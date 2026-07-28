@@ -168,8 +168,8 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
         }, needReportRect ? 'both' : 'draw')
 
         if(rects){
-            staNameRectStore.setStaNameRect(pt.id, rects.rectFull)
-            staNameMainRectStore.setStaNameMainRect(pt.id, rects.rectMain)
+            staNameRectStore.setStaNameRect(pt.id, rects.rectFull, globalPos, 0)
+            staNameMainRectStore.setStaNameMainRect(pt.id, rects.rectMain, globalPos, 0)
             if(markRoot){
                 drawRect(ctx, rects.rectFull)
             }

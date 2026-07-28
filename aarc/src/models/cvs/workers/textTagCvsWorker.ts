@@ -109,7 +109,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             }
             drawTextForLineName(ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'draw', width, dropCap)
             const rectEnlarged = enlargeRect(rect, paddingValue)
-            textTagRectStore.setTextTagRect(t.id, rectEnlarged)
+            textTagRectStore.setTextTagRect(t.id, rectEnlarged, t.pos, 0)
             if(strokeRect){
                 drawRectAndAnchor(ctx, t.pos, rectEnlarged)
             }
@@ -145,7 +145,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         }, 'both')
         if(drawLineNameRes?.rect){
             const rect = drawLineNameRes.rect
-            textTagRectStore.setTextTagRect(t.id, rect)
+            textTagRectStore.setTextTagRect(t.id, rect, t.pos, 0)
             if(strokeRect){
                 drawRectAndAnchor(ctx, t.pos, rect)
             }
@@ -318,7 +318,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             enlargeRectByIcon(rectFull, iconWidth, iconHeight, g, textAlign)
         }
         //rectFull变为包括icon的rect
-        textTagRectStore.setTextTagRect(t.id, rectFull)
+        textTagRectStore.setTextTagRect(t.id, rectFull, t.pos, 0)
         if(strokeRect){
             drawRectAndAnchor(ctx, t.pos, rectFull)
         }
