@@ -208,6 +208,23 @@ describe('staClusterStore.pure - buildNeighbors', () => {
     expect(neighbors[2]?.has(3)).toBe(true)
     expect(neighbors[3]?.has(4)).toBe(true)
   })
+
+  it('轴向粗筛应带 epsilon 余量，极微小超界距离不应被误杀', () => {
+    // 回归：距离 25.000000001 vs 阈值 25，正式判断（带 epsilon*10 余量）会放行，
+    // 但不带余量的轴向粗筛会把这种点对提前丢弃
+    const pts = [pt(1, [0, 0]), pt(2, [25.000000001, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, snapSizeOne, numberCmpEpsilon)
+    expect(neighbors[1]?.has(2)).toBe(true)
+    // 距离 25.5，超出 epsilon 余量
+    const far = [pt(1, [0, 0]), pt(2, [25.5, 0])]
+    expect(buildNeighbors(far, configClingingDist, snapSizeOne, numberCmpEpsilon)[1]).toBeUndefined()
+  })
+
+  it('吸附候选路径下轴向粗筛同样应带 epsilon 余量', () => {
+    const pts = [pt(1, [0, 0]), pt(2, [25.000000001, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, snapSizeOne, numberCmpEpsilon, posOnlySnap)
+    expect(neighbors[1]?.has(2)).toBe(true)
+  })
 })
 
 function posOnlySnap(p: ControlPoint) {
@@ -335,6 +352,15 @@ describe('staClusterStore.pure - updateNeighborsForMovedPt', () => {
     const movedA = pt(1, [0, 0])
     const b = pt(2, [75, 0])
     const next = updateNeighborsForMovedPt({}, movedA, [movedA, b], configClingingDist, size3, numberCmpEpsilon, posOnlySnap)
+    expect(next[1]?.has(2)).toBe(true)
+    expect(next[2]?.has(1)).toBe(true)
+  })
+
+  it('极微小超界距离的点移动后不应被粗筛误杀', () => {
+    // 回归：距离 25.000000001 vs 阈值 25，增量更新的粗筛曾缺少 epsilon 余量
+    const movedA = pt(1, [0, 0])
+    const b = pt(2, [25.000000001, 0])
+    const next = updateNeighborsForMovedPt({}, movedA, [movedA, b], configClingingDist, snapSizeOne, numberCmpEpsilon, posOnlySnap)
     expect(next[1]?.has(2)).toBe(true)
     expect(next[2]?.has(1)).toBe(true)
   })

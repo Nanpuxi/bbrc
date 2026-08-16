@@ -123,13 +123,13 @@ export function mergeColorSourceItems(
     existingGroup: ExternalColorSetGroup | undefined
 ): DataSourceMergeReport {
     const report: DataSourceMergeReport = { added: 0, skipped: 0, overwritten: 0, errors: [] }
-    console.log('[mergeColorSourceItems] ds:', ds.name, 'url:', ds.url, 'overwriteSameName:', ds.overwriteSameName)
+    //console.log('[mergeColorSourceItems] ds:', ds.name, 'url:', ds.url, 'overwriteSameName:', ds.overwriteSameName)
     if (!Array.isArray(fetchedData)) {
-        console.log('[mergeColorSourceItems] 数据不是数组:', fetchedData)
+        //console.log('[mergeColorSourceItems] 数据不是数组:', fetchedData)
         report.errors.push('数据不是数组')
         return report
     }
-    console.log('[mergeColorSourceItems] fetchedData length:', fetchedData.length)
+    //console.log('[mergeColorSourceItems] fetchedData length:', fetchedData.length)
     const itemLimit = ds.type === 'colorSets' ? maxDataSourceColorSetItemCount : maxDataSourceItemCount
     if (fetchedData.length > itemLimit) {
         report.errors.push(`条目过多(${fetchedData.length}个)，上限${itemLimit}个`)
@@ -157,17 +157,17 @@ export function mergeColorSourceItems(
         const pri = raw.pri
         const content = raw.content
         if (typeof name !== 'string' || (typeof pri !== 'number' && typeof pri !== 'string') || typeof content !== 'string') {
-            console.log('[mergeColorSourceItems] 字段校验失败:', { name, pri, content, nameType: typeof name, priType: typeof pri, contentType: typeof content })
+            //console.log('[mergeColorSourceItems] 字段校验失败:', { name, pri, content, nameType: typeof name, priType: typeof pri, contentType: typeof content })
             report.skipped++
             continue
         }
         const priNum = typeof pri === 'string' ? parseInt(pri, 10) : pri
         if (isNaN(priNum)) {
-            console.log('[mergeColorSourceItems] pri 解析失败:', pri)
+            //console.log('[mergeColorSourceItems] pri 解析失败:', pri)
             report.skipped++
             continue
         }
-        console.log('[mergeColorSourceItems] 处理条目:', name, 'pri:', priNum)
+        //console.log('[mergeColorSourceItems] 处理条目:', name, 'pri:', priNum)
 
         items.push({ name, pri: priNum, data: content })
         if (existingByName.has(name)) {
@@ -178,7 +178,7 @@ export function mergeColorSourceItems(
         }
     }
 
-    console.log('[mergeColorSourceItems] 结果:', { added: report.added, skipped: report.skipped, overwritten: report.overwritten, errors: report.errors })
+    //console.log('[mergeColorSourceItems] 结果:', { added: report.added, skipped: report.skipped, overwritten: report.overwritten, errors: report.errors })
     return { ...report, _items: items, _url: ds.url } as DataSourceMergeReport & { _items: ExternalColorSetEntry[], _url: string }
 }
 

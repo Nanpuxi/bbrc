@@ -159,6 +159,9 @@ export function buildNeighbors(
     const maxPairSpan = configClingingDist * maxSize
     const pairSpan = (aId: number, bId: number) =>
         configClingingDist * (sizeCache.get(aId)! + sizeCache.get(bId)!) / 2
+    // 所有预筛都必须带与 ptClingingPure 正式比较一致的 epsilon 余量，
+    // 否则带浮点漂移的边界距离（如 25.000000001 vs 阈值 25）会被预筛提前误杀
+    const epsMargin = epsilon * 10
 
     const grid = new Map<string, ControlPoint[]>()
     for (const pt of staPts) {
@@ -172,7 +175,7 @@ export function buildNeighbors(
 
     // 标准位置判断路径（与 master 版本一致）
     if (!getSnapCandidates) {
-        const cellRadius = Math.max(1, Math.ceil(maxPairSpan / cellSize))
+        const cellRadius = Math.max(1, Math.ceil((maxPairSpan + epsMargin) / cellSize))
         for (const pt of staPts) {
             const cx = Math.floor(pt.pos[0] / cellSize)
             const cy = Math.floor(pt.pos[1] / cellSize)
@@ -184,7 +187,7 @@ export function buildNeighbors(
                     for (const other of cell) {
                         if (other.id <= pt.id)
                             continue
-                        const thrs = pairSpan(pt.id, other.id)
+                        const thrs = pairSpan(pt.id, other.id) + epsMargin
                         if (Math.abs(pt.pos[0] - other.pos[0]) > thrs)
                             continue
                         if (Math.abs(pt.pos[1] - other.pos[1]) > thrs)
@@ -214,7 +217,7 @@ export function buildNeighbors(
             maxReach = info.reach
     }
 
-    const cellRadius = Math.max(1, Math.ceil((maxPairSpan + 2 * maxReach) / cellSize))
+    const cellRadius = Math.max(1, Math.ceil((maxPairSpan + 2 * maxReach + epsMargin) / cellSize))
 
     for (const pt of staPts) {
         const cx = Math.floor(pt.pos[0] / cellSize)
@@ -229,7 +232,7 @@ export function buildNeighbors(
                     if (other.id <= pt.id)
                         continue
                     const otherSnap = snapInfo.get(other.id)!
-                    const checkThrs = pairSpan(pt.id, other.id) + ptSnap.reach + otherSnap.reach
+                    const checkThrs = pairSpan(pt.id, other.id) + ptSnap.reach + otherSnap.reach + epsMargin
                     if (Math.abs(pt.pos[0] - other.pos[0]) > checkThrs)
                         continue
                     if (Math.abs(pt.pos[1] - other.pos[1]) > checkThrs)
@@ -333,9 +336,11 @@ export function updateNeighborsForMovedPt(
             continue
         const otherSnap = getSnapCandidates ? getSnapCandidates(otherPt) : undefined
         if (ptSnap && otherSnap) {
-            // 预筛阈值必须按点对的真实贴合阈值（含尺寸）计算，与 buildNeighbors 保持一致
+            // 预筛阈值必须按点对的真实贴合阈值（含尺寸）计算，并带与 ptClingingPure
+            // 正式比较一致的 epsilon 余量，与 buildNeighbors 保持一致，
+            // 否则带浮点漂移的边界距离（如 25.000000001 vs 阈值 25）会被此处提前误杀
             const checkThrs = configClingingDist * (getSnapSize(pt.id) + getSnapSize(otherPt.id)) / 2
-                + ptSnap.reach + otherSnap.reach
+                + ptSnap.reach + otherSnap.reach + epsilon * 10
             if (Math.abs(pt.pos[0] - otherPt.pos[0]) > checkThrs)
                 continue
             if (Math.abs(pt.pos[1] - otherPt.pos[1]) > checkThrs)
