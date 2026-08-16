@@ -63,6 +63,24 @@ describe('staClusterStore.pure - ptClingingPure', () => {
     // 尺寸 2：平均尺寸 2，clingingDist = 50，40 < 50，true
     expect(ptClingingPure(a, b, configClingingDist, () => 2, numberCmpEpsilon)).toBe(true)
   })
+
+  it('带吸附候选时，bbox 快速拒绝应与正式比较保持一致的 epsilon 余量', () => {
+    // 回归：长 cluster 中浮点漂移使边界距离略微超过阈值（如 25.00001 vs 25），
+    // 曾被不带 epsilon 的 bbox 检查误杀，导致 cluster 在任意位置断开
+    const snapOf = (pos: [number, number]) => ({
+      candidates: [pos] as [number, number][],
+      reach: 0,
+      bbox: { minX: pos[0], maxX: pos[0], minY: pos[1], maxY: pos[1] }
+    })
+    const a = pt(1, [0, 0])
+    const aSnap = snapOf(a.pos)
+    // 距离 25.00001，略超阈值 25，但在 epsilon 余量内
+    const b = pt(2, [25.00001, 0])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapOf(b.pos))).toBe(true)
+    // 距离 25.5，超出 epsilon 余量
+    const c = pt(3, [25.5, 0])
+    expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapOf(c.pos))).toBe(false)
+  })
 })
 
 describe('staClusterStore.pure - buildNeighbors', () => {

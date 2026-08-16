@@ -96,7 +96,9 @@ export function ptClingingPure(
     const clingingDistSqrBiggerByEpsilon = (clingingDist + epsilon * 10) ** 2
 
     if (aSnap && bSnap) {
-        if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist))
+        // 注意：bbox 快速拒绝必须与下方的正式比较保持一致的 epsilon 余量，
+        // 否则带浮点漂移的边界距离（如 25.00001 vs 阈值 25）会被此处提前误杀
+        if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist + epsilon * 10))
             return false
         for (const ca of aSnap.candidates) {
             for (const cb of bSnap.candidates) {
