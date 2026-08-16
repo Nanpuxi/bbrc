@@ -11,6 +11,7 @@ import { useIconStore } from "../iconStore";
 import { useDiscardAreaStore } from "../discardAreaStore";
 import { useNameEditStore } from "../nameEditStore";
 import { useTextTagEditStore } from "../textTagEditStore";
+import { SavePatch } from "../saveDerived/staClusterStore.pure";
 
 /**
  * 在加载前重置所有状态（已废弃）  
@@ -27,7 +28,6 @@ export const useResetterStore = defineStore('resetter', ()=>{
         useTextTagRectStore,
         useLineExtendStore,
         useCvsBlocksControlStore,
-        useStaClusterStore,
         usePointLinkStore,
         useIconStore,
         useDiscardAreaStore,
@@ -35,10 +35,15 @@ export const useResetterStore = defineStore('resetter', ()=>{
         useTextTagEditStore
     ]
 
-    function resetDerivedStores(){
+    /**
+     * @param patch undo/redo 应用的补丁；staClusterStore 会据此决定保留缓存、
+     * 增量恢复还是全量重建。不传（如加载/stash 路径）时保守地全部清空
+     */
+    function resetDerivedStores(patch?: SavePatch){
         for(const use of needClearItemsStoreUses){
             use().clearItems()
         }
+        useStaClusterStore().restoreWithPatch(patch)
         envStore.endEveryEditing()
         envStore.cancelActive()
         envStore.closeOps()

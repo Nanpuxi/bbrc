@@ -1184,3 +1184,121 @@ describe('staClusterStore - cluster/query', () => {
     expect(clustersAfter).toEqual(clustersBefore)
   })
 })
+
+describe('staClusterStore - restoreWithPatch', () => {
+  beforeEach(() => {
+    resetIdCounter()
+    createTestPinia()
+  })
+
+  function setupSaveStore(save: ReturnType<typeof createEmptySave>) {
+    const saveStore = useSaveStore()
+    saveStore.save = save
+    return saveStore
+  }
+
+  it('patch 未触及 points/lines 时应原样保留缓存', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [0.5, 0] as [number, number] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    const before = store.getStaClusters()
+    expect(before).toHaveLength(1)
+
+    store.restoreWithPatch({})
+
+    // 引用不变：未重建、未重新洪水填充
+    expect(store.getStaClusters()).toBe(before)
+  })
+
+  it('单点移动的 patch 应增量恢复出正确 cluster', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [100, 0] as [number, number] }
+      ]
+    })
+    const saveStore = setupSaveStore(save)
+    const store = useStaClusterStore()
+    expect(store.getStaClusters()).toHaveLength(0)
+
+    // 模拟 undo restore：整体替换 save 对象，patch 只含变更点
+    const restored = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [0.5, 0] as [number, number] }
+      ]
+    })
+    saveStore.save = restored
+    store.restoreWithPatch({
+      points: [{ id: 2, old: save.points[1], new: restored.points[1] }]
+    })
+
+    const clusters = store.getStaClusters()
+    expect(clusters).toHaveLength(1)
+    expect(clusters![0].map(p => p.id).sort((a, b) => a - b)).toEqual([1, 2])
+  })
+
+  it('删除点的 patch 应移除对应邻接', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [0.5, 0] as [number, number] }
+      ]
+    })
+    const saveStore = setupSaveStore(save)
+    const store = useStaClusterStore()
+    expect(store.getStaClusters()).toHaveLength(1)
+
+    const restored = createEmptySave({
+      points: [{ ...createPoint(1), pos: [0, 0] as [number, number] }]
+    })
+    saveStore.save = restored
+    store.restoreWithPatch({
+      points: [{ id: 2, old: save.points[1], new: undefined }]
+    })
+
+    expect(store.getStaClusters()).toHaveLength(0)
+  })
+
+  it('触及 lines 的 patch 应全量重建且结果正确', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [0.5, 0] as [number, number] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    const before = store.getStaClusters()
+    expect(before).toHaveLength(1)
+
+    store.restoreWithPatch({ lines: [{ id: 1, old: undefined, new: {} }] })
+
+    const after = store.getStaClusters()
+    expect(after).not.toBe(before)
+    expect(after).toHaveLength(1)
+  })
+
+  it('无 patch 信息时应清空并懒重建（兼容加载/stash 路径）', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] as [number, number] },
+        { ...createPoint(2), pos: [0.5, 0] as [number, number] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    const before = store.getStaClusters()
+
+    store.restoreWithPatch(undefined)
+
+    const after = store.getStaClusters()
+    expect(after).not.toBe(before)
+    expect(after).toHaveLength(1)
+  })
+})

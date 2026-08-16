@@ -378,6 +378,56 @@ export function cleanNeighborsForDeletedPt(
     return next
 }
 
+/** undo/redo 补丁中带 id 数组的变更条目（@aurouscia/au-undo-redo 的 Patch 内部结构） */
+export interface KeyedPatchItem<T> {
+    id: number
+    /** undefined 表示该条目是新增的 */
+    old?: T
+    /** undefined 表示该条目是被删除的 */
+    new?: T
+}
+
+/**
+ * undo/redo 应用到 Save 上的补丁。只声明 cluster 关心的字段：
+ * points 变化直接影响邻接；lines 变化影响吸附尺寸与 free 点方向/reach
+ */
+export interface SavePatch {
+    points?: KeyedPatchItem<ControlPoint>[]
+    lines?: KeyedPatchItem<unknown>[]
+}
+
+export type ClusterRestoreStrategy = 'preserve' | 'incremental' | 'rebuild'
+
+/**
+ * 增量恢复的变更点数上限：每个变更点都要为全部 sta 点重算吸附候选（O(n)），
+ * 变更点过多时增量成本会超过一次全量重建
+ */
+export const clusterRestoreIncrementalLimit = 16
+
+/**
+ * 决定 undo/redo 恢复后 cluster 缓存的处理策略。
+ * 依据的不变量：patch 不含 points/lines 时，cluster 的全部输入
+ * （点位/状态/方向、吸附尺寸、free 点方向与 reach）都未变化，
+ * 邻接表与 cluster 可直接保留
+ * @param patch 本次 undo/redo 应用的补丁；undefined 表示无补丁信息（保守重建）
+ * @param alreadyBuilt 邻接表/cluster 是否已构建过
+ */
+export function decideClusterRestoreStrategy(
+    patch: SavePatch | undefined,
+    alreadyBuilt: boolean
+): ClusterRestoreStrategy {
+    if (!patch)
+        return 'rebuild'
+    if (patch.lines && patch.lines.length > 0)
+        return 'rebuild'
+    const pts = patch.points
+    if (!pts || pts.length === 0)
+        return 'preserve'
+    if (!alreadyBuilt || pts.length > clusterRestoreIncrementalLimit)
+        return 'rebuild'
+    return 'incremental'
+}
+
 /**
  * 尝试把某点的站名标注转移到同 cluster 中距离站名位置更近的点上
  * 返回描述转移的对象；若无需转移则返回 undefined

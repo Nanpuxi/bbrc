@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   buildNeighbors,
   cleanNeighborsForDeletedPt,
+  clusterRestoreIncrementalLimit,
+  decideClusterRestoreStrategy,
   expandSetInNeighbors,
   getClusterMaxSizePure,
   getMaxSizePtWithinClusterPure,
@@ -555,5 +557,42 @@ describe('staClusterStore.pure - expandSetInNeighbors', () => {
     const set = new Set<number>()
     expandSetInNeighbors(neighbors, set, 1)
     expect(set).toEqual(new Set([1, 2, 3]))
+  })
+})
+
+describe('staClusterStore.pure - decideClusterRestoreStrategy', () => {
+  const movedPtsPatch = (n: number) => ({
+    points: Array.from({ length: n }, (_, i) => ({
+      id: i + 1,
+      old: pt(i + 1, [0, 0]),
+      new: pt(i + 1, [1, 0])
+    }))
+  })
+
+  it('无补丁信息（undefined）时应重建', () => {
+    expect(decideClusterRestoreStrategy(undefined, true)).toBe('rebuild')
+  })
+
+  it('补丁不含 points/lines 时应保留缓存', () => {
+    expect(decideClusterRestoreStrategy({}, true)).toBe('preserve')
+    expect(decideClusterRestoreStrategy({ points: [] }, true)).toBe('preserve')
+  })
+
+  it('补丁触及 lines 时应重建（尺寸与 free 方向可能变化）', () => {
+    const patch = { lines: [{ id: 1, old: undefined, new: {} }] }
+    expect(decideClusterRestoreStrategy(patch, true)).toBe('rebuild')
+  })
+
+  it('少量 points 变更且已构建过时应增量恢复', () => {
+    expect(decideClusterRestoreStrategy(movedPtsPatch(3), true)).toBe('incremental')
+  })
+
+  it('未构建过时即使少量变更也应重建（由懒加载完成）', () => {
+    expect(decideClusterRestoreStrategy(movedPtsPatch(1), false)).toBe('rebuild')
+  })
+
+  it('变更点超过阈值时应重建', () => {
+    expect(decideClusterRestoreStrategy(movedPtsPatch(clusterRestoreIncrementalLimit + 1), true)).toBe('rebuild')
+    expect(decideClusterRestoreStrategy(movedPtsPatch(clusterRestoreIncrementalLimit), true)).toBe('incremental')
   })
 })

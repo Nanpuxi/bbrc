@@ -9,6 +9,7 @@ import { Coord } from '@/models/coord';
 import {
     buildNeighbors,
     cleanNeighborsForDeletedPt,
+    decideClusterRestoreStrategy,
     getClusterMaxSizePure,
     getPtSnapCandidatesAndReachPure,
     getRectOfClusterPure,
@@ -18,6 +19,7 @@ import {
     Neighbors,
     PtSnapCandidatesInfo,
     resolveStaNamePure,
+    SavePatch,
     tryTransferStaNameWithinClusterPure,
     updateNeighborsForMovedPt
 } from "./staClusterStore.pure";
@@ -131,6 +133,38 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         staClusters.value = undefined
         neighbors = {}
     }
+    /**
+     * undo/redo 恢复存档后的 cluster 缓存处理（替代无条件的 clearItems）。
+     * patch 未触及 points/lines 时完整保留缓存；只动少量 points 时增量恢复；
+     * 其余情况（无 patch 信息、动了 lines、变更点过多）回退全量重建
+     */
+    function restoreWithPatch(patch?: SavePatch){
+        const strategy = decideClusterRestoreStrategy(patch, staClusters.value !== undefined)
+        if(strategy === 'preserve')
+            return
+        if(strategy === 'rebuild' || !patch?.points){
+            clearItems()
+            return
+        }
+        const allPts = saveStore.save?.points || []
+        for(const entry of patch.points){
+            const pt = entry.new === undefined ? undefined : saveStore.getPtById(entry.id)
+            if(!pt){
+                neighbors = cleanNeighborsForDeletedPt(neighbors, entry.id)
+                continue
+            }
+            neighbors = updateNeighborsForMovedPt(
+                neighbors,
+                pt,
+                allPts,
+                configClingingDist,
+                id => saveStore.getLinesDecidedPtSnapSize(id),
+                numberCmpEpsilon,
+                getPtSnapCandidatesAndReach
+            )
+        }
+        makeClustersFromNeighbors()
+    }
     function getStaClusterById(ptId:number){
         return getStaClusterByIdPure(ptId, getStaClusters() || [], id => saveStore.getPtById(id))
     }
@@ -156,6 +190,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         tryTransferStaNameWithinCluster,
         getMaxSizePtWithinCluster,
         clearItems,
+        restoreWithPatch,
         getRectOfCluster,
         getStaClusterById,
         isPtSingle,
