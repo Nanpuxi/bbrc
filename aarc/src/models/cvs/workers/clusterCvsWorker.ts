@@ -1,4 +1,4 @@
-import { ControlPoint, ControlPointDir, ControlPointSta } from "@/models/save";
+import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta } from "@/models/save";
 import { useConfigStore } from "@/models/stores/configStore";
 import { Coord } from "@/models/coord";
 import { useStaClusterStore } from "@/models/stores/saveDerived/staClusterStore";
@@ -17,6 +17,8 @@ interface ClusterPoly{
     maxStaSize:number
     ill:boolean
     isFromLink?:boolean
+    /** 点的包围盒（不含线宽 padding），供逐帧视口剔除 */
+    bbox:[number,number,number,number]
 }
 export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
     const staClusterStore = useStaClusterStore()
@@ -28,8 +30,66 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
     const renderOptionsStore = useRenderOptionsStore()
     const clusterPolyCache = new Map<string, ClusterPoly>()
 
+    // 全量渲染数据缓存：仅当签名（所有 cluster 点的 id/pos/dir/size + 所有 pointLink）变化时重建。
+    // 视角移动时签名不变，逐帧只做 O(cluster数) 的视口剔除，不再遍历点和拼接缓存 key。
+    let polysCache: ClusterPoly[] = []
+    let sigBuf: number[] = []
+    let sigLen = -1
+
     function getClustersRenderingData(){
-        let clusters = staClusterStore.getStaClusters() || []
+        const clusters = staClusterStore.getStaClusters() || []
+        const links = saveStore.save?.pointLinks
+        if(signatureChanged(clusters, links)){
+            polysCache = buildAllPolys(clusters)
+        }
+        if(renderOptionsStore.exporting)
+            return polysCache
+        const { left, right, top, bottom } = cvsBlocksControlStore.blockTotalBoundary
+        // 未初始化/无 block 时不应省略任何 cluster
+        if(left > right || top > bottom)
+            return polysCache
+        return polysCache.filter(p=>!isPolyOutsideView(p, left, right, top, bottom))
+    }
+
+    /**
+     * 将所有 cluster 点的 id/pos/dir/size 与所有 pointLink 的内容写入可复用的签名缓冲区，
+     * 与上一帧逐位比较，返回是否有变化。数值严格相等比较，无哈希碰撞风险。
+     */
+    function signatureChanged(clusters:ControlPoint[][], links:ControlPointLink[]|undefined){
+        let i = 0
+        let changed = false
+        const put = (v:number)=>{
+            if(sigBuf[i] !== v)
+                changed = true
+            sigBuf[i] = v
+            i++
+        }
+        put(clusters.length)
+        for(const c of clusters){
+            put(c.length)
+            for(const pt of c){
+                put(pt.id)
+                put(pt.pos[0])
+                put(pt.pos[1])
+                put(pt.dir ?? -1)
+                put(saveStore.getLinesDecidedPtSize(pt.id))
+            }
+        }
+        put(links?.length ?? 0)
+        if(links){
+            for(const l of links){
+                put(l.pts[0])
+                put(l.pts[1])
+                put(l.type)
+            }
+        }
+        if(i !== sigLen)
+            changed = true
+        sigLen = i
+        return changed
+    }
+
+    function buildAllPolys(clusters:ControlPoint[][]){
         //伪集群：“点连接”的两端，若不属于集群，需要被涂成集群的样式
         //但需要排除类型为“dot”的点连接，dot连接需要保持原色，而dotCover需要涂色
         const fakeClusters = pointLinkStore.getLinkLinkedPts('excludeDot')
@@ -47,26 +107,16 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
         polys.push(...polysByLink)
         return polys
     }
+
     function getClusterOmitPadding(maxStaSize:number){
         // carpet 层绘制宽度最大：(ptStaSize + ptStaLineWidth) * size * 2
         const maxLineWidth = (cs.config.ptStaSize + cs.config.ptStaLineWidth) * maxStaSize * 2
         return maxLineWidth / 2
     }
-    function checkOmittableClusterPts(c:ControlPoint[], maxStaSize:number){
+    function isPolyOutsideView(p:ClusterPoly, left:number, right:number, top:number, bottom:number){
         const { cvsWidth, cvsHeight } = saveStore
-        const { left, right, top, bottom } = cvsBlocksControlStore.blockTotalBoundary
-        // 未初始化/无 block 时不应省略任何 cluster
-        if (left > right || top > bottom)
-            return false
-        const padding = getClusterOmitPadding(maxStaSize)
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-        for(const pt of c){
-            const [x, y] = pt.pos
-            if(x < minX) minX = x
-            if(x > maxX) maxX = x
-            if(y < minY) minY = y
-            if(y > maxY) maxY = y
-        }
+        const padding = getClusterOmitPadding(p.maxStaSize)
+        const [minX, maxX, minY, maxY] = p.bbox
         if((maxX + padding)/cvsWidth < left)
             return true
         if((minX - padding)/cvsWidth > right)
@@ -179,8 +229,6 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
                 return
             let poly:Coord[] = []
             const maxStaSize = Math.max(...sizes)
-            if(!renderOptionsStore.exporting && checkOmittableClusterPts(c, maxStaSize))
-                return
             const cacheKey = getClusterPolyCacheKey(c, asIs)
             const cached = clusterPolyCache.get(cacheKey)
             if(cached){
@@ -228,12 +276,24 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
             const polyData:ClusterPoly = {
                 coords:poly,
                 maxStaSize,
-                ill:isIllPosedPoly(poly)
+                ill:isIllPosedPoly(poly),
+                bbox:ptsBBox(c)
             }
             clusterPolyCache.set(cacheKey, polyData)
             polys.push(polyData)
         })
         return polys
+    }
+    function ptsBBox(c:ControlPoint[]):[number,number,number,number]{
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+        for(const pt of c){
+            const [x, y] = pt.pos
+            if(x < minX) minX = x
+            if(x > maxX) maxX = x
+            if(y < minY) minY = y
+            if(y > maxY) maxY = y
+        }
+        return [minX, maxX, minY, maxY]
     }
     function getClusterPolyCacheKey(c:ControlPoint[], asIs?:'asIs'){
         const parts = c.map(pt => `${pt.id}:${pt.pos[0]},${pt.pos[1]}:${pt.dir ?? ''}:${saveStore.getLinesDecidedPtSize(pt.id)}`)
