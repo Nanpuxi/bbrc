@@ -299,15 +299,18 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         if(line.length===0)
             return
         
+        // 先用原始控制点算包围盒，在 formalize 之前做省略判定，
+        // 避免视野外线路每帧都 formalize 的固定开销
+        // （formal中间点可能略微超出控制点包围盒，由 checkOmittableLine 的 padding 兜底）
+        const ptsOfLines:ControlPoint[][] = []
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
         for(const l of line){
             const pts = saveStore.getPtsByIds(l.pts)
             if(pts.length<=1)
                 return;
-            const formalPts = formalize(pts)
-            formalizedLineStore.setLinesFormalPts(l.id, formalPts)
-            for(const fp of formalPts){
-                const [x, y] = fp.pos
+            ptsOfLines.push(pts)
+            for(const p of pts){
+                const [x, y] = p.pos
                 if(x < minX) minX = x
                 if(x > maxX) maxX = x
                 if(y < minY) minY = y
@@ -318,7 +321,15 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         // 填充地形或导出时不能省略，避免内容缺失
         const isFilledTerrain = line.some(l => l.isFilled && l.type === LineType.terrain)
         if(!isFilledTerrain && !renderOptionsStore.exporting && checkOmittableLine(minX, maxX, minY, maxY, line)){
+            // 省略时清掉formalPts缓存：点击判定不会命中过期数据，缩略图渲染会按需重新formalize
+            for(const l of line)
+                formalizedLineStore.setLinesFormalPts(l.id, undefined)
             return
+        }
+
+        for(let i=0;i<line.length;i++){
+            const formalPts = formalize(ptsOfLines[i])
+            formalizedLineStore.setLinesFormalPts(line[i].id, formalPts)
         }
 
         const includeCarpet = !rtype || rtype == 'carpet' || rtype == 'both'
