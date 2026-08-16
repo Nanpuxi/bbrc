@@ -173,7 +173,50 @@ describe('staClusterStore.pure - buildNeighbors', () => {
     const brute = buildNeighborsBruteForce(pts, configClingingDist, snapSizeOne, numberCmpEpsilon)
     expect(grid).toEqual(brute)
   })
+
+  it('大站点尺寸（平均尺寸>2.5）时不应被预筛误杀', () => {
+    // 阈值 = 25*3 = 75，间距恰好 75；固定的 2.5*25=62.5 预筛会把这种点对提前丢弃
+    const size3 = () => 3
+    const pts = [pt(1, [0, 0]), pt(2, [75, 0]), pt(3, [150, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, size3, numberCmpEpsilon)
+    expect(neighbors[1]?.has(2)).toBe(true)
+    expect(neighbors[2]?.has(3)).toBe(true)
+  })
+
+  it('大站点尺寸且相隔多个网格时不应遗漏邻接', () => {
+    // cellSize = 62.5；(62.4,0) 在 cell 0，(137.4,0) 在 cell 2，相隔两格
+    const size3 = () => 3
+    const pts = [pt(1, [62.4, 0]), pt(2, [137.4, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, size3, numberCmpEpsilon)
+    expect(neighbors[1]?.has(2)).toBe(true)
+  })
+
+  it('吸附候选路径下大站点尺寸同样不应被预筛误杀', () => {
+    const size3 = () => 3
+    const pts = [pt(1, [0, 0]), pt(2, [75, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, size3, numberCmpEpsilon, posOnlySnap)
+    expect(neighbors[1]?.has(2)).toBe(true)
+  })
+
+  it('混合尺寸链（中间换乘点尺寸更大）应整体连通', () => {
+    // 复刻实际断链场景：size 2-3-3-1，间距 50/75/25，均在各自点对阈值内
+    const sizes: Record<number, number> = { 1: 2, 2: 3, 3: 3, 4: 1 }
+    const getSize = (id: number) => sizes[id] ?? 1
+    const pts = [pt(1, [0, 0]), pt(2, [50, 0]), pt(3, [125, 0]), pt(4, [150, 0])]
+    const neighbors = buildNeighbors(pts, configClingingDist, getSize, numberCmpEpsilon)
+    expect(neighbors[1]?.has(2)).toBe(true)
+    expect(neighbors[2]?.has(3)).toBe(true)
+    expect(neighbors[3]?.has(4)).toBe(true)
+  })
 })
+
+function posOnlySnap(p: ControlPoint) {
+  return {
+    candidates: [[...p.pos]] as [number, number][],
+    reach: 0,
+    bbox: { minX: p.pos[0], maxX: p.pos[0], minY: p.pos[1], maxY: p.pos[1] }
+  }
+}
 
 function buildNeighborsBruteForce(
   pts: ControlPoint[],
@@ -284,6 +327,16 @@ describe('staClusterStore.pure - updateNeighborsForMovedPt', () => {
     const a = pt(1, [0, 0])
     const next = updateNeighborsForMovedPt({}, a, [a], configClingingDist, snapSizeOne, numberCmpEpsilon)
     expect(next[1]?.has(1)).toBe(false)
+  })
+
+  it('大站点尺寸的点移动后不应被粗筛漏掉', () => {
+    // 阈值 = 25*3 = 75，间距恰好 75；旧的固定 2.5*25=62.5 粗筛会漏掉这条边
+    const size3 = () => 3
+    const movedA = pt(1, [0, 0])
+    const b = pt(2, [75, 0])
+    const next = updateNeighborsForMovedPt({}, movedA, [movedA, b], configClingingDist, size3, numberCmpEpsilon, posOnlySnap)
+    expect(next[1]?.has(2)).toBe(true)
+    expect(next[2]?.has(1)).toBe(true)
   })
 })
 

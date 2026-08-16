@@ -141,11 +141,24 @@ export function buildNeighbors(
     getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo
 ): Neighbors {
     const neighbors: Neighbors = {}
-    const skipThrs = 2.5 * configClingingDist
-    const cellSize = skipThrs
+    const cellSize = 2.5 * configClingingDist
     const staPts = pts.filter(pt => pt.sta == ControlPointSta.sta)
-    if (skipThrs <= 0 || staPts.length === 0)
+    if (cellSize <= 0 || staPts.length === 0)
         return neighbors
+
+    // 缓存各点的吸附尺寸。点对的真实贴合阈值为 configClingingDist * (sizeA+sizeB)/2，
+    // 预筛（网格搜索半径与轴向粗筛）必须按该阈值计算；若用固定的 cellSize 做阈值，
+    // 平均尺寸大于 2.5 的点对会在进入 ptClingingPure 之前被误杀
+    const sizeCache = new Map<number, number>()
+    let maxSize = 0
+    for (const pt of staPts) {
+        const s = getSnapSize(pt.id)
+        sizeCache.set(pt.id, s)
+        if (s > maxSize) maxSize = s
+    }
+    const maxPairSpan = configClingingDist * maxSize
+    const pairSpan = (aId: number, bId: number) =>
+        configClingingDist * (sizeCache.get(aId)! + sizeCache.get(bId)!) / 2
 
     const grid = new Map<string, ControlPoint[]>()
     for (const pt of staPts) {
@@ -159,20 +172,22 @@ export function buildNeighbors(
 
     // 标准位置判断路径（与 master 版本一致）
     if (!getSnapCandidates) {
+        const cellRadius = Math.max(1, Math.ceil(maxPairSpan / cellSize))
         for (const pt of staPts) {
             const cx = Math.floor(pt.pos[0] / cellSize)
             const cy = Math.floor(pt.pos[1] / cellSize)
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+                for (let dy = -cellRadius; dy <= cellRadius; dy++) {
                     const cell = grid.get(`${cx + dx},${cy + dy}`)
                     if (!cell)
                         continue
                     for (const other of cell) {
                         if (other.id <= pt.id)
                             continue
-                        if (Math.abs(pt.pos[0] - other.pos[0]) > skipThrs)
+                        const thrs = pairSpan(pt.id, other.id)
+                        if (Math.abs(pt.pos[0] - other.pos[0]) > thrs)
                             continue
-                        if (Math.abs(pt.pos[1] - other.pos[1]) > skipThrs)
+                        if (Math.abs(pt.pos[1] - other.pos[1]) > thrs)
                             continue
                         if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon)) {
                             if (!neighbors[pt.id])
@@ -199,7 +214,7 @@ export function buildNeighbors(
             maxReach = info.reach
     }
 
-    const cellRadius = maxReach > 0 ? Math.ceil((skipThrs + 2 * maxReach) / cellSize) : 1
+    const cellRadius = Math.max(1, Math.ceil((maxPairSpan + 2 * maxReach) / cellSize))
 
     for (const pt of staPts) {
         const cx = Math.floor(pt.pos[0] / cellSize)
@@ -214,7 +229,7 @@ export function buildNeighbors(
                     if (other.id <= pt.id)
                         continue
                     const otherSnap = snapInfo.get(other.id)!
-                    const checkThrs = skipThrs + ptSnap.reach + otherSnap.reach
+                    const checkThrs = pairSpan(pt.id, other.id) + ptSnap.reach + otherSnap.reach
                     if (Math.abs(pt.pos[0] - other.pos[0]) > checkThrs)
                         continue
                     if (Math.abs(pt.pos[1] - other.pos[1]) > checkThrs)
@@ -318,7 +333,9 @@ export function updateNeighborsForMovedPt(
             continue
         const otherSnap = getSnapCandidates ? getSnapCandidates(otherPt) : undefined
         if (ptSnap && otherSnap) {
-            const checkThrs = 2.5 * configClingingDist + ptSnap.reach + otherSnap.reach
+            // 预筛阈值必须按点对的真实贴合阈值（含尺寸）计算，与 buildNeighbors 保持一致
+            const checkThrs = configClingingDist * (getSnapSize(pt.id) + getSnapSize(otherPt.id)) / 2
+                + ptSnap.reach + otherSnap.reach
             if (Math.abs(pt.pos[0] - otherPt.pos[0]) > checkThrs)
                 continue
             if (Math.abs(pt.pos[1] - otherPt.pos[1]) > checkThrs)
