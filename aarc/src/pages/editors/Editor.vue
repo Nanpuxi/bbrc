@@ -335,10 +335,17 @@ function startHeartbeat(){
     heartbeatOnEdit ??= throttle(()=>{
         api.save.heartbeatRenewal(saveIdNum.value)
     }, heartbeatOnEditMinIntervalMs)
+    document.addEventListener('visibilitychange', onVisibleHeartbeat)
 }
 function endHeartbeat(){
     // 结束心跳续约周期
     window.clearInterval(heartbeatTimer)
+    document.removeEventListener('visibilitychange', onVisibleHeartbeat)
+}
+function onVisibleHeartbeat(){
+    // 页面重新可见时立即补发一次续约心跳（隐藏期间定时器可能已被 webview/系统冻结）
+    if(document.visibilityState === 'visible')
+        api.save.heartbeatRenewal(saveIdNum.value)
 }
 
 watch(props, async()=>{
