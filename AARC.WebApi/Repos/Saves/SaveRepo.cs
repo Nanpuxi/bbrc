@@ -403,7 +403,7 @@ namespace AARC.WebApi.Repos.Saves
         /// 本应用设计为单实例部署，所以心跳仅使用这里的锁即可，无需数据库锁
         /// （如果要支持多实例部署，需要使用数据库锁，否则会出现并发问题）
         /// </summary>
-        private static Lock HeartbeatLock => new();
+        private static Lock HeartbeatLock { get; } = new();
         public void Heartbeat(int id, HeartbeatType type, bool checkOnly = false)
         {
             lock (HeartbeatLock)
