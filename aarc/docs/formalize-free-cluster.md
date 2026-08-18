@@ -84,7 +84,7 @@ interface AdjacentSeg {
 | 孤立点 | 无方向。 |
 | 线段长度极短 | 若 `|segment| < ε`，跳过该侧，避免退化方向。 |
 
-一个点可能出现在多条线路中，因此可能产生多于 2 个方向。`useFreePtDirectionStore` 仅对 `free === true` 的点进行缓存，同时提供**第一次出现**的 `AdjacentSeg`（供 snap 使用）和**所有方向**（供 cluster 使用）。非 free 点的方向由 `ControlPointDir` 覆盖，不进入此 store。
+一个点可能出现在多条线路中，因此可能产生多于 2 个方向。`useFreePtDirectionStore` 仅对 `free === true` 的点进行缓存，按**每次出现**分别缓存相邻段与方向信息：`getPtDirectionInfos`（供 snap/cluster 的候选生成，逐次出现生成后合并去重）、`getAdjacentSeg`（第一次出现）与合并视图 `getPtDirectionInfo`/`getPtDirections`（prev/next 取第一次出现，`all` 为各次出现方向的并集，供 cluster 使用）。非 free 点的方向由 `ControlPointDir` 覆盖，不进入此 store。
 
 **注意**：这里取的是“点指向邻点”的向量，而不是“邻点指向点”。对于包围盒方向来说，`u` 与 `-u` 等价（同一条直线），后续会归一化到 `[0, π)` 区间。
 

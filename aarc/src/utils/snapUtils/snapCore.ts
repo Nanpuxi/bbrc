@@ -7,7 +7,7 @@ import { makeCoordLength1 } from "@/utils/coordUtils/coordMath";
 import { crossAddNums } from "@/utils/lang/crossAddNums";
 import { numberCmpEpsilon, sqrt2half } from "@/utils/consts";
 import { freeRayIntersect } from "@/utils/rayUtils/rayIntersection";
-import { computeFreeSnapCandidates, PtDirectionInfo } from "./snapInterPtFree";
+import { computeFreeSnapCandidatesMulti, PtDirectionInfo } from "./snapInterPtFree";
 import { projectToNearestNormalLine } from "./snapNameFree";
 
 /** 站名吸附的候选方向配置 */
@@ -463,7 +463,9 @@ function computeStandardBiases(
 /**
  * 计算当前点与附近点之间的吸附。
  * 对应原 snapStore 中 snapInterPt 的核心计算。
- * free 目标点使用基于两侧线段方向的 5 点候选，非 free 点保持原有 4/8 方向逻辑。
+ * free 目标点使用基于两侧线段方向的候选（每次出现/每条线路各一组，合并去重），
+ * 非 free 点保持原有 4/8 方向逻辑。
+ * noBias 为 true 时（点间吸附开关关闭），两种分支都只保留零偏置候选（目标点本身）。
  */
 export function snapInterPt(
     pt: ControlPoint,
@@ -471,7 +473,7 @@ export function snapInterPt(
     cfg: SnapInterPtConfig,
     getPtSnapSizes?: (id: number) => number[] | undefined,
     noBias?: boolean,
-    getPtDirectionInfo?: (id: number) => PtDirectionInfo | undefined
+    getPtDirectionInfos?: (id: number) => PtDirectionInfo[] | undefined
 ): SnapInterPtResult {
     const { snapDistBase, snapThrs } = cfg
     const targets: SnapInterPtResult['targets'] = { snapPoss: [], snapToPts: [] }
@@ -490,8 +492,11 @@ export function snapInterPt(
 
         if (opt.free) {
             snapDists.forEach(snapDist => {
-                const directionInfo = getPtDirectionInfo?.(opt.id)
-                const candidates = computeFreeSnapCandidates(opt, snapDist, directionInfo)
+                // noBias（点间吸附开关关闭）时与非 free 分支一致：
+                // 只保留零偏置候选（opt.pos 本身），不生成沿线路的偏移候选；
+                // 传入 undefined 方向信息即走孤立点回退（仅返回 opt.pos）
+                const candidates = computeFreeSnapCandidatesMulti(
+                    opt, snapDist, noBias ? undefined : getPtDirectionInfos?.(opt.id))
                 candidates.forEach(candidate => {
                     targets.snapPoss.push(candidate)
                     const dist = coordDist(pt.pos, candidate)

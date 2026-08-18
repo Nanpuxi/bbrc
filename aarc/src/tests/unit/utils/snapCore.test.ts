@@ -559,6 +559,26 @@ describe('snapInterPt', () => {
     expect(res.matched).toEqual([10, 0])
   })
 
+  it('noBias 模式下 free 目标点只保留零偏置候选', () => {
+    // 回归：点间吸附开关关闭（noBias）时，free 点此前仍会生成
+    // 沿线路的偏移候选（垂足、平行线交点），应只保留 opt.pos 本身
+    const A = makePt(10, [0, 0])
+    const B = makePt(11, [1, 0], ControlPointDir.vertical, undefined, true)
+    const C = makePt(12, [1, 1])
+    const info = toPtDirectionInfo(B, A, C)
+    const getDirInfo = (id: number) => id === 11 ? [info] : undefined
+    // snapDist = 10，B 的垂足候选之一为 (1, -10)，移动点放在其附近
+    const pt = makePt(1, [1.5, -9.5])
+    const cfg = { snapDistBase: 10, snapThrs: 5 }
+    // 正常模式：命中偏移候选 (1, -10)
+    const resBiased = snapInterPt(pt, [B], cfg, undefined, false, getDirInfo)
+    expect(resBiased.matched).toBeDefined()
+    // noBias：偏移候选不生成，只有 B 本身；dist ≈ 9.5 > 5，不命中
+    const resNoBias = snapInterPt(pt, [B], cfg, undefined, true, getDirInfo)
+    expect(resNoBias.matched).toBeUndefined()
+    expect(resNoBias.targets.snapPoss).toEqual([[1, 0]])
+  })
+
   it('斜向方向存在可吸附点时返回匹配坐标', () => {
     // 零偏置距离约 14.14 超过阈值，但对角偏置可命中
     const pt = makePt(1, [0, 0], ControlPointDir.incline)

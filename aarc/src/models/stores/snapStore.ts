@@ -120,7 +120,7 @@ export const useSnapStore = defineStore('snap',()=>{
         const ptsFiltered = freeNeighborIds.size>0
             ? pts.filter(p=>!freeNeighborIds.has(p.id))
             : pts
-        const getPtDirectionInfo = (id: number) => freePtDirectionStore.getPtDirectionInfo(id)
+        const getPtDirectionInfos = (id: number) => freePtDirectionStore.getPtDirectionInfos(id)
         const { matched, targets } = snapInterPtCore(
             pt,
             ptsFiltered,
@@ -130,7 +130,7 @@ export const useSnapStore = defineStore('snap',()=>{
             },
             getLinesDecidedPtSnapSizes,
             noBias,
-            getPtDirectionInfo
+            getPtDirectionInfos
         )
         snapInterPtTargets.value = { ...targets, matched }
         return matched

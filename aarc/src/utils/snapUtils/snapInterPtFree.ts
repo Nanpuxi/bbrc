@@ -9,7 +9,7 @@ import {
     makeCoordLength1
 } from "@/utils/coordUtils/coordMath";
 import { freeRayIntersect } from "@/utils/rayUtils/rayIntersection";
-import { isZero } from "@/utils/sgn";
+import { isSameCoord, isZero } from "@/utils/sgn";
 import { PtDirectionInfo } from "@/utils/ptUtils/ptDirection";
 
 export type { PtDirectionInfo } from "@/utils/ptUtils/ptDirection";
@@ -141,5 +141,30 @@ export function computeFreeSnapCandidates(
     result.push(p4, p5)
 
     return result
+}
+
+/**
+ * 多点出现（多线路）版本的候选生成：对每个方向信息分别生成候选后合并去重。
+ * 属于多条线路的 free 点（如两条垂直线路的交叉点）应为每条线路各生成
+ * 一组候选（如两条直线各贡献 2 个垂足，合起来呈十字形），而不是只用第一次出现。
+ *
+ * @param directionInfos 每次出现的方向信息数组；空或 undefined 时视为孤立点
+ */
+export function computeFreeSnapCandidatesMulti(
+    opt: ControlPoint,
+    snapDist: number,
+    directionInfos: (PtDirectionInfo | undefined)[] | undefined
+): Coord[] {
+    if (!directionInfos || directionInfos.length === 0) {
+        return computeFreeSnapCandidates(opt, snapDist, undefined)
+    }
+    const res: Coord[] = []
+    for (const info of directionInfos) {
+        for (const c of computeFreeSnapCandidates(opt, snapDist, info)) {
+            if (!res.some(x => isSameCoord(x, c)))
+                res.push(c)
+        }
+    }
+    return res
 }
 

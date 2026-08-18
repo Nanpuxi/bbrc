@@ -79,3 +79,21 @@ export function computePtDirections(
 ): Coord[] {
     return computePtDirectionInfo(pos, adjacentSeg).all
 }
+
+/**
+ * 合并点多次出现（多条线路）的方向信息：
+ * prev/next 取首个含有它们的出现（保持与"第一次出现"语义一致），
+ * all 为各次出现方向的并集（去重，均已在 [0, π) 区间）
+ */
+export function mergePtDirectionInfos(infos: PtDirectionInfo[]): PtDirectionInfo {
+    const res: PtDirectionInfo = { all: [] }
+    for (const info of infos) {
+        if (!res.prev && info.prev)
+            res.prev = info.prev
+        if (!res.next && info.next)
+            res.next = info.next
+        for (const d of info.all)
+            addUniqueDir(res.all, d)
+    }
+    return res
+}

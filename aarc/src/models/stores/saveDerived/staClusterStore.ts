@@ -52,7 +52,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         getPtSnapCandidatesAndReachPure(
             pt,
             id => saveStore.getLinesDecidedPtSnapSize(id),
-            id => freePtDirectionStore.getPtDirectionInfo(id),
+            id => freePtDirectionStore.getPtDirectionInfos(id),
             getConfigClingingDist()
         )
 

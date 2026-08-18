@@ -167,7 +167,8 @@ for (const opt of nearbyPts) {
     if (opt.free) {
         snapDists.forEach(snapDist => {
             const adjacentSeg = getAdjacentSegs?.(opt.id)
-            const candidates = computeFreeSnapCandidates(opt, snapDist, adjacentSeg)
+            // noBias（点间吸附开关关闭）时只保留零偏置候选（opt.pos 本身），与非 free 分支一致
+            const candidates = noBias ? [opt.pos] : computeFreeSnapCandidates(opt, snapDist, adjacentSeg)
             candidates.forEach(candidate => {
                 // 比较 candidate 与 pt.pos，更新 matched
             })
@@ -217,7 +218,7 @@ const getAdjacentSegs = (id: number): AdjacentSeg | undefined => {
 | 端点自由点（只有一侧） | 以该侧线段方向为轴，生成 B、B ± d * perp(u) 共 3 个候选；沿轴向的延长点可视需求追加。 |
 | 孤立自由点 | 只返回 `[B]` 候选。 |
 | 线段极短 | 若 `|segment| < ε`，跳过该侧，用另一侧；两侧都极短则退化到孤立点。 |
-| 点在多条线路中重复出现 | `adjacentSegs` 可能只返回第一次出现的位置；若需更精确，可对每个出现位置分别生成候选并去重。 |
+| 点在多条线路中重复出现 | 已实现：`freePtDirectionStore` 保留**每次出现**的相邻段与方向信息（`getPtDirectionInfos`），候选对每次出现分别生成后合并去重（`computeFreeSnapCandidatesMulti`），如两条垂直线路的交叉点会生成十字形候选；`getPtDirectionInfo` 返回合并视图（prev/next 取第一次出现，`all` 为各次方向并集），供渲染方向选择使用。 |
 
 ---
 
