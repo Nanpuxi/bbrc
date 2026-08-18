@@ -83,6 +83,54 @@ describe('staClusterStore.pure - ptClingingPure', () => {
     const c = pt(3, [25.5, 0])
     expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapOf(c.pos))).toBe(false)
   })
+
+  it('候选比较应为“点的实际位置 vs 对方候选”，候选对候选贴近不应贴合', () => {
+    // 回归：旧实现比较双方全部候选的两两组合，任一候选对贴近即贴合。
+    // 两个偏移候选之间的贴近不对应任何真实吸附（snapCore.snapInterPt 的语义是
+    // “一个点的实际位置落在另一个点的候选上”），导致 cluster 在数倍阈值距离上误并
+    const snapWith = (pos: [number, number], extra: [number, number][]) => {
+      const candidates: [number, number][] = [pos, ...extra]
+      const xs = candidates.map(c => c[0])
+      const ys = candidates.map(c => c[1])
+      return {
+        candidates,
+        reach: Math.max(...extra.map(c => Math.max(Math.abs(c[0] - pos[0]), Math.abs(c[1] - pos[1])), 0)),
+        bbox: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+      }
+    }
+    // A(0,0) 与 B(50,50) 各有一个候选在中点 (25,25)，候选对候选距离为 0，
+    // 但双方实际位置均不在对方任何候选的阈值（25）内：不应贴合
+    const a = pt(1, [0, 0])
+    const b = pt(2, [50, 50])
+    const aSnap = snapWith(a.pos, [[25, 25]])
+    const bSnap = snapWith(b.pos, [[25, 25]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnap)).toBe(false)
+  })
+
+  it('点的实际位置落在对方候选上应贴合（双向均检查）', () => {
+    const snapWith = (pos: [number, number], extra: [number, number][]) => {
+      const candidates: [number, number][] = [pos, ...extra]
+      const xs = candidates.map(c => c[0])
+      const ys = candidates.map(c => c[1])
+      return {
+        candidates,
+        reach: Math.max(...extra.map(c => Math.max(Math.abs(c[0] - pos[0]), Math.abs(c[1] - pos[1])), 0)),
+        bbox: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+      }
+    }
+    // B 的候选 (24,24) 距 A 的实际位置 (0,0) 约 33.9 > 25，不贴合；
+    // 候选 (20,0) 距 A 为 20 < 25，贴合
+    const a = pt(1, [0, 0])
+    const b = pt(2, [50, 0])
+    const aSnap = snapWith(a.pos, [])
+    const bSnapFar = snapWith(b.pos, [[24, 24]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapFar)).toBe(false)
+    const bSnapNear = snapWith(b.pos, [[20, 0]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapNear)).toBe(true)
+    // 反向：A 的候选 (40,10) 距 B 的实际位置 (50,0) 约 14.1 < 25，也应贴合
+    const aSnapNear = snapWith(a.pos, [[40, 10]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnapNear, bSnapFar)).toBe(true)
+  })
 })
 
 describe('staClusterStore.pure - buildNeighbors', () => {

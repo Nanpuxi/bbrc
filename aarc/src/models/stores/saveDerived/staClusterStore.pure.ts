@@ -100,11 +100,17 @@ export function ptClingingPure(
         // 否则带浮点漂移的边界距离（如 25.00001 vs 阈值 25）会被此处提前误杀
         if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist + epsilon * 10))
             return false
+        // 与 snapCore.snapInterPt 的语义一致：比较“一个点的实际位置”与
+        // “另一个点的吸附候选”。两个偏移候选之间的贴近不对应任何真实吸附，
+        // 候选对候选比较会导致 cluster 在数倍阈值的距离上误并。
+        // 候选列表本身包含 pos，因此也覆盖位置对位置的比较
+        for (const cb of bSnap.candidates) {
+            if (coordDistSqLessThan(a.pos, cb, clingingDistSqrBiggerByEpsilon))
+                return true
+        }
         for (const ca of aSnap.candidates) {
-            for (const cb of bSnap.candidates) {
-                if (coordDistSqLessThan(ca, cb, clingingDistSqrBiggerByEpsilon))
-                    return true
-            }
+            if (coordDistSqLessThan(b.pos, ca, clingingDistSqrBiggerByEpsilon))
+                return true
         }
         return false
     }

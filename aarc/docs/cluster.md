@@ -23,7 +23,7 @@
   - `size` 来自 `saveStore.getLinesDecidedPtSnapSize(id)`，即该点在各线路中决定的吸附尺寸
   - 因此**大站点的贴合阈值更大**，不是固定值
 - 正式比较带 epsilon 余量：`distSq < (clingingDist + epsilon * 10)²`，其中 `epsilon = numberCmpEpsilon = 1e-4`（余量即 0.001），用于容忍长 cluster 中坐标累加产生的浮点漂移
-- 带吸附候选时（free 点可能有平行线交点等候选位置），先做一次 bbox 快速拒绝（`bboxesCouldCling`），再对所有候选对做正式距离比较；任一候选对贴合即为 true
+- 带吸附候选时（free 点可能有平行线交点等候选位置），先做一次 bbox 快速拒绝（`bboxesCouldCling`），再做正式距离比较。正式比较与 `snapCore.snapInterPt` 的语义一致，是"**一个点的实际位置 vs 另一个点的候选**"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），任一方向贴近即为 true
 
 **关键不变量：所有快速拒绝/预筛都必须比正式判断宽松（至少带相同的 epsilon 余量），否则会把本该贴合的点对提前误杀。** 第 6 节的几次 fix 都是这一原则被破坏导致的。
 
@@ -115,7 +115,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 - 正式判断的判定边界（尺寸系数、epsilon 余量、reach 偏移）发生变化时，必须同步检查所有预筛：bbox 快速拒绝、轴向粗筛、网格搜索半径、增量更新路径
 - 回归测试应覆盖"恰好等于阈值"和"阈值 + 极微小增量"两类边界输入
 
-## 7. 待修复问题（2026-08 调查）
+## 7. 2026-08 调查发现的问题（均已修复）
 
 调查起因：用户报告 free 点之间的 cluster 生成"似乎没有考虑 config 中的 LineWidthMappedConfig"，部分情况下产生远距离 cluster。调查确认尺寸链路本身**是**走映射的（`getLinesDecidedPtSnapSize` → `saveStore.ptSnapSizes`，优先级含 `config.lineWidthMapped[width].staSnapSize`），但发现以下两个真实问题。
 
@@ -127,9 +127,9 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 
 **修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"三个用例（含 `lineWidthMapped` 深层就地修改）。
 
-### 7.2 free 点"候选对候选"比较过度合并（已复现）
+### 7.2 free 点"候选对候选"比较过度合并（已修复）
 
-`ptClingingPure` 带吸附候选时比较的是**双方全部候选的两两组合**，任一候选对贴近即贴合（见第 2 节）。但实际吸附（`snapCore.snapInterPt`）的语义是"**一个点的实际位置**落在**另一个点的候选**上"，候选只描述"对方可以吸附到哪里"。
+`ptClingingPure` 带吸附候选时曾比较**双方全部候选的两两组合**，任一候选对贴近即贴合。但实际吸附（`snapCore.snapInterPt`）的语义是"**一个点的实际位置**落在**另一个点的候选**上"，候选只描述"对方可以吸附到哪里"。
 
 两个偏移候选之间的贴近不对应任何真实吸附结果，导致过度合并。实测（base=25、尺寸=1、两个 90° 拐角 free 点沿对角线拉开）：
 
@@ -141,4 +141,4 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 
 即 cluster 最远可在约 **3.8 倍阈值**的距离上形成（双方偏移候选各伸出 ~1.41×snapDist，再加 clingingDist）。典型例：A(0,0)、B(50,50) 两个拐角朝向相对的 free 点，各自候选都含中点 (25,25)，距离 70.7 也被并入。`lineWidthMapped` 把 staSnapSize 调大时该效应同比放大。
 
-**修复方向**：候选比较改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），阈值仍用 `clingingDist + epsMargin`。现有 bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；本节后文（第 2 节"任一候选对贴合即为 true"的描述）需同步更新。
+**修复**：候选比较已改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），阈值仍用 `clingingDist + epsMargin`。bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；第 2 节的描述已同步更新。回归测试见 `staClusterStore.pure.test.ts` 的"候选比较应为'点的实际位置 vs 对方候选'"两个用例。
