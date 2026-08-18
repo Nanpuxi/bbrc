@@ -228,7 +228,7 @@ export const useEnvStore = defineStore('env', ()=>{
 
         if(!noDetect){
             //判断是否在站名上
-            const staName = onStaName(coord)
+            const staName = onStaName(coord, true)
             if(staName){
                 //点到站名上了
                 endEveryEditing({exceptName:true})

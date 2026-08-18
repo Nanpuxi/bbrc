@@ -88,15 +88,35 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
             lastClickedLockedLineId = undefined
         return res
     }
-    function onStaName(c:Coord){
+    // 记录上一次用户点击命中的锁定站名所属点，连续点击同一锁定站名时弹出提示
+    let lastClickedLockedStaNamePtId:number|undefined = undefined
+    function onStaName(c:Coord, notifyLocked?:boolean){
         let onPt:ControlPoint|undefined;
+        let hitLockedPt:ControlPoint|undefined;
         enumerateStaNameRects((ptId, rect)=>{
             if(rectInside(rect, c)){
                 const pt = saveStore.save?.points.find(pt => pt.id == ptId)
+                if(pt && ptLockedByLines(pt.id)){
+                    hitLockedPt = pt
+                    return true;
+                }
                 onPt = pt;
                 return true;
             }
         })
+        if(notifyLocked){
+            if(hitLockedPt){
+                if(lastClickedLockedStaNamePtId === hitLockedPt.id){
+                    const lineName = saveStore.getLinesByPt(hitLockedPt.id)[0]?.name || '该线'
+                    showPop(`${lineName}已锁定\n请前往列表解锁`, 'failed')
+                    lastClickedLockedStaNamePtId = undefined
+                }else{
+                    lastClickedLockedStaNamePtId = hitLockedPt.id
+                }
+            }else{
+                lastClickedLockedStaNamePtId = undefined
+            }
+        }
         return onPt;
     }
     function onLineExtendBtn(c:Coord){

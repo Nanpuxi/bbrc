@@ -4,6 +4,7 @@ import { useOnDetectStore } from '@/models/stores/saveDerived/saveDerivedDerived
 import { useFormalizedLineStore } from '@/models/stores/saveDerived/formalizedLineStore'
 import { useSaveStore } from '@/models/stores/saveStore'
 import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents'
+import { useStaNameRectStore } from '@/models/stores/saveDerived/staNameRectStore'
 import { ControlPoint, ControlPointDir, ControlPointSta, Line, Save } from '@/models/save'
 import { BoxType } from '@/components/common/types/pop'
 import { FormalPt } from '@/models/coord'
@@ -251,6 +252,89 @@ describe('onDetectStore - onLine', () => {
       const store = useOnDetectStore()
 
       expect(store.onPt([100, 100])?.id).toBe(10)
+    })
+  })
+
+  describe('onStaName - locked 线路', () => {
+    function makePt(id: number, pos: [number, number]): ControlPoint {
+      return { id, pos, dir: ControlPointDir.vertical, sta: ControlPointSta.sta } as ControlPoint
+    }
+
+    function setupStaNameRect(ptId: number) {
+      useStaNameRectStore().setStaNameRect(ptId, [[100, 100], [200, 150]])
+    }
+
+    it('点所属线路全部锁定时站名不应命中', () => {
+      setupStaNameRect(10)
+      setupSave([makeLine(1, [10, 20], true)], [makePt(10, [150, 120])])
+      const store = useOnDetectStore()
+
+      expect(store.onStaName([150, 120])).toBeUndefined()
+    })
+
+    it('点所属线路仅部分锁定时站名仍应命中', () => {
+      setupStaNameRect(10)
+      setupSave(
+        [makeLine(1, [10, 20], true), makeLine(2, [10, 30])],
+        [makePt(10, [150, 120])]
+      )
+      const store = useOnDetectStore()
+
+      expect(store.onStaName([150, 120])?.id).toBe(10)
+    })
+
+    it('连续两次点击同一锁定站名应弹出提示', () => {
+      setupStaNameRect(10)
+      const line = makeLine(1, [10, 20], true)
+      line.name = '1号线'
+      setupSave([line], [makePt(10, [150, 120])])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onStaName([150, 120], true)
+      expect(pops).toHaveLength(0)
+
+      store.onStaName([150, 120], true)
+      expect(pops).toHaveLength(1)
+      expect(pops[0].msg).toBe('1号线已锁定\n请前往列表解锁')
+      expect(pops[0].type).toBe('failed')
+    })
+
+    it('不传 notifyLocked 时点击锁定站名不弹提示', () => {
+      setupStaNameRect(10)
+      setupSave([makeLine(1, [10, 20], true)], [makePt(10, [150, 120])])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onStaName([150, 120])
+      store.onStaName([150, 120])
+      expect(pops).toHaveLength(0)
+    })
+
+    it('中间点击其他位置后重置，不再视为连续点击', () => {
+      setupStaNameRect(10)
+      setupSave([makeLine(1, [10, 20], true)], [makePt(10, [150, 120])])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onStaName([150, 120], true)
+      store.onStaName([500, 500], true) // 点击空白处，重置记录
+      store.onStaName([150, 120], true)
+      expect(pops).toHaveLength(0)
+
+      store.onStaName([150, 120], true) // 再次连续点击才弹提示
+      expect(pops).toHaveLength(1)
+    })
+
+    it('线路解锁后站名恢复命中', () => {
+      setupStaNameRect(10)
+      setupSave([makeLine(1, [10, 20], true)], [makePt(10, [150, 120])])
+      const store = useOnDetectStore()
+
+      expect(store.onStaName([150, 120])).toBeUndefined()
+
+      useSaveStore().save!.lines[0].locked = undefined
+      expect(store.onStaName([150, 120])?.id).toBe(10)
     })
   })
 })
