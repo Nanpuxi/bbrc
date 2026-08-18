@@ -40,12 +40,14 @@ import { useSignalrStore } from '@/app/com/signalrStore';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
 import { coordRound } from '@/utils/coordUtils/coordRound';
+import { throttle } from '@/utils/lang/throttle';
 import { useUndoStore } from '@/models/stores/utils/undoStore';
 import { isFocusingInput } from '@/utils/domUtils/focusingInput';
 import { renderAndUploadCloudSvg } from '@/models/save/cloudSvgOps';
 import { kickedName } from './routes/routesNames.ts';
 
 const heartbeatIntervalSecs = 3 * 60 // 每3分钟心跳一次
+const heartbeatOnEditMinIntervalMs = 60 * 1000 // 编辑活动触发的心跳，一分钟内最多一次
 
 const props = defineProps<{saveId:string}>()
 const router = useRouter()
@@ -314,17 +316,25 @@ function setLeavingPreventing(){
             savingDisabledWarningStore.onFirstEdit()
         }
         preventLeaving()
+        heartbeatOnEdit?.()
         if(saveStore.save)
             undoStore.push(saveStore.save)
     }
 }
 
 let heartbeatTimer = 0
+// 编辑活动本身也是在场证明：画布重新渲染（即发生编辑）时触发一次续约心跳，
+// 防止定时器被 webview/系统冻结导致的心跳误判（一分钟内最多一次）
+// 仅在 startHeartbeat 时（即确定处于可编辑模式后）才赋值，未赋值说明不可编辑，无需发送
+let heartbeatOnEdit: (() => void) | undefined
 function startHeartbeat(){
     // 开始心跳续约周期（不需要立即执行一次，因为loadData相当于已经执行过一次）
     heartbeatTimer = window.setInterval(async()=>{
         await api.save.heartbeatRenewal(saveIdNum.value)
     }, heartbeatIntervalSecs * 1000)
+    heartbeatOnEdit ??= throttle(()=>{
+        api.save.heartbeatRenewal(saveIdNum.value)
+    }, heartbeatOnEditMinIntervalMs)
 }
 function endHeartbeat(){
     // 结束心跳续约周期
