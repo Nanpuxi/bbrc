@@ -23,7 +23,9 @@
   - `size` 来自 `saveStore.getLinesDecidedPtSnapSize(id)`，即该点在各线路中决定的吸附尺寸
   - 因此**大站点的贴合阈值更大**，不是固定值
 - 正式比较带 epsilon 余量：`distSq < (clingingDist + epsilon * 10)²`，其中 `epsilon = numberCmpEpsilon = 1e-4`（余量即 0.001），用于容忍长 cluster 中坐标累加产生的浮点漂移
-- 带吸附候选时（free 点可能有平行线交点等候选位置），先做一次 bbox 快速拒绝（`bboxesCouldCling`），再做正式距离比较。正式比较与 `snapCore.snapInterPt` 的语义一致，是"**一个点的实际位置 vs 另一个点的候选**"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），任一方向贴近即为 true
+- 带吸附候选时（free 点可能有平行线交点等候选位置），先做一次 bbox 快速拒绝（`bboxesCouldCling`），再做正式距离比较。正式比较与 `snapCore.snapInterPt` 的语义一致，分两层：
+  - **位置对位置**：`a.pos vs b.pos`，阈值 `clingingDist + epsMargin`，与非 free 点的基准语义一致（候选列表本身包含 `pos`，但 pos 对的阈值不被吸附阈值收紧）
+  - **位置对偏移候选**：`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`，阈值改用**实际吸附阈值** `snapThrs = snapOctaClingPtPtThrs × getSnapThrsRatio(id)`（`+ epsMargin`），与实际吸附完全对齐——只有"拖动某点时会真的吸附到对方候选上"才贴合，避免仅仅接近的点意外成 cluster（见 7.3）
 
 **关键不变量：所有快速拒绝/预筛都必须比正式判断宽松（至少带相同的 epsilon 余量），否则会把本该贴合的点对提前误杀。** 第 6 节的几次 fix 都是这一原则被破坏导致的。
 
@@ -141,4 +143,17 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 
 即 cluster 最远可在约 **3.8 倍阈值**的距离上形成（双方偏移候选各伸出 ~1.41×snapDist，再加 clingingDist）。典型例：A(0,0)、B(50,50) 两个拐角朝向相对的 free 点，各自候选都含中点 (25,25)，距离 70.7 也被并入。`lineWidthMapped` 把 staSnapSize 调大时该效应同比放大。
 
-**修复**：候选比较已改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），阈值仍用 `clingingDist + epsMargin`。bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；第 2 节的描述已同步更新。回归测试见 `staClusterStore.pure.test.ts` 的"候选比较应为'点的实际位置 vs 对方候选'"两个用例。
+**修复**：候选比较已改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），修复时阈值仍用 `clingingDist + epsMargin`（后由 7.3 进一步收紧，偏移候选改用实际吸附阈值）。bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；第 2 节的描述已同步更新。回归测试见 `staClusterStore.pure.test.ts` 的"候选比较应为'点的实际位置 vs 对方候选'"两个用例。
+
+### 7.3 free 点候选比较的阈值与实际吸附不对齐（已修复）
+
+7.2 修正了比较的**对象**（位置 vs 候选），但偏移候选的判定**阈值**仍是 `clingingDist`（默认 25），而实际吸附（`snapCore.snapInterPt`）用的是 `snapThrs = snapOctaClingPtPtThrs × getSnapThrsRatio(id)`（默认 10）。于是两个 free 点在"接近但远未吸附"的距离上也会成 cluster（直线上最远 ~50，拐角更远），实际使用中出现意外的合并。
+
+**修复**：`ptClingingPure` 新增可选参数 `getSnapThrs`（由 `staClusterStore` 注入，`snapOctaClingPtPtThrs × saveStore.getSnapThrsRatio(id)`）。带候选的比较分两层：
+
+- 位置对位置（`a.pos vs b.pos`）仍用 `clingingDist + epsMargin`，保持与非 free 点一致的基准语义；
+- 位置对**偏移候选**改用 `snapThrs + epsMargin`，方向性也与吸附一致（"a 吸附到 b 的候选"模拟拖动 a，阈值取 a 的比率）。
+
+`getSnapThrsRatio` 从 `snapStore` 移到 `saveStore` 供两处共用（`snapStore` 依赖 `staClusterStore`，反向引用会成环）。配置 watch 补充 `snapOctaClingPtPtThrs`。所有预筛（bbox、轴向粗筛、网格半径）仍按 `clingingDist + reach + epsMargin` 计算，比正式判断宽松，无需改动。回归测试见 `staClusterStore.pure.test.ts` 的"点的实际位置落在对方候选的吸附阈值内应贴合（与实际吸附对齐）"。
+
+注意一个已知的近似：候选的**生成**仍用各点自身尺寸（`snapDist = size(pt) × base`），而实际吸附的候选偏移距离按点对交叉尺寸 `(sizeA+sizeB)/2 × base` 计算；两者在双方尺寸相同时一致，尺寸不同时候选位置略有差异，暂不影响主要使用场景。

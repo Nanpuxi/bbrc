@@ -288,6 +288,14 @@ export const useSaveStore = defineStore('save', () => {
     function getLinesByPt(ptId:number){
         return ptBelongLineDict.value[ptId] || []
     }
+    // 吸附阈值缩放比例：取点所属线路的最小宽度，仅在小于1时缩小阈值（大于1不放大）
+    function getSnapThrsRatio(ptId:number):number{
+        const lines = getLinesByPt(ptId)
+        if(lines.length===0)
+            return 1
+        const minWidth = Math.min(...lines.map(l=>l.width||1))
+        return Math.min(minWidth, 1)
+    }
     function getLinesDecidedPtSize(ptId:number){
         return ptSize.value[ptId] || 1
     }
@@ -689,7 +697,7 @@ export const useSaveStore = defineStore('save', () => {
         save, getNewId, cvsWidth, cvsHeight, disposedStaNameOf, deletedPoint, deletedTextTag, linePtsChanged,
         getPtById, getPtsByIds, getLineById, getLinesByIds, linesSortedByZIndex,
         getLinesDecidedPtSize, getLinesDecidedPtSizes, getLinesDecidedPtNameSize, getLinesDecidedPtNameSnapSize, getLinesDecidedPtSnapSizes, getLinesDecidedPtSnapSize,
-        getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
+        getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getSnapThrsRatio, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
         insertNewPtToLine, insertPtToLine, createNewLine, arrangeLinesOfType, ensureLinesOrdered,
         removePt, removePtFromLine, removeNoLinePoints, removePointLinkByPt, removeDanglingPointLinks, tryMergePt, isNamedPt,
         removeTextTag, moveEverything, setCvsSize,

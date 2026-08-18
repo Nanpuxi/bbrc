@@ -107,7 +107,7 @@ describe('staClusterStore.pure - ptClingingPure', () => {
     expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnap)).toBe(false)
   })
 
-  it('点的实际位置落在对方候选上应贴合（双向均检查）', () => {
+  it('点的实际位置落在对方候选的吸附阈值内应贴合（与实际吸附对齐）', () => {
     const snapWith = (pos: [number, number], extra: [number, number][]) => {
       const candidates: [number, number][] = [pos, ...extra]
       const xs = candidates.map(c => c[0])
@@ -118,18 +118,23 @@ describe('staClusterStore.pure - ptClingingPure', () => {
         bbox: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
       }
     }
-    // B 的候选 (24,24) 距 A 的实际位置 (0,0) 约 33.9 > 25，不贴合；
-    // 候选 (20,0) 距 A 为 20 < 25，贴合
+    // 偏移候选的比较用吸附阈值 snapThrs（这里取 10，与默认配置一致）而非 clingingDist(25)：
+    // B 的候选 (20,0) 距 A(0,0) 为 20，大于 snapThrs 但小于 clingingDist，
+    // 实际吸附不会发生，不应贴合；候选 (8,0) 距 A 为 8 < 10，贴合
+    const snapThrs10 = () => 10
     const a = pt(1, [0, 0])
     const b = pt(2, [50, 0])
     const aSnap = snapWith(a.pos, [])
-    const bSnapFar = snapWith(b.pos, [[24, 24]])
-    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapFar)).toBe(false)
-    const bSnapNear = snapWith(b.pos, [[20, 0]])
-    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapNear)).toBe(true)
-    // 反向：A 的候选 (40,10) 距 B 的实际位置 (50,0) 约 14.1 < 25，也应贴合
-    const aSnapNear = snapWith(a.pos, [[40, 10]])
-    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnapNear, bSnapFar)).toBe(true)
+    const bSnapFar = snapWith(b.pos, [[20, 0]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapFar, snapThrs10)).toBe(false)
+    const bSnapNear = snapWith(b.pos, [[8, 0]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapNear, snapThrs10)).toBe(true)
+    // 反向：A 的候选 (44, 3) 距 B(50,0) 约 5.8 < 10，也应贴合
+    const aSnapNear = snapWith(a.pos, [[44, 3]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnapNear, bSnapFar, snapThrs10)).toBe(true)
+    // 位置对位置的基准判断不受吸附阈值收紧影响：距离 20 < clingingDist(25) 仍贴合
+    const c = pt(3, [20, 0])
+    expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapWith(c.pos, []), snapThrs10)).toBe(true)
   })
 })
 

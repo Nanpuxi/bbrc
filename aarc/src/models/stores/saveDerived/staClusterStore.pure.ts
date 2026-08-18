@@ -79,6 +79,9 @@ export function bboxesCouldCling(
  * @param epsilon 浮点数比较容差
  * @param aSnap 点 A 的吸附候选信息（仅 free 相关逻辑使用），不传时退化为标准位置判断
  * @param bSnap 点 B 的吸附候选信息
+ * @param getSnapThrs 根据点 ID 获取实际吸附阈值（snapOctaClingPtPtThrs × 线宽比率）。
+ * 传入时，偏移候选的比较与实际吸附（snapCore.snapInterPt）对齐，用该阈值而非 clingingDist；
+ * 不传时保持旧行为（候选比较也用 clingingDist）
  */
 export function ptClingingPure(
     a: ControlPoint,
@@ -87,29 +90,37 @@ export function ptClingingPure(
     getSnapSize: (id: number) => number,
     epsilon: number,
     aSnap?: PtSnapCandidatesInfo,
-    bSnap?: PtSnapCandidatesInfo
+    bSnap?: PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number
 ): boolean {
     const sizeA = getSnapSize(a.id)
     const sizeB = getSnapSize(b.id)
     const distMut = (sizeA + sizeB) / 2
     const clingingDist = configClingingDist * distMut
-    const clingingDistSqrBiggerByEpsilon = (clingingDist + epsilon * 10) ** 2
+    const epsMargin = epsilon * 10
+    const clingingDistSqrBiggerByEpsilon = (clingingDist + epsMargin) ** 2
 
     if (aSnap && bSnap) {
         // 注意：bbox 快速拒绝必须与下方的正式比较保持一致的 epsilon 余量，
         // 否则带浮点漂移的边界距离（如 25.00001 vs 阈值 25）会被此处提前误杀
-        if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist + epsilon * 10))
+        if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist + epsMargin))
             return false
-        // 与 snapCore.snapInterPt 的语义一致：比较“一个点的实际位置”与
-        // “另一个点的吸附候选”。两个偏移候选之间的贴近不对应任何真实吸附，
-        // 候选对候选比较会导致 cluster 在数倍阈值的距离上误并。
-        // 候选列表本身包含 pos，因此也覆盖位置对位置的比较
+        // 位置对位置的基准判断：仍用 clingingDist，与非 free 点的语义一致
+        // （候选列表本身包含 pos，但 pos 对的阈值不应被吸附阈值收紧）
+        if (coordDistSqLessThan(a.pos, b.pos, clingingDistSqrBiggerByEpsilon))
+            return true
+        // 偏移候选的比较与实际吸附（snapCore.snapInterPt）对齐：
+        // “一个点的实际位置”落在“另一个点的候选”的吸附阈值内才贴合。
+        // 用吸附阈值而非 clingingDist，避免仅仅接近（但远未吸附）的点意外成 cluster。
+        // “a 吸附到 b 的候选”模拟拖动 a，阈值取 a 的比率；b 侧同理
+        const snapThrsSqrA = ((getSnapThrs?.(a.id) ?? clingingDist) + epsMargin) ** 2
+        const snapThrsSqrB = ((getSnapThrs?.(b.id) ?? clingingDist) + epsMargin) ** 2
         for (const cb of bSnap.candidates) {
-            if (coordDistSqLessThan(a.pos, cb, clingingDistSqrBiggerByEpsilon))
+            if (coordDistSqLessThan(a.pos, cb, snapThrsSqrA))
                 return true
         }
         for (const ca of aSnap.candidates) {
-            if (coordDistSqLessThan(b.pos, ca, clingingDistSqrBiggerByEpsilon))
+            if (coordDistSqLessThan(b.pos, ca, snapThrsSqrB))
                 return true
         }
         return false
@@ -138,13 +149,15 @@ function getGridKey(x: number, y: number, cellSize: number): string {
  * （k 为单个网格及周围 8 格内平均点数）
  * @param getSnapCandidates 可选；提供时会把 free 点吸附候选也纳入判断，
  * 否则退化为标准位置判断（与 master 版本一致）
+ * @param getSnapThrs 可选；提供时偏移候选的比较与实际吸附阈值对齐（见 ptClingingPure）
  */
 export function buildNeighbors(
     pts: ControlPoint[],
     configClingingDist: number,
     getSnapSize: (id: number) => number,
     epsilon: number,
-    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo
+    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number
 ): Neighbors {
     const neighbors: Neighbors = {}
     const cellSize = 2.5 * configClingingDist
@@ -243,7 +256,7 @@ export function buildNeighbors(
                         continue
                     if (Math.abs(pt.pos[1] - other.pos[1]) > checkThrs)
                         continue
-                    if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap)) {
+                    if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap, getSnapThrs)) {
                         if (!neighbors[pt.id])
                             neighbors[pt.id] = new Set<number>()
                         if (!neighbors[other.id])
@@ -317,7 +330,8 @@ export function updateNeighborsForMovedPt(
     configClingingDist: number,
     getSnapSize: (id: number) => number,
     epsilon: number,
-    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo
+    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number
 ): Neighbors {
     const next = cloneNeighbors(neighbors)
     let neibs = next[pt.id]
@@ -352,7 +366,7 @@ export function updateNeighborsForMovedPt(
             if (Math.abs(pt.pos[1] - otherPt.pos[1]) > checkThrs)
                 continue
         }
-        if (ptClingingPure(pt, otherPt, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap)) {
+        if (ptClingingPure(pt, otherPt, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap, getSnapThrs)) {
             neibs.add(otherPt.id)
             if (!next[otherPt.id])
                 next[otherPt.id] = new Set<number>()

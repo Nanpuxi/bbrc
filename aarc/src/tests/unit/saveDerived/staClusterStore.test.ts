@@ -477,16 +477,17 @@ describe('staClusterStore - getStaClusters', () => {
   })
 
   it('free 点平行线交点候选接近时应聚成同一个 cluster', () => {
-    // 两个 free 点实际距离 50 > 25，按原逻辑不会聚类；
-    // 但它们内侧平行线交点候选距离约 20.7 < 25，应聚类。
+    // 两个 free 点实际距离 44 > 25，按位置对位置的基准逻辑不会聚类；
+    // 点 2 的内侧平行线交点候选 (35.36,0) 距点 5 实际位置 (44,0) 约 8.6，
+    // 小于吸附阈值（snapOctaClingPtPtThrs 默认 10），与实际吸附对齐，应聚类。
     const save = createEmptySave({
       points: [
         { ...createPoint(1), pos: [100, 100], sta: ControlPointSta.sta },
         { ...createPoint(2), pos: [0, 0], sta: ControlPointSta.sta, free: true },
         { ...createPoint(3), pos: [100, -100], sta: ControlPointSta.sta },
-        { ...createPoint(4), pos: [-50, 100], sta: ControlPointSta.sta },
-        { ...createPoint(5), pos: [50, 0], sta: ControlPointSta.sta, free: true },
-        { ...createPoint(6), pos: [-50, -100], sta: ControlPointSta.sta }
+        { ...createPoint(4), pos: [-44, 100], sta: ControlPointSta.sta },
+        { ...createPoint(5), pos: [44, 0], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(6), pos: [-44, -100], sta: ControlPointSta.sta }
       ],
       lines: [
         createLine([1, 2, 3]),

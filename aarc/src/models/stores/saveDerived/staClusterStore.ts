@@ -33,12 +33,17 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     // 使用时读取而非一次性捕获：snapOctaClingPtPtDist 可能在会话内被修改
     const getConfigClingingDist = () => cs.config.snapOctaClingPtPtDist
 
-    // 贴合距离相关配置（基础距离、线宽映射的吸附尺寸）变化时，
+    // free 点偏移候选的比较阈值与实际吸附（snapCore.snapInterPt）对齐：
+    // snapOctaClingPtPtThrs × 吸附阈值缩放比率（点所属线路的最小宽度）
+    const getSnapThrs = (id: number) =>
+        cs.config.snapOctaClingPtPtThrs * saveStore.getSnapThrsRatio(id)
+
+    // 贴合距离相关配置（基础距离、吸附阈值、线宽映射的吸附尺寸）变化时，
     // 邻接表与 cluster 缓存必须整体失效（靠懒加载重建），
     // 否则会残留旧配置算出的邻接关系（如远距离 cluster）；
     // 且增量更新会用新配置重算单点邻接，与旧边混杂
     watch(
-        () => [cs.config.snapOctaClingPtPtDist, cs.config.lineWidthMapped],
+        () => [cs.config.snapOctaClingPtPtDist, cs.config.snapOctaClingPtPtThrs, cs.config.lineWidthMapped],
         () => clearItems(),
         { deep: true }
     )
@@ -85,7 +90,8 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
-            getPtSnapCandidatesAndReach
+            getPtSnapCandidatesAndReach,
+            getSnapThrs
         )
     }
     function makeClustersFromNeighbors(){
@@ -103,7 +109,8 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
-            getPtSnapCandidatesAndReach
+            getPtSnapCandidatesAndReach,
+            getSnapThrs
         )
         makeClustersFromNeighbors()
     }
@@ -171,7 +178,8 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
                 getConfigClingingDist(),
                 id => saveStore.getLinesDecidedPtSnapSize(id),
                 numberCmpEpsilon,
-                getPtSnapCandidatesAndReach
+                getPtSnapCandidatesAndReach,
+                getSnapThrs
             )
         }
         makeClustersFromNeighbors()
