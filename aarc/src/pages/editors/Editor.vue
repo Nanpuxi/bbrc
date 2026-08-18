@@ -23,6 +23,8 @@ import { useMiniatureCvsDispatcher } from '@/models/cvs/dispatchers/miniatureCvs
 import { useCachePreventer } from '@/utils/timeUtils/cachePreventer';
 import { DocumentHiddenLongWatcher } from '@/utils/eventUtils/documentHiddenLong';
 import HiddenLongWarnPrompt from './components/HiddenLongWarnPrompt.vue';
+import HeartbeatFailWarnPrompt from './components/HeartbeatFailWarnPrompt.vue';
+import { useHeartbeatStatusStore } from '@/app/globalStores/heartbeatStatus';
 import WarnRulePrompts from './components/WarnRulePrompts.vue';
 import ChatRoom from '@/pages/chat/ChatRoom.vue';
 import UserFileFavorites from '@/components/common/userFile/UserFileFavorites.vue';
@@ -323,17 +325,31 @@ function setLeavingPreventing(){
 }
 
 let heartbeatTimer = 0
+const heartbeatFailWarnMs = 6 * 60 * 1000 // 距上次成功心跳超过该时长后再失败则弹出警告
+const showHeartbeatFailWarn = ref(false)
+const heartbeatStatusStore = useHeartbeatStatusStore()
+// 所有续约心跳的统一入口：记录上次成功时间；失败且距上次成功过久时弹出警告
+async function renewHeartbeat(){
+    const ok = await api.save.heartbeatRenewal(saveIdNum.value)
+    if(ok){
+        heartbeatStatusStore.markSuccess()
+    }
+    else if(heartbeatStatusStore.sinceLastSuccessMs() > heartbeatFailWarnMs){
+        showHeartbeatFailWarn.value = true
+    }
+}
 // 编辑活动本身也是在场证明：画布重新渲染（即发生编辑）时触发一次续约心跳，
 // 防止定时器被 webview/系统冻结导致的心跳误判（一分钟内最多一次）
 // 仅在 startHeartbeat 时（即确定处于可编辑模式后）才赋值，未赋值说明不可编辑，无需发送
 let heartbeatOnEdit: (() => void) | undefined
 function startHeartbeat(){
     // 开始心跳续约周期（不需要立即执行一次，因为loadData相当于已经执行过一次）
+    heartbeatStatusStore.markSuccess()
     heartbeatTimer = window.setInterval(async()=>{
-        await api.save.heartbeatRenewal(saveIdNum.value)
+        await renewHeartbeat()
     }, heartbeatIntervalSecs * 1000)
     heartbeatOnEdit ??= throttle(()=>{
-        api.save.heartbeatRenewal(saveIdNum.value)
+        renewHeartbeat()
     }, heartbeatOnEditMinIntervalMs)
     document.addEventListener('visibilitychange', onVisibleHeartbeat)
 }
@@ -345,7 +361,7 @@ function endHeartbeat(){
 function onVisibleHeartbeat(){
     // 页面重新可见时立即补发一次续约心跳（隐藏期间定时器可能已被 webview/系统冻结）
     if(document.visibilityState === 'visible')
-        api.save.heartbeatRenewal(saveIdNum.value)
+        renewHeartbeat()
 }
 
 watch(props, async()=>{
@@ -431,6 +447,7 @@ onBeforeUnmount(()=>{
     <UnsavedLeavingWarning v-if="showUnsavedWarning" :release="releasePreventLeaving"
         :save="async()=>{ await saveData(false) }" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
     <HiddenLongWarnPrompt v-if="showHiddenLongWarn" @ok="showHiddenLongWarn=false"></HiddenLongWarnPrompt>
+    <HeartbeatFailWarnPrompt v-if="showHeartbeatFailWarn" @ok="showHeartbeatFailWarn=false"></HeartbeatFailWarnPrompt>
     <WarnRulePrompts :save-status="saveStatus"></WarnRulePrompts>
     <SavingDisabledWarning></SavingDisabledWarning>
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
