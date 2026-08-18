@@ -315,7 +315,7 @@ export const useEnvStore = defineStore('env', ()=>{
             
             //判断是否在线上
             //如果已经移动过点，这时formalPts还未更新，不应该进行点击线路判断，直接视为点击空白处
-            const lineMatches = onLine(coord);
+            const lineMatches = onLine(coord, [], true);
             if(lineMatches && lineMatches.length>0){
                 //点到线上了
                 const lineMatch = lineMatches[0]

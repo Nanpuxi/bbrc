@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { useOnDetectStore } from '@/models/stores/saveDerived/saveDerivedDerived/onDetectStore'
 import { useFormalizedLineStore } from '@/models/stores/saveDerived/formalizedLineStore'
-import { ControlPointDir } from '@/models/save'
+import { useSaveStore } from '@/models/stores/saveStore'
+import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents'
+import { ControlPoint, ControlPointDir, ControlPointSta, Line, Save } from '@/models/save'
+import { BoxType } from '@/components/common/types/pop'
 import { FormalPt } from '@/models/coord'
 
 describe('onDetectStore - onLine', () => {
@@ -17,6 +20,26 @@ describe('onDetectStore - onLine', () => {
   function setupFormalizedLine(lineId: number, pts: FormalPt[]) {
     const fls = useFormalizedLineStore()
     fls.setLinesFormalPts(lineId, pts)
+  }
+
+  function makeLine(id: number, pts: number[], locked?: boolean): Line {
+    return { id, pts, name: '', nameSub: '', color: '', type: 0, locked } as Line
+  }
+
+  function setupSave(lines: Line[], points: ControlPoint[] = []) {
+    const saveStore = useSaveStore()
+    saveStore.save = {
+      idIncre: 1, points, lines, textTags: [], cvsSize: [1000, 1000], config: {}, meta: {}
+    } as Save
+  }
+
+  function setupPopRecorder() {
+    const pops: { msg: string, type: BoxType }[] = []
+    useUniqueComponentsStore().initCallbacks({
+      popCallback: (msg, type) => { pops.push({ msg, type }) },
+      waitCallback: () => {}
+    })
+    return pops
   }
 
   it('点击水平线段应返回命中', () => {
@@ -128,6 +151,106 @@ describe('onDetectStore - onLine', () => {
       expect(onNormal).toHaveLength(1)
       expect(onNormal[0].afterPtIdx).toBe(1)
       expect(onNormal[0].alignedPos).toEqual([45, 10])
+    })
+  })
+
+  describe('onLine - locked 线路', () => {
+    it('锁定的线路不应返回命中', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupSave([makeLine(1, [10, 20], true)])
+      const store = useOnDetectStore()
+
+      expect(store.onLine([50, 5])).toHaveLength(0)
+    })
+
+    it('连续两次点击同一锁定线路应弹出提示', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      const line = makeLine(1, [10, 20], true)
+      line.name = '1号线'
+      setupSave([line])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onLine([50, 5], [], true)
+      expect(pops).toHaveLength(0)
+
+      store.onLine([50, 5], [], true)
+      expect(pops).toHaveLength(1)
+      expect(pops[0].msg).toBe('1号线已锁定\n请前往列表解锁')
+      expect(pops[0].type).toBe('failed')
+    })
+
+    it('不传 notifyLocked 时点击锁定线路不弹提示', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupSave([makeLine(1, [10, 20], true)])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onLine([50, 5])
+      store.onLine([50, 5])
+      expect(pops).toHaveLength(0)
+    })
+
+    it('中间点击其他位置后重置，不再视为连续点击', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupSave([makeLine(1, [10, 20], true)])
+      const pops = setupPopRecorder()
+      const store = useOnDetectStore()
+
+      store.onLine([50, 5], [], true)
+      store.onLine([500, 500], [], true) // 点击空白处，重置记录
+      store.onLine([50, 5], [], true)
+      expect(pops).toHaveLength(0)
+
+      store.onLine([50, 5], [], true) // 再次连续点击才弹提示
+      expect(pops).toHaveLength(1)
+    })
+
+    it('线路解锁后点击恢复命中', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupSave([makeLine(1, [10, 20], true)])
+      const store = useOnDetectStore()
+
+      expect(store.onLine([50, 5])).toHaveLength(0)
+
+      useSaveStore().save!.lines[0].locked = undefined
+      const res = store.onLine([50, 5])
+      expect(res).toHaveLength(1)
+      expect(res[0].lineId).toBe(1)
+    })
+  })
+
+  describe('onPt - locked 线路', () => {
+    function makePt(id: number, pos: [number, number]): ControlPoint {
+      return { id, pos, dir: ControlPointDir.vertical, sta: ControlPointSta.sta } as ControlPoint
+    }
+
+    it('点所属线路全部锁定时不应命中', () => {
+      setupSave(
+        [makeLine(1, [10, 20], true), makeLine(2, [10, 30], true)],
+        [makePt(10, [100, 100])]
+      )
+      const store = useOnDetectStore()
+
+      expect(store.onPt([100, 100])).toBeUndefined()
+      expect(store.onPt([100, 100], true)).toBeUndefined()
+    })
+
+    it('点所属线路仅部分锁定时仍应命中', () => {
+      setupSave(
+        [makeLine(1, [10, 20], true), makeLine(2, [10, 30])],
+        [makePt(10, [100, 100])]
+      )
+      const store = useOnDetectStore()
+
+      expect(store.onPt([100, 100])?.id).toBe(10)
+    })
+
+    it('不属于任何线路的点不受锁定影响', () => {
+      setupSave([makeLine(1, [20, 30], true)], [makePt(10, [100, 100])])
+      const store = useOnDetectStore()
+
+      expect(store.onPt([100, 100])?.id).toBe(10)
     })
   })
 })

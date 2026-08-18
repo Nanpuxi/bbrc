@@ -147,6 +147,9 @@ export const usePointCvsWorker = defineStore('pointCvsWorker', ()=>{
         if(relatedLines.length>0 && relatedLines.every(x=>saveStore.isLineTypeWithoutSta(x.type)))
             pt.sta = ControlPointSta.plain //自动设置车站类型
         let staType = pt.sta
+        if(staType === ControlPointSta.plain && relatedLines.length>0 && relatedLines.every(l=>l.locked)){
+            return //所属线路全部锁定时，不渲染十字点
+        }
         if(staType !== ControlPointSta.sta && staOnly){
             return
         }

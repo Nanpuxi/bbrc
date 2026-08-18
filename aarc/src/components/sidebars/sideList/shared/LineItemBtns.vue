@@ -9,6 +9,8 @@ import branchIcon from '@/assets/ui/editor/branch.svg';
 import branchSeperateIcon from '@/assets/ui/editor/branchSeperate.svg';
 import slicesIcon from '@/assets/ui/slices.svg';
 import searchIcon from '@/assets/ui/search.svg';
+import lockIcon from '@/assets/ui/editor/lock.svg';
+import unlockIcon from '@/assets/ui/editor/unlock.svg';
 
 const envStore = useEnvStore()
 const cvs = useCvsFrameStore()
@@ -44,6 +46,11 @@ function centerOnLine(){
     envStore.activePt = pt;
     envStore.cursorPos = [...pt.pos]
     emit('closeSidebar')
+}
+
+function toggleLock(){
+    props.l.locked = !props.l.locked || undefined
+    envStore.lineInfoChanged(props.l)
 }
 
 const mode = computed<'A'|'B'>(()=>{
@@ -85,6 +92,10 @@ const childrenCount = computed<number>(()=>{
     <div v-if="mode==='B'" class="sqrBtn" @click="delLineStart(l)">
         ×
     </div>
+    <div class="lock-icon" :class="{locked: l.locked}"
+        @click="toggleLock" :title="l.locked ? '点击解锁该线路' : '点击锁定该线路（锁定后无法选中）'">
+        <img :src="l.locked ? lockIcon : unlockIcon"/>
+    </div>
     <img :src="searchIcon" class="search-icon" @click="centerOnLine" title="点击寻找该线路的位置"/>
 </template>
 
@@ -119,9 +130,9 @@ const childrenCount = computed<number>(()=>{
     // 需要外层线路卡片是 position 非 static 才能正确定位
     position: absolute;
     right: -10px;
-    top: -8px;
-    width: 15px;
-    height: 15px;
+    top: -10px;
+    width: 14px;
+    height: 14px;
     padding: 5px;
     border-radius: 5px 0px 0px 5px;
     background-color: white;
@@ -130,6 +141,38 @@ const childrenCount = computed<number>(()=>{
     z-index: 10;
     &:hover{
         filter: brightness(0.8);
+    }
+}
+.lock-icon{
+    // 同 search-icon，位于其左侧
+    position: absolute;
+    right: 18px;
+    top: -10px;
+    // 总尺寸与原 img 一致：内容 18 + 原 padding 3*2 = 24
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    background-color: white;
+    box-shadow: 0 0 4px 0 rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 10;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    img{
+        width: 18px;
+        height: 18px;
+    }
+    &:hover{
+        filter: brightness(0.8);
+    }
+    &.locked{
+        background-color: #f0d878;
+        // 滤镜只作用于内层 img，避免连同背景一起变白
+        img{
+            filter: brightness(0) invert(1); // 图标变为纯白
+        }
     }
 }
 </style>
