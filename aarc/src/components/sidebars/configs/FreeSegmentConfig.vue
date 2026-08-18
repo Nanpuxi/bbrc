@@ -83,10 +83,11 @@ function applySnapRayAnglesForFree() {
         </tr>
         <tr>
             <td>
-                <button @click="envStore.rerender()">重绘</button>
+                <button @click="envStore.rerender()">手动触发重绘</button>
                 <div class="explain">
                     <p>修改后需要重绘才能有实际效果，较大的图中首次重绘可能耗时较久。</p>
                 </div>
+                <div class="smallNote">也可不点击此处，直接继续编辑也会触发重绘</div>
             </td>
         </tr>
         <tr>
