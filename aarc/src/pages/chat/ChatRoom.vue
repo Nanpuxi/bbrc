@@ -122,6 +122,7 @@ watch(() => signalrStore.pendingKickEditingUserRooms.has(roomName.value), (hasKi
 
 async function joinRoom() {
     if (isJoining.value) return
+    if (!userInfoStore.isLogined) return // 未登录：不尝试连接，避免无意义的报错
     localError.value = null
     isJoining.value = true
     try {
