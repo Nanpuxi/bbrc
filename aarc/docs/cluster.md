@@ -27,6 +27,14 @@
   - **位置对位置**：`a.pos vs b.pos`，阈值 `clingingDist + epsMargin`，与非 free 点的基准语义一致（候选列表本身包含 `pos`，但 pos 对的阈值不被吸附阈值收紧）
   - **位置对偏移候选**：`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`，阈值改用**实际吸附阈值** `snapThrs = snapOctaClingPtPtThrs × getSnapThrsRatio(id)`（`+ epsMargin`），与实际吸附完全对齐——只有"拖动某点时会真的吸附到对方候选上"才贴合，避免仅仅接近的点意外成 cluster（见 7.3）
 
+**free 点 cluster 生成模式**（配置项 `freePtClusterMode`，见 `FreeSegmentConfig.vue`）：
+
+- `loose`（默认）：即上述当前行为，点的实际位置落在对方吸附点位的吸附阈值内即算入 cluster
+- `strict`：位置对偏移候选的比较阈值收紧为仅 epsilon 余量（`ptClingingPure` 的 `freeClusterMode` 参数），点的实际位置必须几乎精确落在对方吸附点位上才贴合；位置对位置的基准判断不受影响
+- `off`：free 点完全不参与 cluster 生成——`ptClingingPure` 对任何含 free 点的点对直接返回不贴合（全量/增量/补丁恢复所有路径都经过该函数）；store 层此时也不再传入吸附候选，避免 free 点候选的无效计算
+
+模式变化通过 `staClusterStore` 的配置 watch 使邻接表/cluster 缓存整体失效后懒加载重建（同 7.1）。strict/off 都只让正式判断更严格，所有预筛（bbox、轴向粗筛、网格半径）仍按 loose 口径计算，保持"只会更宽松"的不变量，无需改动。
+
 **关键不变量：所有快速拒绝/预筛都必须比正式判断宽松（至少带相同的 epsilon 余量），否则会把本该贴合的点对提前误杀。** 第 6 节的几次 fix 都是这一原则被破坏导致的。
 
 ## 3. 生成机制（buildNeighbors）
@@ -127,7 +135,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 - 修改 `lineWidthMapped` 后，没有任何 watcher 使 `neighbors`/`staClusters` 失效（`resetterStore` 只在存档加载/undo/redo 时重置；`configStore` 内无相关监听）。
 - 更隐蔽的是：改完配置后再移动某个点，`updateNeighborsForMovedPt` 会用**新尺寸**增量更新该点的邻接边，而邻接表中其他边仍是**旧尺寸**的计算结果——新旧混杂，旧的大尺寸远距离 cluster 会一直残留到页面刷新。
 
-**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"三个用例（含 `lineWidthMapped` 深层就地修改）。
+**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建（后续 `snapOctaClingPtPtThrs`、`freePtClusterMode` 也加入同一 watch）。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"三个用例（含 `lineWidthMapped` 深层就地修改）。
 
 ### 7.2 free 点"候选对候选"比较过度合并（已修复）
 

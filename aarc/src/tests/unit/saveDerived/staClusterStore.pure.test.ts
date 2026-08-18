@@ -136,6 +136,50 @@ describe('staClusterStore.pure - ptClingingPure', () => {
     const c = pt(3, [20, 0])
     expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapWith(c.pos, []), snapThrs10)).toBe(true)
   })
+
+  it('off 模式下任何含 free 点的点对都不贴合', () => {
+    // off：free 点完全不参与 cluster 生成，即使位置几乎重合（pos-pos 基准距离内）
+    const a = pt(1, [0, 0], ControlPointSta.sta, { free: true })
+    const b = pt(2, [1, 0], ControlPointSta.sta, { free: true })
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, undefined, undefined, undefined, 'off')).toBe(false)
+    // free 与非 free 混合也不贴合
+    const c = pt(3, [1, 0])
+    expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, undefined, undefined, undefined, 'off')).toBe(false)
+    // 纯非 free 点对不受影响
+    const d = pt(4, [1, 0])
+    expect(ptClingingPure(c, d, configClingingDist, snapSizeOne, numberCmpEpsilon, undefined, undefined, undefined, 'off')).toBe(true)
+    // loose/strict 下重合的 free 点对仍按基准判断贴合
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, undefined, undefined, undefined, 'loose')).toBe(true)
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, undefined, undefined, undefined, 'strict')).toBe(true)
+  })
+
+  it('strict 模式下偏移候选需几乎精确命中（仅 epsilon 余量）才贴合', () => {
+    const snapWith = (pos: [number, number], extra: [number, number][]) => {
+      const candidates: [number, number][] = [pos, ...extra]
+      const xs = candidates.map(c => c[0])
+      const ys = candidates.map(c => c[1])
+      return {
+        candidates,
+        reach: Math.max(...extra.map(c => Math.max(Math.abs(c[0] - pos[0]), Math.abs(c[1] - pos[1])), 0)),
+        bbox: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+      }
+    }
+    const snapThrs10 = () => 10
+    const a = pt(1, [0, 0])
+    const b = pt(2, [50, 0])
+    const aSnap = snapWith(a.pos, [])
+    // B 的候选 (8,0) 距 A(0,0) 为 8：loose 下 < snapThrs(10) 贴合；
+    // strict 下候选阈值仅 epsilon 余量，不贴合
+    const bSnapNear = snapWith(b.pos, [[8, 0]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapNear, snapThrs10, 'loose')).toBe(true)
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapNear, snapThrs10, 'strict')).toBe(false)
+    // strict 下候选与 A 几乎重合（浮点漂移量级，在 epsilon 余量内）仍贴合
+    const bSnapExact = snapWith(b.pos, [[0.00001, 0]])
+    expect(ptClingingPure(a, b, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, bSnapExact, snapThrs10, 'strict')).toBe(true)
+    // strict 不影响位置对位置的基准判断：距离 20 < clingingDist(25) 仍贴合
+    const c = pt(3, [20, 0])
+    expect(ptClingingPure(a, c, configClingingDist, snapSizeOne, numberCmpEpsilon, aSnap, snapWith(c.pos, []), snapThrs10, 'strict')).toBe(true)
+  })
 })
 
 describe('staClusterStore.pure - buildNeighbors', () => {
@@ -279,6 +323,28 @@ describe('staClusterStore.pure - buildNeighbors', () => {
     const pts = [pt(1, [0, 0]), pt(2, [25.000000001, 0])]
     const neighbors = buildNeighbors(pts, configClingingDist, snapSizeOne, numberCmpEpsilon, posOnlySnap)
     expect(neighbors[1]?.has(2)).toBe(true)
+  })
+
+  it('吸附候选路径下 strict 模式应收紧偏移候选判断', () => {
+    // A(0,0)、B(50,0)，B 有偏移候选 (8,0) 距 A 为 8：
+    // loose（snapThrs=10）应邻接；strict（仅 epsilon 余量）不应邻接
+    const pts = [pt(1, [0, 0]), pt(2, [50, 0])]
+    const snapThrs10 = () => 10
+    const getCandidates = (p: ControlPoint) => {
+      const extra: [number, number][] = p.id === 2 ? [[8, 0]] : []
+      const candidates: [number, number][] = [[...p.pos], ...extra]
+      const xs = candidates.map(c => c[0])
+      const ys = candidates.map(c => c[1])
+      return {
+        candidates,
+        reach: extra.reduce((r, c) => Math.max(r, Math.abs(c[0] - p.pos[0]), Math.abs(c[1] - p.pos[1])), 0),
+        bbox: { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+      }
+    }
+    const loose = buildNeighbors(pts, configClingingDist, snapSizeOne, numberCmpEpsilon, getCandidates, snapThrs10, 'loose')
+    expect(loose[1]?.has(2)).toBe(true)
+    const strict = buildNeighbors(pts, configClingingDist, snapSizeOne, numberCmpEpsilon, getCandidates, snapThrs10, 'strict')
+    expect(strict[1]).toBeUndefined()
   })
 })
 

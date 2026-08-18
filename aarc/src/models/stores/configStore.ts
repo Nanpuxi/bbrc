@@ -68,6 +68,7 @@ export const configDefault:Config = {
     snapGridThrs: 6,
     snapRayAngles: ['0', '45', '90', '135'],
     snapRayAnglesForFree: [],
+    freePtClusterMode: 'loose',
 
     colorPresetArea: '#cccccc',
     colorPresetWater: '#c3e5eb',

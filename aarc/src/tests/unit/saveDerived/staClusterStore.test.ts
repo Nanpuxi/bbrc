@@ -1378,4 +1378,93 @@ describe('staClusterStore - 贴合配置变更后缓存失效', () => {
     await nextTick()
     expect(store.isPtSingle(1)).toBe(false)
   })
+
+  it('freePtClusterMode 变化后应重建 cluster', async () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [0.5, 0] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    const before = store.getStaClusters()
+
+    // 模式变化必须使邻接表/cluster 缓存失效（靠懒加载重建），
+    // 否则旧模式算出的邻接关系会一直残留
+    const cs = useConfigStore()
+    cs.config.freePtClusterMode = 'off'
+    await nextTick()
+
+    const after = store.getStaClusters()
+    expect(after).not.toBe(before)
+    expect(after).toHaveLength(1)
+  })
+
+  it('off 模式下 free 点即使位置接近也不聚类（全量与增量一致）', async () => {
+    // 两个 free 点距离 20 < 基准贴合阈值 25：loose 下按位置对位置也会聚类；
+    // off 下 free 点完全不参与 cluster 生成
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(2), pos: [20, 0], sta: ControlPointSta.sta, free: true }
+      ]
+    })
+    setupSaveStore(save)
+    const cs = useConfigStore()
+    const store = useStaClusterStore()
+    expect(store.getStaClusters()).toHaveLength(1)
+
+    cs.config.freePtClusterMode = 'off'
+    await nextTick()
+    // 全量重建：不聚类
+    expect(store.getStaClusters()).toHaveLength(0)
+    // 增量更新：同样不聚类
+    const pt2 = save.points.find(p => p.id === 2)!
+    pt2.pos = [10, 0]
+    store.updateClustersBecauseOf(pt2)
+    expect(store.getStaClusters()).toHaveLength(0)
+  })
+
+  it('off 模式下 free 点吸附候选不聚类（全量与增量一致）', () => {
+    // 与“free 点平行线交点候选接近时应聚成同一个 cluster”相同场景：
+    // loose 下经吸附候选聚类；off 下全量与增量都不聚类
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [100, 100], sta: ControlPointSta.sta },
+        { ...createPoint(2), pos: [0, 0], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(3), pos: [100, -100], sta: ControlPointSta.sta },
+        { ...createPoint(4), pos: [-44, 100], sta: ControlPointSta.sta },
+        { ...createPoint(5), pos: [44, 0], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(6), pos: [-44, -100], sta: ControlPointSta.sta }
+      ],
+      lines: [
+        createLine([1, 2, 3]),
+        createLine([4, 5, 6])
+      ]
+    })
+    setupSaveStore(save)
+    const cs = useConfigStore()
+    cs.config.freePtClusterMode = 'off'
+    const store = useStaClusterStore()
+    expect(store.getStaClusters()).toHaveLength(0)
+
+    const pt2 = save.points.find(p => p.id === 2)!
+    store.updateClustersBecauseOf(pt2)
+    expect(store.getStaClusters()).toHaveLength(0)
+  })
+
+  it('off 模式下非 free 点仍正常聚类', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [20, 0] }
+      ]
+    })
+    setupSaveStore(save)
+    const cs = useConfigStore()
+    cs.config.freePtClusterMode = 'off'
+    const store = useStaClusterStore()
+    expect(store.getStaClusters()).toHaveLength(1)
+  })
 })

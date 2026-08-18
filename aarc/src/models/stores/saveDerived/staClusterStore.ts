@@ -33,17 +33,22 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     // 使用时读取而非一次性捕获：snapOctaClingPtPtDist 可能在会话内被修改
     const getConfigClingingDist = () => cs.config.snapOctaClingPtPtDist
 
+    // free 点 cluster 生成模式：loose（默认，吸附阈值内即算入）/ strict（需几乎精确落在
+    // 吸附点位上）/ off（free 点完全不参与 cluster 生成，由 ptClingingPure 拒绝任何含
+    // free 点的点对；此处不传吸附候选只是为了避免 free 点候选的无效计算）
+    const getFreePtClusterMode = () => cs.config.freePtClusterMode
+
     // free 点偏移候选的比较阈值与实际吸附（snapCore.snapInterPt）对齐：
     // snapOctaClingPtPtThrs × 吸附阈值缩放比率（点所属线路的最小宽度）
     const getSnapThrs = (id: number) =>
         cs.config.snapOctaClingPtPtThrs * saveStore.getSnapThrsRatio(id)
 
-    // 贴合距离相关配置（基础距离、吸附阈值、线宽映射的吸附尺寸）变化时，
+    // 贴合距离相关配置（基础距离、吸附阈值、线宽映射的吸附尺寸、free cluster 模式）变化时，
     // 邻接表与 cluster 缓存必须整体失效（靠懒加载重建），
     // 否则会残留旧配置算出的邻接关系（如远距离 cluster）；
     // 且增量更新会用新配置重算单点邻接，与旧边混杂
     watch(
-        () => [cs.config.snapOctaClingPtPtDist, cs.config.snapOctaClingPtPtThrs, cs.config.lineWidthMapped],
+        () => [cs.config.snapOctaClingPtPtDist, cs.config.snapOctaClingPtPtThrs, cs.config.lineWidthMapped, cs.config.freePtClusterMode],
         () => clearItems(),
         { deep: true }
     )
@@ -85,13 +90,15 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         const pts = saveStore.save?.points
         if (!pts)
             return
+        const freeMode = getFreePtClusterMode()
         neighbors = buildNeighbors(
             pts,
             getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
-            getPtSnapCandidatesAndReach,
-            getSnapThrs
+            freeMode === 'off' ? undefined : getPtSnapCandidatesAndReach,
+            freeMode === 'off' ? undefined : getSnapThrs,
+            freeMode
         )
     }
     function makeClustersFromNeighbors(){
@@ -102,6 +109,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     }
 
     function updateClustersBecauseOf(pt:ControlPoint){
+        const freeMode = getFreePtClusterMode()
         neighbors = updateNeighborsForMovedPt(
             neighbors,
             pt,
@@ -109,8 +117,9 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
-            getPtSnapCandidatesAndReach,
-            getSnapThrs
+            freeMode === 'off' ? undefined : getPtSnapCandidatesAndReach,
+            freeMode === 'off' ? undefined : getSnapThrs,
+            freeMode
         )
         makeClustersFromNeighbors()
     }
@@ -165,6 +174,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             return
         }
         const allPts = saveStore.save?.points || []
+        const freeMode = getFreePtClusterMode()
         for(const entry of patch.points){
             const pt = entry.new === undefined ? undefined : saveStore.getPtById(entry.id)
             if(!pt){
@@ -178,8 +188,9 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
                 getConfigClingingDist(),
                 id => saveStore.getLinesDecidedPtSnapSize(id),
                 numberCmpEpsilon,
-                getPtSnapCandidatesAndReach,
-                getSnapThrs
+                freeMode === 'off' ? undefined : getPtSnapCandidatesAndReach,
+                freeMode === 'off' ? undefined : getSnapThrs,
+                freeMode
             )
         }
         makeClustersFromNeighbors()
