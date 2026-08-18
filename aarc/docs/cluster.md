@@ -114,3 +114,31 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 - 预筛存在的唯一目的是提速，它**只能更宽松、不能更严格**；任何"正式判断能过但预筛过不去"的情形都是 bug
 - 正式判断的判定边界（尺寸系数、epsilon 余量、reach 偏移）发生变化时，必须同步检查所有预筛：bbox 快速拒绝、轴向粗筛、网格搜索半径、增量更新路径
 - 回归测试应覆盖"恰好等于阈值"和"阈值 + 极微小增量"两类边界输入
+
+## 7. 待修复问题（2026-08 调查）
+
+调查起因：用户报告 free 点之间的 cluster 生成"似乎没有考虑 config 中的 LineWidthMappedConfig"，部分情况下产生远距离 cluster。调查确认尺寸链路本身**是**走映射的（`getLinesDecidedPtSnapSize` → `saveStore.ptSnapSizes`，优先级含 `config.lineWidthMapped[width].staSnapSize`），但发现以下两个真实问题。
+
+### 7.1 配置变更不会使 cluster 缓存失效（已修复）
+
+- ~~`staClusterStore.ts` 中 `configClingingDist = cs.config.snapOctaClingPtPtDist` 在 store 创建时**一次性捕获**~~，会话内修改该配置不会反映到 cluster 生成。
+- 修改 `lineWidthMapped` 后，没有任何 watcher 使 `neighbors`/`staClusters` 失效（`resetterStore` 只在存档加载/undo/redo 时重置；`configStore` 内无相关监听）。
+- 更隐蔽的是：改完配置后再移动某个点，`updateNeighborsForMovedPt` 会用**新尺寸**增量更新该点的邻接边，而邻接表中其他边仍是**旧尺寸**的计算结果——新旧混杂，旧的大尺寸远距离 cluster 会一直残留到页面刷新。
+
+**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"三个用例（含 `lineWidthMapped` 深层就地修改）。
+
+### 7.2 free 点"候选对候选"比较过度合并（已复现）
+
+`ptClingingPure` 带吸附候选时比较的是**双方全部候选的两两组合**，任一候选对贴近即贴合（见第 2 节）。但实际吸附（`snapCore.snapInterPt`）的语义是"**一个点的实际位置**落在**另一个点的候选**上"，候选只描述"对方可以吸附到哪里"。
+
+两个偏移候选之间的贴近不对应任何真实吸附结果，导致过度合并。实测（base=25、尺寸=1、两个 90° 拐角 free 点沿对角线拉开）：
+
+| dist(A,B) | cluster 判定 | 实际吸附是否发生 |
+|-----------|-------------|------------------|
+| 35~40 | 贴合 | 是（拐角交点候选 ≈ 1.41×base） |
+| 45~95 | **贴合（误并）** | 否 |
+| ≥100 | 不贴合 | 否 |
+
+即 cluster 最远可在约 **3.8 倍阈值**的距离上形成（双方偏移候选各伸出 ~1.41×snapDist，再加 clingingDist）。典型例：A(0,0)、B(50,50) 两个拐角朝向相对的 free 点，各自候选都含中点 (25,25)，距离 70.7 也被并入。`lineWidthMapped` 把 staSnapSize 调大时该效应同比放大。
+
+**修复方向**：候选比较改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），阈值仍用 `clingingDist + epsMargin`。现有 bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；本节后文（第 2 节"任一候选对贴合即为 true"的描述）需同步更新。

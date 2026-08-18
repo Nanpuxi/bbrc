@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { useSaveStore } from '@/models/stores/saveStore'
+import { useConfigStore } from '@/models/stores/configStore'
 import { useStaClusterStore } from '@/models/stores/saveDerived/staClusterStore'
 import { ControlPointLinkType, ControlPointSta } from '@/models/save'
 // 注意：虽然代码不再限制 link 类型，但测试中仍使用 ControlPointLinkType 来创建不同类型的 link
@@ -1300,5 +1302,79 @@ describe('staClusterStore - restoreWithPatch', () => {
     const after = store.getStaClusters()
     expect(after).not.toBe(before)
     expect(after).toHaveLength(1)
+  })
+})
+
+describe('staClusterStore - 贴合配置变更后缓存失效', () => {
+  beforeEach(() => {
+    resetIdCounter()
+    createTestPinia()
+  })
+
+  function setupSaveStore(save: ReturnType<typeof createEmptySave>) {
+    const saveStore = useSaveStore()
+    saveStore.save = save
+    return saveStore
+  }
+
+  it('snapOctaClingPtPtDist 变化后应重建 cluster', async () => {
+    // 两点距离 30，默认阈值 25，不成 cluster
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [30, 0] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    expect(store.isPtSingle(1)).toBe(true)
+
+    // 阈值变为 40 后，距离 30 应成 cluster（旧实现因 configClingingDist
+    // 一次性捕获且缓存不失效，会一直沿用旧阈值）
+    const cs = useConfigStore()
+    cs.config.snapOctaClingPtPtDist = 40
+    await nextTick()
+    expect(store.isPtSingle(1)).toBe(false)
+  })
+
+  it('lineWidthMapped 整体替换后应重建 cluster', async () => {
+    // 两点挂在线宽 1 的线路上，吸附尺寸为 1，阈值 25；距离 30 不成 cluster
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [30, 0] }
+      ],
+      lines: [createLine([1, 2], { width: 1 })]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    expect(store.isPtSingle(1)).toBe(true)
+
+    // 线宽 1 映射 staSnapSize=2 后，阈值变为 25*(2+2)/2=50，应成 cluster
+    const cs = useConfigStore()
+    cs.config.lineWidthMapped = { '1': { staSnapSize: 2 } }
+    await nextTick()
+    expect(store.isPtSingle(1)).toBe(false)
+  })
+
+  it('lineWidthMapped 深层属性修改后应重建 cluster', async () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [30, 0] }
+      ],
+      lines: [createLine([1, 2], { width: 1 })]
+    })
+    setupSaveStore(save)
+    const cs = useConfigStore()
+    cs.config.lineWidthMapped = { '1': { staSnapSize: 1 } }
+    const store = useStaClusterStore()
+    await nextTick()
+    expect(store.isPtSingle(1)).toBe(true)
+
+    // 深层就地修改（LineWidthMappedConfig.vue 的实际修改方式）也应触发失效
+    cs.config.lineWidthMapped['1']!.staSnapSize = 2
+    await nextTick()
+    expect(store.isPtSingle(1)).toBe(false)
   })
 })

@@ -4,7 +4,7 @@ import { useSaveStore } from "../saveStore";
 import { useConfigStore } from "../configStore";
 import { useFreePtDirectionStore } from "./freePtDirectionStore";
 import { numberCmpEpsilon } from "@/utils/consts";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { Coord } from '@/models/coord';
 import {
     buildNeighbors,
@@ -30,14 +30,25 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     const freePtDirectionStore = useFreePtDirectionStore()
     saveStore.deletedPoint = cleanClustersFromDeletedPt
     
-    const configClingingDist = cs.config.snapOctaClingPtPtDist
+    // 使用时读取而非一次性捕获：snapOctaClingPtPtDist 可能在会话内被修改
+    const getConfigClingingDist = () => cs.config.snapOctaClingPtPtDist
+
+    // 贴合距离相关配置（基础距离、线宽映射的吸附尺寸）变化时，
+    // 邻接表与 cluster 缓存必须整体失效（靠懒加载重建），
+    // 否则会残留旧配置算出的邻接关系（如远距离 cluster）；
+    // 且增量更新会用新配置重算单点邻接，与旧边混杂
+    watch(
+        () => [cs.config.snapOctaClingPtPtDist, cs.config.lineWidthMapped],
+        () => clearItems(),
+        { deep: true }
+    )
 
     const getPtSnapCandidatesAndReach = (pt: ControlPoint): PtSnapCandidatesInfo =>
         getPtSnapCandidatesAndReachPure(
             pt,
             id => saveStore.getLinesDecidedPtSnapSize(id),
             id => freePtDirectionStore.getPtDirectionInfo(id),
-            configClingingDist
+            getConfigClingingDist()
         )
 
     const staClusters = ref<ControlPoint[][]>()
@@ -71,7 +82,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             return
         neighbors = buildNeighbors(
             pts,
-            configClingingDist,
+            getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
             getPtSnapCandidatesAndReach
@@ -89,7 +100,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
             neighbors,
             pt,
             saveStore.save?.points || [],
-            configClingingDist,
+            getConfigClingingDist(),
             id => saveStore.getLinesDecidedPtSnapSize(id),
             numberCmpEpsilon,
             getPtSnapCandidatesAndReach
@@ -157,7 +168,7 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
                 neighbors,
                 pt,
                 allPts,
-                configClingingDist,
+                getConfigClingingDist(),
                 id => saveStore.getLinesDecidedPtSnapSize(id),
                 numberCmpEpsilon,
                 getPtSnapCandidatesAndReach
