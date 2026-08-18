@@ -327,16 +327,35 @@ function setLeavingPreventing(){
 let heartbeatTimer = 0
 const heartbeatFailWarnMs = 6 * 60 * 1000 // 距上次成功心跳超过该时长后再失败则弹出警告
 const showHeartbeatFailWarn = ref(false)
+const heartbeatStolenWarn = ref(false) // true：心跳已被他人接管；false：网络问题导致多次失败
 const heartbeatStatusStore = useHeartbeatStatusStore()
-// 所有续约心跳的统一入口：记录上次成功时间；失败且距上次成功过久时弹出警告
+// 所有续约心跳的统一入口：记录上次成功时间；失败时先鉴别原因，再分别处理
 async function renewHeartbeat(){
     const ok = await api.save.heartbeatRenewal(saveIdNum.value)
     if(ok){
         heartbeatStatusStore.markSuccess()
+        return
     }
-    else if(heartbeatStatusStore.sinceLastSuccessMs() > heartbeatFailWarnMs){
+    if(await isHeartbeatStolen()){
+        // 心跳已被他人抢走：续约不可能再成功，停止心跳以免持续报错，并弹出“被接管”警告
+        // （与被所有者请出语义不同，不复用 onKicked，留在原页面以便用户自行备份未保存内容）
+        endHeartbeat()
+        heartbeatStolenWarn.value = true
+        showHeartbeatFailWarn.value = true
+        return
+    }
+    // 其他失败（断网等）：距上次成功过久时弹出警告
+    if(heartbeatStatusStore.sinceLastSuccessMs() > heartbeatFailWarnMs){
         showHeartbeatFailWarn.value = true
     }
+}
+// 续约失败时鉴别是否“心跳已被抢”：loadStatus 能查到“他人在编辑”即为被抢；
+// 查不到占用者（或 loadStatus 本身也失败）则说明是网络等其他问题
+async function isHeartbeatStolen():Promise<boolean>{
+    const status = await api.save.loadStatus(saveIdNum.value, false)
+    if(!status || !status.editingByUserId)
+        return false
+    return status.editingByUserId !== userInfoStore.userInfo?.id
 }
 // 编辑活动本身也是在场证明：画布重新渲染（即发生编辑）时触发一次续约心跳，
 // 防止定时器被 webview/系统冻结导致的心跳误判（一分钟内最多一次）
@@ -447,7 +466,7 @@ onBeforeUnmount(()=>{
     <UnsavedLeavingWarning v-if="showUnsavedWarning" :release="releasePreventLeaving"
         :save="async()=>{ await saveData(false) }" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
     <HiddenLongWarnPrompt v-if="showHiddenLongWarn" @ok="showHiddenLongWarn=false"></HiddenLongWarnPrompt>
-    <HeartbeatFailWarnPrompt v-if="showHeartbeatFailWarn" @ok="showHeartbeatFailWarn=false"></HeartbeatFailWarnPrompt>
+    <HeartbeatFailWarnPrompt v-if="showHeartbeatFailWarn" :stolen="heartbeatStolenWarn" @ok="showHeartbeatFailWarn=false"></HeartbeatFailWarnPrompt>
     <WarnRulePrompts :save-status="saveStatus"></WarnRulePrompts>
     <SavingDisabledWarning></SavingDisabledWarning>
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
