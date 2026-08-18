@@ -6,7 +6,7 @@ import { defineStore } from "pinia";
 import { CvsContext } from "../common/cvsContext";
 import { useSaveStore } from "@/models/stores/saveStore";
 import { useFreePtDirectionStore } from "@/models/stores/saveDerived/freePtDirectionStore";
-import { clusterToPolyMinimumArea, clusterToPolyVert, clusterToPolyInc } from "@/utils/clusterUtils/clusterPolyAngle";
+import { clusterToPolyAngle, clusterToPolyMinimumArea, clusterToPolyVert, clusterToPolyInc } from "@/utils/clusterUtils/clusterPolyAngle";
 import { usePointLinkStore } from "@/models/stores/pointLinkStore";
 import { isZero } from "@/utils/sgn";
 import { useCvsBlocksControlStore } from "../common/cvs";
@@ -239,18 +239,27 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
                 poly = c.map(x=>x.pos)
             }
             else if(c.some(x=>x.free)){
-                const directions = c
-                    .filter(x=>x.free)
-                    .flatMap(x => {
-                        const info = freePtDirectionStore.getPtDirectionInfo(x.id)
-                        if (!info) return []
-                        const bisector = bisectorDir(info.prev?.dir, info.next?.dir)
-                        return bisector ? [...info.all, bisector] : [...info.all]
-                    })
-                const best = directions.length > 0
-                    ? clusterToPolyMinimumArea(c, directions)
-                    : clusterToPolyVert(c)
-                poly = best.poly
+                if(c.length === 2){
+                    // 两点 cluster 特殊处理：不做最佳方向计算，直接用两点连线方向。
+                    // 沿连线方向的 OBB 垂直宽度为 0，形成连接两点的窄矩形（线条）。
+                    // 两点重合时 dir 为零向量，clusterToPolyAngle 回退轴对齐，退化为点（按圆形绘制）
+                    const dir:Coord = [c[1].pos[0]-c[0].pos[0], c[1].pos[1]-c[0].pos[1]]
+                    poly = clusterToPolyAngle(c, dir).poly
+                }
+                else{
+                    const directions = c
+                        .filter(x=>x.free)
+                        .flatMap(x => {
+                            const info = freePtDirectionStore.getPtDirectionInfo(x.id)
+                            if (!info) return []
+                            const bisector = bisectorDir(info.prev?.dir, info.next?.dir)
+                            return bisector ? [...info.all, bisector] : [...info.all]
+                        })
+                    const best = directions.length > 0
+                        ? clusterToPolyMinimumArea(c, directions)
+                        : clusterToPolyVert(c)
+                    poly = best.poly
+                }
             }
             else{
                 const vertCount = c.filter(x=>x.dir===ControlPointDir.vertical).length

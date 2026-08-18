@@ -227,14 +227,20 @@ const freePtDirectionStore = useFreePtDirectionStore()
 if (asIs) {
     poly = c.map(x => x.pos)
 } else if (c.some(x => x.free)) {
-    const directions = c
-        .filter(x => x.free)
-        .map(x => freePtDirectionStore.getPtDirections(x.id))
-        .flat()
-    const best = directions.length > 0
-        ? clusterToPolyMinimumArea(c, directions)
-        : clusterToPolyVert(c)
-    poly = best.poly
+    if (c.length === 2) {
+        // 两点 cluster：不做最佳方向计算，直接沿两点连线生成宽度为 0 的窄矩形（线条）
+        const dir = [c[1].pos[0] - c[0].pos[0], c[1].pos[1] - c[0].pos[1]]
+        poly = clusterToPolyAngle(c, dir).poly
+    } else {
+        const directions = c
+            .filter(x => x.free)
+            .map(x => freePtDirectionStore.getPtDirections(x.id))
+            .flat()
+        const best = directions.length > 0
+            ? clusterToPolyMinimumArea(c, directions)
+            : clusterToPolyVert(c)
+        poly = best.poly
+    }
 } else if (incCount === 0) {
     poly = clusterToPolyVert(c).poly
 } else if (vertCount === 0) {
@@ -268,6 +274,7 @@ if (asIs) {
 
 | 场景 | 处理 |
 |------|------|
+| 恰好两个点的 free cluster | 不做最佳方向计算，直接用两点连线方向生成 OBB：垂直宽度为 0，形成连接两点的窄矩形（线条）。两点重合时方向退化为零向量，回退轴对齐（按圆形绘制）。 |
 | 单点 cluster | 无方向，回退到 `clusterToPolyVert`，结果等价于当前点位置的小矩形。 |
 | 无方向 cluster | 例如孤立点组成的 cluster，回退到 `clusterToPolyVert`。 |
 | 点在线路中多次出现 | `adjacentSegs` 返回多个 segment，合并所有方向后再去重。 |

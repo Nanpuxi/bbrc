@@ -83,11 +83,48 @@ describe('clusterCvsWorker - getClustersRenderingData', () => {
     expect(polyBox.maxY - polyBox.minY).toBeLessThan(10)
   })
 
-  it('120° 拐角 free 点 cluster 使用角平分线方向得到贴身四角点', () => {
-    // 两个 free 点实际坐标 (0,0) 与 (50,5)
-    // 前后线段夹角 120°，方向分别为 60°/120° 与 -60°/-120°（归一化后 60°/120°）
+  it('120° 拐角 free 点 cluster（三点）使用角平分线方向得到贴身四角点', () => {
+    // 两个 free 点实际坐标 (0,0) 与 (50,5)，另有一个非 free 点 (20,2) 在连线上，
+    // 使 cluster 含 3 个点（两点 cluster 走零宽度线条特殊分支，不测方向选择）。
+    // free 点前后线段夹角 120°，方向分别为 60°/120° 与 -60°/-120°（归一化后 60°/120°）
     // 若不加入角平分线 0°，OBB 会选用 60°/120°，得到高约 45 的胖矩形；
     // 加入角平分线后应选中 0°，得到紧贴实际点的低矩形。
+    const sqrt3 = Math.sqrt(3)
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [50, -50 * sqrt3], sta: ControlPointSta.sta },
+        { ...createPoint(2), pos: [0, 0], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(3), pos: [50, 50 * sqrt3], sta: ControlPointSta.sta },
+        { ...createPoint(4), pos: [0, 50 + 50 * sqrt3], sta: ControlPointSta.sta },
+        { ...createPoint(5), pos: [50, 5], sta: ControlPointSta.sta, free: true },
+        { ...createPoint(6), pos: [0, 5 - 50 * sqrt3], sta: ControlPointSta.sta },
+        { ...createPoint(7), pos: [20, 2], sta: ControlPointSta.sta }
+      ],
+      lines: [
+        createLine([1, 2, 3]),
+        createLine([4, 5, 6])
+      ]
+    })
+    setupSaveStore(save)
+
+    const worker = useClusterCvsWorker()
+    const data = worker.getClustersRenderingData()
+
+    expect(data).toHaveLength(1)
+    const poly = data[0].coords
+    const polyBox = bbox(poly)
+
+    // 应紧贴覆盖三个实际点 (0,0)、(50,5) 与 (20,2)
+    expectBoxCovers(polyBox, { minX: 0, maxX: 50, minY: 0, maxY: 5 })
+
+    // 使用角平分线后，高度应很小；若用 60°/120° 方向，高度会约 45
+    expect(polyBox.maxY - polyBox.minY).toBeLessThan(10)
+  })
+
+  it('两个点的 free cluster 不做最佳方向计算，直接形成连接两点的零宽度线条', () => {
+    // 两个 free 点实际坐标 (0,0) 与 (50,5)，两侧线段方向（120° 拐角）与连线方向不一致。
+    // 应忽略线段方向，直接沿两点连线生成宽度为 0 的窄矩形：
+    // 四角点全部落在 (0,0)-(50,5) 连线上，且端点恰好是两个实际点。
     const sqrt3 = Math.sqrt(3)
     const save = createEmptySave({
       points: [
@@ -110,13 +147,16 @@ describe('clusterCvsWorker - getClustersRenderingData', () => {
 
     expect(data).toHaveLength(1)
     const poly = data[0].coords
-    const polyBox = bbox(poly)
+    expect(poly).toHaveLength(4)
 
-    // 应紧贴覆盖两个实际点 (0,0) 与 (50,5)
-    expectBoxCovers(polyBox, { minX: 0, maxX: 50, minY: 0, maxY: 5 })
+    // 四角点全部在两点连线上（叉积为 0），即矩形宽度为 0
+    for (const corner of poly) {
+      const cross = 50 * (corner[1] - 0) - 5 * (corner[0] - 0)
+      expect(isZero(cross)).toBe(true)
+    }
 
-    // 使用角平分线后，高度应很小；若用 60°/120° 方向，高度会约 45
-    expect(polyBox.maxY - polyBox.minY).toBeLessThan(10)
+    // 连线两端的角点恰好是两个实际点
+    expectBoxCovers(bbox(poly), { minX: 0, maxX: 50, minY: 0, maxY: 5 })
   })
 
   it('非 free 点 cluster 行为不受新逻辑影响', () => {
