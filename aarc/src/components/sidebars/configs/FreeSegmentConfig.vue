@@ -92,6 +92,11 @@ function applySnapRayAnglesForFree() {
         </tr>
         <tr>
             <td>
+                <div class="explain">此处设置仅针对自由点，如果未生效请检查其是否已设为自由</div>
+            </td>
+        </tr>
+        <tr>
+            <td>
                 <div class="explain">提示：你可以在右下角折叠菜单开启/关闭点间吸附，但吸附是否开启与车站团是否生成无关</div>
             </td>
         </tr>
