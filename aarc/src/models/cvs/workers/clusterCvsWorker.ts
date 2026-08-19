@@ -1,4 +1,4 @@
-import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta } from "@/models/save";
+import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointLinkType, ControlPointSta } from "@/models/save";
 import { useConfigStore } from "@/models/stores/configStore";
 import { Coord } from "@/models/coord";
 import { useStaClusterStore } from "@/models/stores/saveDerived/staClusterStore";
@@ -30,7 +30,7 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
     const renderOptionsStore = useRenderOptionsStore()
     const clusterPolyCache = new Map<string, ClusterPoly>()
 
-    // 全量渲染数据缓存：仅当签名（所有 cluster 点的 id/pos/dir/size + 所有 pointLink）变化时重建。
+    // 全量渲染数据缓存：仅当签名（所有 cluster 点的 id/pos/dir/size + 所有 pointLink 及其非 dot 端点的 pos/dir/size/sta）变化时重建。
     // 视角移动时签名不变，逐帧只做 O(cluster数) 的视口剔除，不再遍历点和拼接缓存 key。
     let polysCache: ClusterPoly[] = []
     let sigBuf: number[] = []
@@ -52,8 +52,10 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
     }
 
     /**
-     * 将所有 cluster 点的 id/pos/dir/size 与所有 pointLink 的内容写入可复用的签名缓冲区，
-     * 与上一帧逐位比较，返回是否有变化。数值严格相等比较，无哈希碰撞风险。
+     * 将所有 cluster 点的 id/pos/dir/size、所有 pointLink 的内容、以及非 dot 链接端点的
+     * pos/dir/size/sta 写入可复用的签名缓冲区，与上一帧逐位比较，返回是否有变化。
+     * 端点数据必须入签名：伪集群与 cluster 型链接的多边形由端点坐标决定，而端点未必属于
+     * 真实 cluster，缺了会导致移动端点时缓存不失效。数值严格相等比较，无哈希碰撞风险。
      */
     function signatureChanged(clusters:ControlPoint[][], links:ControlPointLink[]|undefined){
         let i = 0
@@ -81,6 +83,19 @@ export const useClusterCvsWorker = defineStore('clusterCvsWorker', ()=>{
                 put(l.pts[0])
                 put(l.pts[1])
                 put(l.type)
+                // dot 连接不产生任何 cluster 多边形（伪集群与 cluster 型链接都排除它），端点位置无需入签名
+                if(l.type === ControlPointLinkType.dot)
+                    continue
+                // 伪集群与 cluster 型链接的多边形由端点坐标决定，但端点未必属于真实 cluster，
+                // 必须把端点的位置/方向/尺寸/站点状态写入签名，否则移动端点时缓存不失效
+                for(const ptId of l.pts){
+                    const pt = saveStore.getPtById(ptId)
+                    put(pt?.pos[0] ?? 0)
+                    put(pt?.pos[1] ?? 0)
+                    put(pt?.dir ?? -1)
+                    put(pt?.sta ?? -1)
+                    put(pt ? saveStore.getLinesDecidedPtSize(pt.id) : 0)
+                }
             }
         }
         if(i !== sigLen)

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { useSaveStore } from '@/models/stores/saveStore'
 import { useClusterCvsWorker } from '@/models/cvs/workers/clusterCvsWorker'
-import { ControlPointSta } from '@/models/save'
+import { ControlPointLinkType, ControlPointSta } from '@/models/save'
 import { isZero } from '@/utils/sgn'
 import {
   resetIdCounter,
@@ -160,6 +160,38 @@ describe('clusterCvsWorker - getClustersRenderingData', () => {
 
     // 连线两端的角点恰好是两个实际点
     expectBoxCovers(bbox(poly), { minX: 0, maxX: 37, minY: 0, maxY: 3.7 })
+  })
+
+  it('伪集群端点移动后应跟随新位置（渲染缓存签名包含链接端点坐标）', () => {
+    // 两个相距很远的 sta 点不构成真实 cluster，但由 fat 型 pointLink 连接，
+    // 各自被涂成单点伪集群。移动其中一点后，伪集群必须跟随移动——
+    // 端点不属于真实 cluster，其坐标不在全量渲染缓存签名里时，缓存不会失效，
+    // 伪集群会留在原地。
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0], sta: ControlPointSta.sta },
+        { ...createPoint(2), pos: [500, 500], sta: ControlPointSta.sta }
+      ],
+      pointLinks: [{ pts: [1, 2], type: ControlPointLinkType.fat }]
+    })
+    const saveStore = setupSaveStore(save)
+
+    const worker = useClusterCvsWorker()
+    const data1 = worker.getClustersRenderingData()
+    expect(data1).toHaveLength(2)
+
+    // 移动点 1（不属于任何真实 cluster，坐标只通过伪集群参与渲染）
+    const pt1 = saveStore.getPtById(1)!
+    pt1.pos = [100, 100]
+
+    const data2 = worker.getClustersRenderingData()
+    expect(data2).toHaveLength(2)
+    const moved = data2.find(p =>
+      isZero(p.bbox[0] - 100) && isZero(p.bbox[2] - 100))
+    expect(moved).toBeTruthy()
+    const stayed = data2.find(p =>
+      isZero(p.bbox[0] - 500) && isZero(p.bbox[2] - 500))
+    expect(stayed).toBeTruthy()
   })
 
   it('非 free 点 cluster 行为不受新逻辑影响', () => {

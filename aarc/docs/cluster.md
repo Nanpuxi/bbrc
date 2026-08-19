@@ -68,7 +68,7 @@ store 层（`staClusterStore.ts`）懒初始化：`staClusters` 为 `undefined` 
 
 1. **单个 cluster 多边形缓存** `clusterPolyCache`：以 `id:pos:dir:size` 拼接为 key，cluster 内点未变时直接复用已算好的四角点（四角点计算见 `docs/formalize-free-cluster.md`）
 2. **全量渲染数据缓存**（perf 提交 `8ebbdb92`）：
-   - 把所有 cluster 点的 `id/pos/dir/size` 与所有 pointLink 写入可复用的签名缓冲区 `sigBuf`，与上一帧**逐位比较**（数值严格相等，无哈希碰撞风险）
+   - 把所有 cluster 点的 `id/pos/dir/size`、所有 pointLink 的内容、以及**非 dot 链接端点的 `pos/dir/size/sta`** 写入可复用的签名缓冲区 `sigBuf`，与上一帧**逐位比较**（数值严格相等，无哈希碰撞风险）。端点数据必须入签名：伪集群与 cluster 型链接的多边形由端点坐标决定，而端点未必属于真实 cluster，否则移动端点时缓存不失效、伪集群留在原地
    - 签名未变时直接复用 `polysCache`，不再重新遍历点和拼接缓存 key
    - 视角（视口）移动不改变签名，因此逐帧只做 O(cluster数) 的视口剔除：用每个 poly 预存的 `bbox` 加上由 `maxStaSize` 决定的线宽 padding，与 `cvsBlocksControlStore.blockTotalBoundary` 比较，视口外直接过滤
 
