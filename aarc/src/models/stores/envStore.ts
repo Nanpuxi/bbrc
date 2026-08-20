@@ -896,6 +896,50 @@ export const useEnvStore = defineStore('env', ()=>{
             cursorPos.value = coordAvg(pt1.pos, pt2.pos)
         }
     }
+    function createClosedTerrainLine(group:number|undefined){
+        if(!saveStore.save)
+            return
+        const viewCenter = getViewCenterOffset()
+        let viewCenterCoord:Coord|undefined = [viewCenter.x, viewCenter.y]
+        viewCenterCoord = translateFromOffset(viewCenterCoord)
+        if(!viewCenterCoord)
+            return
+        ensureCoordInCanvas(viewCenterCoord)
+        //以视野中心为中心的矩形四角
+        const cornerPoses:Coord[] = [
+            [viewCenterCoord[0]-75, viewCenterCoord[1]-75],
+            [viewCenterCoord[0]+75, viewCenterCoord[1]-75],
+            [viewCenterCoord[0]+75, viewCenterCoord[1]+75],
+            [viewCenterCoord[0]-75, viewCenterCoord[1]+75]
+        ]
+        const pts:ControlPoint[] = []
+        for(const cornerPos of cornerPoses){
+            ensureSpaceForNewPt(cornerPos)
+            const pt:ControlPoint = {
+                id: saveStore.getNewId(),
+                pos: snapGrid(cornerPos, undefined, undefined, true) ?? cornerPos,
+                dir: ControlPointDir.vertical,
+                sta: ControlPointSta.plain
+            }
+            saveStore.save.points.push(pt)
+            pts.push(pt)
+        }
+        const newLine:Line = {
+            id: saveStore.getNewId(),
+            pts: [...pts.map(p=>p.id), pts[0].id], //环线：头尾相同
+            name: '',
+            nameSub: '',
+            color: "#000000",
+            type: LineType.terrain,
+            colorPre: ColorPreset.water,
+            isFilled: true,
+            group
+        }
+        saveStore.createNewLine(newLine)
+        rerender.value([newLine.id], pts.map(p=>p.id))
+        activeLine.value = newLine
+        cursorPos.value = [...viewCenterCoord]
+    }
     function lineInfoChanged(line:Line, staSizeChanged?:boolean){
         const children = ensureChildrenOptionsSame(line.id)
         if(staSizeChanged){
@@ -1123,7 +1167,7 @@ export const useEnvStore = defineStore('env', ()=>{
         cursorPos, movingPoint, movedPoint, movingExtendedPointOriginated, movingTextTag,
         cvsWidth, cvsHeight, getDisplayRatio,
         rerender, rescaled, lineFocus, getActivePtOpsAvoidance,
-        delActivePt, delLine, createLine, lineInfoChanged, ensureChildrenOptionsSame,
+        delActivePt, delLine, createLine, createClosedTerrainLine, lineInfoChanged, ensureChildrenOptionsSame,
         createTextTag, duplicateTextTag, delActiveTextTag, createPlainPt,
         endEveryEditing, cancelActive, splitLineByPt, mergeLinesByPt,
         removeRepeatPtOnLines,
