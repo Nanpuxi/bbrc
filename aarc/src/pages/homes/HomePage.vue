@@ -5,6 +5,7 @@ import GiteeInfo from '@/components/common/GiteeGitInfo.vue';
 import { onMounted } from 'vue';
 import { appVersionCheck } from '@/app/appVersionCheck';
 import SearchSaveEntrance from '../components/SearchSaveEntrance.vue';
+import DonorList from '../components/DonorList.vue';
 import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import RecentUpdates from '../components/RecentUpdates.vue';
@@ -66,6 +67,9 @@ onMounted(()=>{
 </div>
 <div class="marginedSection">
     <SearchSaveEntrance></SearchSaveEntrance>
+</div>
+<div class="marginedSection">
+    <DonorList></DonorList>
 </div>
 <div v-if="!isFork" class="marginedSection">
     <a href="http://u.fsf.org/16e" style="display: block;margin: auto;width: 200px;" target="_blank">

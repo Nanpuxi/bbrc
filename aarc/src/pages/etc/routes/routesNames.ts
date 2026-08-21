@@ -1,4 +1,5 @@
 export const sponsorWxName = 'sponsorWx'
+export const donorsName = 'donors'
 export const deriveWikiName = 'deriveWiki'
 export const deriveRailchessName = 'deriveRailchess'
 export const forkAarcName = 'forkAarc'

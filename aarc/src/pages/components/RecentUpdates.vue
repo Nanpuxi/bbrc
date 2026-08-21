@@ -103,6 +103,7 @@ onMounted(async() => {
         </div>
         <a href="https://gitee.com/au114514/aarc/commits/master" target="_blank">查看所有更新</a>
     </h2>
+    <div style="color: palevioletred; margin-bottom: 8px;">遇到意外情况，请加qq交流群并<b>私聊</b>群主提供存档号，不要在群里@</div>
     <div v-if="!data" class="loading">
       加载中...
     </div>
