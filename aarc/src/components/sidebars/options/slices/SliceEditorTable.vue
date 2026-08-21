@@ -53,11 +53,14 @@ function openLineTimeOptions() {
 const stations = computed(() => {
     return props.line.pts.map(ptId => {
         const staNameInfo = staClusterStore.getStaName(ptId, true)
+        const namePt = saveStore.getPtById(staNameInfo.ptId)
         return {
             id: ptId,
             name: staNameInfo.name,
             nameSub: staNameInfo.nameSub,
-            namePtId: staNameInfo.ptId
+            namePtId: staNameInfo.ptId,
+            // 无实际名称（显示 "#编号" fallback）时下划线提示可点击编辑
+            isFallbackName: !namePt?.name
         }
     })
 })
@@ -555,7 +558,7 @@ defineExpose({
             <td class="cell-station">
               <div class="sta-name-row">
                 <img :src="searchIcon" class="sta-icon" title="定位到该站点" @click="centerOnSta(row.stationIdx)"/>
-                <div class="sta-name-display" @click="startEditStaName(row.stationIdx)">
+                <div class="sta-name-display" :class="{ 'fallback-name': stations[row.stationIdx].isFallbackName }" @click="startEditStaName(row.stationIdx)">
                   {{ stations[row.stationIdx].name }}
                 </div>
               </div>
@@ -705,6 +708,11 @@ table {
       flex: 1;
       text-align: center;
       cursor: pointer;
+
+      &.fallback-name {
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+      }
     }
   }
 
