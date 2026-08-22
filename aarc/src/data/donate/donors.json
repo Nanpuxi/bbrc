@@ -1,5 +1,47 @@
 [
     {
+        "name": "YAG",
+        "amount": 8.88
+    },
+    {
+        "name": "小万",
+        "amount": 10.00
+    },
+    {
+        "name": "仍没昵称",
+        "amount": 6.00
+    },
+    {
+        "name": "ethereal",
+        "amount": 0.50
+    },
+    {
+        "name": "崩铁棍母学教父",
+        "amount": 0.50
+    },
+    {
+        "name": "达鱼",
+        "amount": 1.15
+    },
+    {
+        "name": "Setreat",
+        "amount": 1.46,
+        "remark": "随机地形图"
+    },
+    {
+        "name": "金岩轩",
+        "amount": 0.10
+    },
+    {
+        "name": "南浦Xi（GoA2喵）",
+        "amount": 18.00
+    },
+    {
+        "name": "下湖AWA",
+        "amount": 18.00
+    },
+
+    {
         "name": "江扬",
         "amount": 6.00
     },
