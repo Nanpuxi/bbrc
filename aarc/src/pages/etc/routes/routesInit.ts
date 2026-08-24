@@ -1,7 +1,8 @@
 import { Router } from "vue-router";
 import { addToRouter } from "@/app/router/addToRouter";
-import { sponsorWxName, deriveWikiName, deriveRailchessName, forkAarcName } from "./routesNames";
+import { sponsorWxName, donorsName, deriveWikiName, deriveRailchessName, forkAarcName } from "./routesNames";
 import SponsorWx from "../SponsorWx.vue";
+import Donors from "../Donors.vue";
 import DeriveWiki from "../DeriveWiki.vue";
 import DeriveRailchess from "../DeriveRailchess.vue";
 import ForkAarc from "../ForkAarc.vue";
@@ -15,6 +16,11 @@ const routes = [
         path: "/sponsor-wx",
         component: SponsorWx,
         name: sponsorWxName
+    },
+    {
+        path: "/donors",
+        component: Donors,
+        name: donorsName
     },
     {
         path: "/derive-wiki",

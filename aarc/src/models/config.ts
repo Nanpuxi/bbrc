@@ -55,6 +55,9 @@ export interface Config{
     snapOctaClingPtNameThrs: number,
     snapOctaRayPtNameThrs: number,
     snapGridThrs: number,
+    snapRayAngles: string[],
+    snapRayAnglesForFree: string[],
+    freePtClusterMode: FreePtClusterMode,
 
     colorPresetArea: string,
     colorPresetWater :string,
@@ -89,6 +92,13 @@ export type LineWidthMappedConfig = Record<string, {
     staSnapSize?:number,
     staNameSnapSize?:number
 }|undefined>
+/**
+ * free 点（自由区间点）参与 cluster 生成的模式：
+ * loose：目前行为，点的实际位置落在对方吸附点位的吸附阈值（snapOctaClingPtPtThrs）内即算入 cluster
+ * strict：点的实际位置必须几乎精确落在对方吸附点位上（仅 epsilon 余量）才算入 cluster
+ * off：free 点不参与 cluster 生成（任何情况下都不生成）
+ */
+export type FreePtClusterMode = 'loose' | 'strict' | 'off'
 export type BgRefImageConfig = {
     url?: string,
     export?: boolean,

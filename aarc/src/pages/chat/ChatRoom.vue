@@ -32,6 +32,7 @@ const emit = defineEmits<{
     enable: []
     disable: []
     kicked: []
+    save: []
 }>()
 
 const signalrStore = useSignalrStore()
@@ -121,6 +122,7 @@ watch(() => signalrStore.pendingKickEditingUserRooms.has(roomName.value), (hasKi
 
 async function joinRoom() {
     if (isJoining.value) return
+    if (!userInfoStore.isLogined) return // 未登录：不尝试连接，避免无意义的报错
     localError.value = null
     isJoining.value = true
     try {
@@ -311,7 +313,7 @@ onUnmounted(async () => {
         <p>已很长时间未保存，请尽快进行一次保存操作，否则 {{ saveReminderSeconds }} 秒后可能被存档所有者请出</p>
     </div>
 </Prompt>
-<Prompt v-if="showKickPrompt" :bgClickClose="false">
+<Prompt v-if="showKickPrompt" :bgClickClose="false" closeBtn="保存并退出" @close="emit('save')">
     <div class="kickPrompt">
         <p class="kickTitle">请立即保存并退出，存档即将被强制接管</p>
         <p class="kickCountdown">{{ kickCountdown }} 秒后自动退出</p>

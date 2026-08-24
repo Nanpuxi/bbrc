@@ -9,6 +9,7 @@ import TimeSliceEditor from './TimeSliceEditor.vue';
 import StyleSliceEditor from './StyleSliceEditor.vue';
 import { useEnvStore } from '@/models/stores/envStore';
 import { useSliceResolverStore } from '@/models/stores/saveDerived/slice/sliceResolverStore';
+import { useNameEditStore } from '@/models/stores/nameEditStore';
 import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
 import {
     buildCellInfoMap,
@@ -40,6 +41,7 @@ const cvs = useCvsFrameStore()
 const staClusterStore = useStaClusterStore()
 const sliceResolverStore = useSliceResolverStore()
 const envStore = useEnvStore()
+const nameEditStore = useNameEditStore()
 const sidebar = useTemplateRef('sidebar')
 const lineTimeOptions = useTemplateRef('lineTimeOptions')
 
@@ -51,11 +53,14 @@ function openLineTimeOptions() {
 const stations = computed(() => {
     return props.line.pts.map(ptId => {
         const staNameInfo = staClusterStore.getStaName(ptId, true)
+        const namePt = saveStore.getPtById(staNameInfo.ptId)
         return {
             id: ptId,
             name: staNameInfo.name,
             nameSub: staNameInfo.nameSub,
-            namePtId: staNameInfo.ptId
+            namePtId: staNameInfo.ptId,
+            // 无实际名称（显示 "#编号" fallback）时下划线提示可点击编辑
+            isFallbackName: !namePt?.name
         }
     })
 })
@@ -76,8 +81,10 @@ function startEditStaName(stationIdx: number) {
     resizingSlice.value = null
     pendingFrom.value = null
     editingStaIdx.value = stationIdx
-    editingName.value = stations.value[stationIdx].name
-    editingNameSub.value = stations.value[stationIdx].nameSub
+    // 从实际持有名称的点读取原始值预填，避免把无名站的 "#编号" fallback 显示名当成站名
+    const namePt = saveStore.getPtById(stations.value[stationIdx].namePtId)
+    editingName.value = namePt?.name ?? ''
+    editingNameSub.value = namePt?.nameS ?? ''
 }
 
 function finishEditStaName() {
@@ -88,6 +95,10 @@ function finishEditStaName() {
         if (pt) {
             pt.name = editingName.value
             pt.nameS = editingNameSub.value
+            // 原本无名的站没有 nameP，补一个默认名称位置，否则 renderPtName 直接跳过导致看不到名字
+            if (pt.name && !pt.nameP) {
+                pt.nameP = nameEditStore.optimizedNamePos(pt.id)
+            }
             envStore.lineInfoChanged(props.line)
         }
         editingStaIdx.value = null
@@ -547,7 +558,7 @@ defineExpose({
             <td class="cell-station">
               <div class="sta-name-row">
                 <img :src="searchIcon" class="sta-icon" title="定位到该站点" @click="centerOnSta(row.stationIdx)"/>
-                <div class="sta-name-display" @click="startEditStaName(row.stationIdx)">
+                <div class="sta-name-display" :class="{ 'fallback-name': stations[row.stationIdx].isFallbackName }" @click="startEditStaName(row.stationIdx)">
                   {{ stations[row.stationIdx].name }}
                 </div>
               </div>
@@ -697,6 +708,11 @@ table {
       flex: 1;
       text-align: center;
       cursor: pointer;
+
+      &.fallback-name {
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+      }
     }
   }
 

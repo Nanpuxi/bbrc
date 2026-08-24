@@ -14,6 +14,9 @@ export interface ChatMessage {
     isSystem: boolean
 }
 
+// 连接建立过程中被要求停止（如页面已退出）时抛出，用于与正常失败区分、静默处理
+class ConnectionCancelledError extends Error {}
+
 export const useSignalrStore = defineStore('signalr', () => {
     const apiStore = useApiStore()
     const { showPop } = useUniqueComponentsStore()
@@ -34,6 +37,8 @@ export const useSignalrStore = defineStore('signalr', () => {
 
     // 防止多个并发的 ensureConnected 各自启动一条新连接
     let connectingPromise: Promise<HubConnection> | null = null
+    // stopConnection 时递增，用于作废在途的连接建立（如连接建立期间页面已退出）
+    let connectionEpoch = 0
 
     function getHubUrl(): string {
         const baseUrl = import.meta.env.VITE_ApiUrlBase as string | undefined
@@ -63,6 +68,7 @@ export const useSignalrStore = defineStore('signalr', () => {
         if (connection.value) {
             await stopConnection()
         }
+        const epoch = connectionEpoch
         error.value = null
         const conn = new HubConnectionBuilder()
             .withUrl(getHubUrl(), {
@@ -167,6 +173,12 @@ export const useSignalrStore = defineStore('signalr', () => {
             showPop(msg, 'failed')
             throw e
         }
+        if (epoch !== connectionEpoch) {
+            // start 期间已被 stopConnection（如页面已退出）：立即关闭，不投入使用
+            try { await conn.stop() } catch { /* 忽略关闭异常 */ }
+            connectionState.value = HubConnectionState.Disconnected
+            throw new ConnectionCancelledError()
+        }
         connection.value = conn
         connectionState.value = conn.state
         console.log('[signalr]连接已建立', conn.connectionId)
@@ -174,6 +186,7 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function stopConnection(): Promise<void> {
+        connectionEpoch++ // 作废在途的连接建立
         if (connection.value) {
             try {
                 await connection.value.stop()
@@ -205,12 +218,14 @@ export const useSignalrStore = defineStore('signalr', () => {
         if (!roomName.trim()) return false
         try {
             const conn = await ensureConnected()
+            if (conn.state !== HubConnectionState.Connected) return false // 期间连接已被停止（如页面已退出）
             console.log(`[signalr]正在加入房间 ${roomName}`)
             await conn.invoke("JoinRoom", roomName.trim())
             joinedRooms.value.add(roomName.trim())
             console.log(`[signalr]已加入房间 ${roomName}`)
             return true
         } catch (e: any) {
+            if (e instanceof ConnectionCancelledError) return false // 页面退出导致的取消，静默处理
             const msg = e?.message ?? '加入房间失败'
             error.value = msg
             showPop(msg, 'failed')
@@ -220,10 +235,11 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function syncHistory(roomName: string): Promise<boolean> {
-        if (!roomName.trim() || !connection.value) return false
+        const conn = connection.value
+        if (!roomName.trim() || !conn || conn.state !== HubConnectionState.Connected) return false
         try {
             console.log(`[signalr]正在同步历史 ${roomName}`)
-            await connection.value.invoke("SyncHistory", roomName.trim())
+            await conn.invoke("SyncHistory", roomName.trim())
             return true
         } catch (e: any) {
             const msg = e?.message ?? '同步历史消息失败'
@@ -235,10 +251,11 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function leaveRoom(roomName: string): Promise<boolean> {
-        if (!roomName.trim() || !connection.value) return false
+        const conn = connection.value
+        if (!roomName.trim() || !conn || conn.state !== HubConnectionState.Connected) return false
         try {
             console.log(`[signalr]正在退出房间 ${roomName}`)
-            await connection.value.invoke("LeaveRoom", roomName.trim())
+            await conn.invoke("LeaveRoom", roomName.trim())
             joinedRooms.value.delete(roomName.trim())
             console.log(`[signalr]已退出房间 ${roomName}`)
             return true
@@ -255,10 +272,12 @@ export const useSignalrStore = defineStore('signalr', () => {
         if (!roomName.trim() || !content.trim()) return false
         try {
             const conn = await ensureConnected()
+            if (conn.state !== HubConnectionState.Connected) return false // 期间连接已被停止（如页面已退出）
             console.log(`[signalr]发送消息 [${roomName}]: ${content}`)
             await conn.invoke("SendMessage", roomName.trim(), content.trim())
             return true
         } catch (e: any) {
+            if (e instanceof ConnectionCancelledError) return false // 页面退出导致的取消，静默处理
             const msg = e?.message ?? '发送消息失败'
             error.value = msg
             showPop(msg, 'failed')
@@ -268,10 +287,11 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function disableChat(roomName: string): Promise<boolean> {
-        if (!roomName.trim() || !connection.value) return false
+        const conn = connection.value
+        if (!roomName.trim() || !conn || conn.state !== HubConnectionState.Connected) return false
         try {
             console.log(`[signalr]请求禁用房间 ${roomName} 的聊天功能`)
-            await connection.value.invoke("DisableChat", roomName.trim())
+            await conn.invoke("DisableChat", roomName.trim())
             disabledRooms.value.add(roomName.trim())
             return true
         } catch (e: any) {
@@ -284,10 +304,11 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function notifyKickEditingUser(roomName: string): Promise<boolean> {
-        if (!roomName.trim() || !connection.value) return false
+        const conn = connection.value
+        if (!roomName.trim() || !conn || conn.state !== HubConnectionState.Connected) return false
         try {
             console.log(`[signalr]通知房间 ${roomName} 的编辑用户即将被请出`)
-            await connection.value.invoke("NotifyKickEditingUser", roomName.trim())
+            await conn.invoke("NotifyKickEditingUser", roomName.trim())
             return true
         } catch (e: any) {
             const msg = e?.message ?? '通知编辑用户失败'
@@ -299,9 +320,10 @@ export const useSignalrStore = defineStore('signalr', () => {
     }
 
     async function getEditorJoinedAt(saveId: number): Promise<number | null> {
-        if (!connection.value) return null
+        const conn = connection.value
+        if (!conn || conn.state !== HubConnectionState.Connected) return null
         try {
-            const res = await connection.value.invoke<number | null>("GetEditorJoinedAt", saveId)
+            const res = await conn.invoke<number | null>("GetEditorJoinedAt", saveId)
             console.log(`[signalr]获取编辑者加入时间 ${saveId}: ${res}`)
             return res
         } catch (e: any) {

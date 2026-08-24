@@ -127,7 +127,11 @@ const hasRule = computed(()=>{
 const sDisplay = computed(()=>{
     // 如果有新加载的状态，则将其合并进props的值里（不修改props）
     const res = {...props.s}
-    const source = loadedStatus.value ?? {}
+    const source = {...loadedStatus.value}
+    // loadedStatus 由 needComments=false 的 loadStatus 获得，评论相关字段为空，不应用其覆盖props
+    delete source.latestWarnContent
+    delete source.latestRuleContent
+    delete source.latestRuleCommentId
     Object.assign(res, source)
     return res
 })

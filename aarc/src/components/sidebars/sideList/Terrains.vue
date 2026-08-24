@@ -19,8 +19,12 @@ const {
     wantDelLine, delLineStart, delLineAbort, delLineExe,
     showingLineGroup, lineGroupCheck, lineGroupsSelectable, autoInitShowingGroup,
     showListSidebar, hideListSidebar,
-    flashingLineId, focusLine
+    flashingLineId, focusLine, envStore
 } = useSideListShared(LineType.terrain, sidebar, lineOptions, undefined, linesContainer, 'focusTerrainLine')
+
+function createClosedTerrain(){
+    envStore.createClosedTerrainLine(showingLineGroup.value)
+}
 
 const pickers = useTemplateRef('pickers')
 function clickContainer(){
@@ -63,7 +67,10 @@ onUnmounted(()=>{
                     @close-sidebar="sidebar?.fold()"></LineItemBtns>
             </div>
             <div class="newLine" @click="createLine">
-                +新地形
+                +新地形（条状）
+            </div>
+            <div class="newLine" @click="createClosedTerrain">
+                +新地形（闭合）
             </div>
         </div>
     </SideBar>

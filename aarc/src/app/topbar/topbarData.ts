@@ -1,11 +1,11 @@
-import { mySavesName, saveToolsName, searchSaveName, saveFoldersName, saveWarnsName, userFavoritesName } from "@/pages/saves/routes/routesNames";
+import { mySavesName, saveToolsName, searchSaveName, saveFoldersName, saveWarnsName, userFavoritesName, recycleBinName } from "@/pages/saves/routes/routesNames";
 import { TopbarModel, TopbarModelItem } from "./topbarModel";
 import { aboutName, loginName, userCreditName, userHistoriesName, userListName } from "@/pages/identities/routes/routesNames";
 import { faq } from "@/pages/homes/routes/routesNames";
 import { useCommonLocalConfigStore } from "@/app/localConfig/commonLocalConfig";
 import { userFileList, userFileMarket } from "@/pages/files/routes/routesNames";
 import { useUserListLocalConfigStore } from "../localConfig/userListLocalConfig";
-import { deriveRailchessName, deriveWikiName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
+import { deriveRailchessName, deriveWikiName, donorsName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
 
 const isFork = import.meta.env.VITE_IsFork == "true"
 
@@ -39,6 +39,10 @@ export async function getTopbarData(): Promise<TopbarModel> {
                 {
                     title: "问题提醒",
                     link: { name: saveWarnsName }
+                },
+                {
+                    title: "回收站",
+                    link: { name: recycleBinName }
                 }
             ]
         },
@@ -138,7 +142,16 @@ export async function getTopbarData(): Promise<TopbarModel> {
     if(!isFork){
         items.push({
             title: "资助",
-            link: { name: sponsorWxName }
+            children: [
+                {
+                    title: "资助入口",
+                    link: { name: sponsorWxName }
+                },
+                {
+                    title: "特别鸣谢",
+                    link: { name: donorsName }
+                }
+            ]
         })
     }
     

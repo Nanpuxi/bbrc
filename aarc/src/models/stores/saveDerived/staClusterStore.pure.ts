@@ -1,9 +1,17 @@
 import { ControlPoint, ControlPointLink, ControlPointSta } from "@/models/save";
+import { FreePtClusterMode } from "@/models/config";
 import { Coord } from '@/models/coord';
 import { coordDistSq, coordDistSqLessThan } from "@/utils/coordUtils/coordDist";
 import { coordAdd, coordSub } from "@/utils/coordUtils/coordMath";
+import { computeFreeSnapCandidatesMulti, type PtDirectionInfo } from "@/utils/snapUtils/snapInterPtFree";
 
 export type Neighbors = Record<number, Set<number> | undefined>;
+
+export interface PtSnapCandidatesInfo {
+    candidates: Coord[]
+    reach: number
+    bbox: { minX: number; maxX: number; minY: number; maxY: number }
+}
 
 export interface StaNameTransfer {
     fromId: number
@@ -19,24 +27,118 @@ export interface StaNameResult {
     ptId: number
 }
 
+export function getCandidatesBbox(candidates: Coord[]): PtSnapCandidatesInfo['bbox'] {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const c of candidates) {
+        if (c[0] < minX) minX = c[0]
+        if (c[0] > maxX) maxX = c[0]
+        if (c[1] < minY) minY = c[1]
+        if (c[1] > maxY) maxY = c[1]
+    }
+    return { minX, maxX, minY, maxY }
+}
+
+/**
+ * 获取点的吸附候选位置及其在 x/y 轴上的最大偏移（reach）。
+ * 对 free 点按每次出现（每条线路）的方向分别生成候选（含平行线交点）后合并去重；
+ * 非 free 点退化为 [pt.pos]，reach 为 0。
+ */
+export function getPtSnapCandidatesAndReachPure(
+    pt: ControlPoint,
+    getSnapSize: (id: number) => number,
+    getDirectionInfos: (id: number) => PtDirectionInfo[] | undefined,
+    configClingingDist: number
+): PtSnapCandidatesInfo {
+    const size = getSnapSize(pt.id)
+    const snapDist = size * configClingingDist
+    const directionInfos = getDirectionInfos(pt.id)
+    const candidates = computeFreeSnapCandidatesMulti(pt, snapDist, directionInfos)
+    let reach = 0
+    for (const c of candidates) {
+        const dx = Math.abs(c[0] - pt.pos[0])
+        const dy = Math.abs(c[1] - pt.pos[1])
+        if (dx > reach) reach = dx
+        if (dy > reach) reach = dy
+    }
+    return { candidates, reach, bbox: getCandidatesBbox(candidates) }
+}
+
+export function bboxesCouldCling(
+    bboxA: PtSnapCandidatesInfo['bbox'],
+    bboxB: PtSnapCandidatesInfo['bbox'],
+    dist: number
+): boolean {
+    if (bboxA.minX - bboxB.maxX > dist || bboxB.minX - bboxA.maxX > dist) return false
+    if (bboxA.minY - bboxB.maxY > dist || bboxB.minY - bboxA.maxY > dist) return false
+    return true
+}
+
 /**
  * 判断两个点是否“吸附”到需要被划入同一个 cluster 的程度
  * @param configClingingDist 全局配置的基础吸附距离
  * @param getSnapSize 根据点 ID 获取该点用于吸附距离计算的尺寸
  * @param epsilon 浮点数比较容差
+ * @param aSnap 点 A 的吸附候选信息（仅 free 相关逻辑使用），不传时退化为标准位置判断
+ * @param bSnap 点 B 的吸附候选信息
+ * @param getSnapThrs 根据点 ID 获取实际吸附阈值（snapOctaClingPtPtThrs × 线宽比率）。
+ * 传入时，偏移候选的比较与实际吸附（snapCore.snapInterPt）对齐，用该阈值而非 clingingDist；
+ * 不传时保持旧行为（候选比较也用 clingingDist）
+ * @param freeClusterMode free 点 cluster 生成模式：
+ * off 时任何含 free 点的点对直接不贴合（free 点完全不参与 cluster 生成）；
+ * strict 时偏移候选比较只用 epsilon 余量，即点的实际位置必须几乎精确落在对方吸附点位上才贴合；
+ * 默认 loose
  */
 export function ptClingingPure(
     a: ControlPoint,
     b: ControlPoint,
     configClingingDist: number,
     getSnapSize: (id: number) => number,
-    epsilon: number
+    epsilon: number,
+    aSnap?: PtSnapCandidatesInfo,
+    bSnap?: PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number,
+    freeClusterMode?: FreePtClusterMode
 ): boolean {
+    // off：free 点完全不参与 cluster 生成（全量/增量/补丁恢复所有路径都经过此处）
+    if (freeClusterMode === 'off' && (a.free || b.free))
+        return false
     const sizeA = getSnapSize(a.id)
     const sizeB = getSnapSize(b.id)
     const distMut = (sizeA + sizeB) / 2
     const clingingDist = configClingingDist * distMut
-    const clingingDistSqrBiggerByEpsilon = (clingingDist + epsilon * 10) ** 2
+    const epsMargin = epsilon * 10
+    const clingingDistSqrBiggerByEpsilon = (clingingDist + epsMargin) ** 2
+
+    if (aSnap && bSnap) {
+        // 注意：bbox 快速拒绝必须与下方的正式比较保持一致的 epsilon 余量，
+        // 否则带浮点漂移的边界距离（如 25.00001 vs 阈值 25）会被此处提前误杀
+        if (!bboxesCouldCling(aSnap.bbox, bSnap.bbox, clingingDist + epsMargin))
+            return false
+        // 位置对位置的基准判断：仍用 clingingDist，与非 free 点的语义一致
+        // （候选列表本身包含 pos，但 pos 对的阈值不应被吸附阈值收紧）
+        if (coordDistSqLessThan(a.pos, b.pos, clingingDistSqrBiggerByEpsilon))
+            return true
+        // 偏移候选的比较与实际吸附（snapCore.snapInterPt）对齐：
+        // “一个点的实际位置”落在“另一个点的候选”的吸附阈值内才贴合。
+        // 用吸附阈值而非 clingingDist，避免仅仅接近（但远未吸附）的点意外成 cluster。
+        // “a 吸附到 b 的候选”模拟拖动 a，阈值取 a 的比率；b 侧同理。
+        // strict 模式下候选阈值取 0（仅保留 epsilon 余量）：
+        // 点的实际位置必须几乎精确落在对方吸附点位上才贴合
+        const candThrsA = freeClusterMode === 'strict' ? 0 : (getSnapThrs?.(a.id) ?? clingingDist)
+        const candThrsB = freeClusterMode === 'strict' ? 0 : (getSnapThrs?.(b.id) ?? clingingDist)
+        const snapThrsSqrA = (candThrsA + epsMargin) ** 2
+        const snapThrsSqrB = (candThrsB + epsMargin) ** 2
+        for (const cb of bSnap.candidates) {
+            if (coordDistSqLessThan(a.pos, cb, snapThrsSqrA))
+                return true
+        }
+        for (const ca of aSnap.candidates) {
+            if (coordDistSqLessThan(b.pos, ca, snapThrsSqrB))
+                return true
+        }
+        return false
+    }
+
     return !!coordDistSqLessThan(a.pos, b.pos, clingingDistSqrBiggerByEpsilon)
 }
 
@@ -58,19 +160,43 @@ function getGridKey(x: number, y: number, cellSize: number): string {
  * 根据所有点构建邻接表
  * 只考虑 sta 类型的点，使用均匀网格索引将时间复杂度从 O(n^2) 降到 O(n*k)
  * （k 为单个网格及周围 8 格内平均点数）
+ * @param getSnapCandidates 可选；提供时会把 free 点吸附候选也纳入判断，
+ * 否则退化为标准位置判断（与 master 版本一致）
+ * @param getSnapThrs 可选；提供时偏移候选的比较与实际吸附阈值对齐（见 ptClingingPure）
+ * @param freeClusterMode 可选；strict 时偏移候选比较只用 epsilon 余量，
+ * off 时任何含 free 点的点对不贴合（见 ptClingingPure），默认 loose
  */
 export function buildNeighbors(
     pts: ControlPoint[],
     configClingingDist: number,
     getSnapSize: (id: number) => number,
-    epsilon: number
+    epsilon: number,
+    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number,
+    freeClusterMode?: FreePtClusterMode
 ): Neighbors {
     const neighbors: Neighbors = {}
-    const skipThrs = 2.5 * configClingingDist
-    const cellSize = skipThrs
+    const cellSize = 2.5 * configClingingDist
     const staPts = pts.filter(pt => pt.sta == ControlPointSta.sta)
-    if (skipThrs <= 0 || staPts.length === 0)
+    if (cellSize <= 0 || staPts.length === 0)
         return neighbors
+
+    // 缓存各点的吸附尺寸。点对的真实贴合阈值为 configClingingDist * (sizeA+sizeB)/2，
+    // 预筛（网格搜索半径与轴向粗筛）必须按该阈值计算；若用固定的 cellSize 做阈值，
+    // 平均尺寸大于 2.5 的点对会在进入 ptClingingPure 之前被误杀
+    const sizeCache = new Map<number, number>()
+    let maxSize = 0
+    for (const pt of staPts) {
+        const s = getSnapSize(pt.id)
+        sizeCache.set(pt.id, s)
+        if (s > maxSize) maxSize = s
+    }
+    const maxPairSpan = configClingingDist * maxSize
+    const pairSpan = (aId: number, bId: number) =>
+        configClingingDist * (sizeCache.get(aId)! + sizeCache.get(bId)!) / 2
+    // 所有预筛都必须带与 ptClingingPure 正式比较一致的 epsilon 余量，
+    // 否则带浮点漂移的边界距离（如 25.000000001 vs 阈值 25）会被预筛提前误杀
+    const epsMargin = epsilon * 10
 
     const grid = new Map<string, ControlPoint[]>()
     for (const pt of staPts) {
@@ -82,22 +208,71 @@ export function buildNeighbors(
             grid.set(key, [pt])
     }
 
+    // 标准位置判断路径（与 master 版本一致）
+    if (!getSnapCandidates) {
+        const cellRadius = Math.max(1, Math.ceil((maxPairSpan + epsMargin) / cellSize))
+        for (const pt of staPts) {
+            const cx = Math.floor(pt.pos[0] / cellSize)
+            const cy = Math.floor(pt.pos[1] / cellSize)
+            for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+                for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                    const cell = grid.get(`${cx + dx},${cy + dy}`)
+                    if (!cell)
+                        continue
+                    for (const other of cell) {
+                        if (other.id <= pt.id)
+                            continue
+                        const thrs = pairSpan(pt.id, other.id) + epsMargin
+                        if (Math.abs(pt.pos[0] - other.pos[0]) > thrs)
+                            continue
+                        if (Math.abs(pt.pos[1] - other.pos[1]) > thrs)
+                            continue
+                        if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon, undefined, undefined, undefined, freeClusterMode)) {
+                            if (!neighbors[pt.id])
+                                neighbors[pt.id] = new Set<number>()
+                            if (!neighbors[other.id])
+                                neighbors[other.id] = new Set<number>()
+                            neighbors[pt.id]?.add(other.id)
+                            neighbors[other.id]?.add(pt.id)
+                        }
+                    }
+                }
+            }
+        }
+        return neighbors
+    }
+
+    // 带吸附候选的路径：支持 free 点平行线交点等候选位置
+    const snapInfo = new Map<number, PtSnapCandidatesInfo>()
+    let maxReach = 0
+    for (const pt of staPts) {
+        const info = getSnapCandidates(pt)
+        snapInfo.set(pt.id, info)
+        if (info.reach > maxReach)
+            maxReach = info.reach
+    }
+
+    const cellRadius = Math.max(1, Math.ceil((maxPairSpan + 2 * maxReach + epsMargin) / cellSize))
+
     for (const pt of staPts) {
         const cx = Math.floor(pt.pos[0] / cellSize)
         const cy = Math.floor(pt.pos[1] / cellSize)
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
+        const ptSnap = snapInfo.get(pt.id)!
+        for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+            for (let dy = -cellRadius; dy <= cellRadius; dy++) {
                 const cell = grid.get(`${cx + dx},${cy + dy}`)
                 if (!cell)
                     continue
                 for (const other of cell) {
                     if (other.id <= pt.id)
                         continue
-                    if (Math.abs(pt.pos[0] - other.pos[0]) > skipThrs)
+                    const otherSnap = snapInfo.get(other.id)!
+                    const checkThrs = pairSpan(pt.id, other.id) + ptSnap.reach + otherSnap.reach + epsMargin
+                    if (Math.abs(pt.pos[0] - other.pos[0]) > checkThrs)
                         continue
-                    if (Math.abs(pt.pos[1] - other.pos[1]) > skipThrs)
+                    if (Math.abs(pt.pos[1] - other.pos[1]) > checkThrs)
                         continue
-                    if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon)) {
+                    if (ptClingingPure(pt, other, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap, getSnapThrs, freeClusterMode)) {
                         if (!neighbors[pt.id])
                             neighbors[pt.id] = new Set<number>()
                         if (!neighbors[other.id])
@@ -170,7 +345,10 @@ export function updateNeighborsForMovedPt(
     allPts: ControlPoint[],
     configClingingDist: number,
     getSnapSize: (id: number) => number,
-    epsilon: number
+    epsilon: number,
+    getSnapCandidates?: (pt: ControlPoint) => PtSnapCandidatesInfo,
+    getSnapThrs?: (id: number) => number,
+    freeClusterMode?: FreePtClusterMode
 ): Neighbors {
     const next = cloneNeighbors(neighbors)
     let neibs = next[pt.id]
@@ -189,10 +367,23 @@ export function updateNeighborsForMovedPt(
     if (pt.sta !== ControlPointSta.sta) {
         return next
     }
+    const ptSnap = getSnapCandidates ? getSnapCandidates(pt) : undefined
     for (const otherPt of allPts) {
         if (otherPt.sta !== ControlPointSta.sta || otherPt.id === pt.id)
             continue
-        if (ptClingingPure(pt, otherPt, configClingingDist, getSnapSize, epsilon)) {
+        const otherSnap = getSnapCandidates ? getSnapCandidates(otherPt) : undefined
+        if (ptSnap && otherSnap) {
+            // 预筛阈值必须按点对的真实贴合阈值（含尺寸）计算，并带与 ptClingingPure
+            // 正式比较一致的 epsilon 余量，与 buildNeighbors 保持一致，
+            // 否则带浮点漂移的边界距离（如 25.000000001 vs 阈值 25）会被此处提前误杀
+            const checkThrs = configClingingDist * (getSnapSize(pt.id) + getSnapSize(otherPt.id)) / 2
+                + ptSnap.reach + otherSnap.reach + epsilon * 10
+            if (Math.abs(pt.pos[0] - otherPt.pos[0]) > checkThrs)
+                continue
+            if (Math.abs(pt.pos[1] - otherPt.pos[1]) > checkThrs)
+                continue
+        }
+        if (ptClingingPure(pt, otherPt, configClingingDist, getSnapSize, epsilon, ptSnap, otherSnap, getSnapThrs, freeClusterMode)) {
             neibs.add(otherPt.id)
             if (!next[otherPt.id])
                 next[otherPt.id] = new Set<number>()
@@ -222,6 +413,56 @@ export function cleanNeighborsForDeletedPt(
     }
     delete next[ptId]
     return next
+}
+
+/** undo/redo 补丁中带 id 数组的变更条目（@aurouscia/au-undo-redo 的 Patch 内部结构） */
+export interface KeyedPatchItem<T> {
+    id: number
+    /** undefined 表示该条目是新增的 */
+    old?: T
+    /** undefined 表示该条目是被删除的 */
+    new?: T
+}
+
+/**
+ * undo/redo 应用到 Save 上的补丁。只声明 cluster 关心的字段：
+ * points 变化直接影响邻接；lines 变化影响吸附尺寸与 free 点方向/reach
+ */
+export interface SavePatch {
+    points?: KeyedPatchItem<ControlPoint>[]
+    lines?: KeyedPatchItem<unknown>[]
+}
+
+export type ClusterRestoreStrategy = 'preserve' | 'incremental' | 'rebuild'
+
+/**
+ * 增量恢复的变更点数上限：每个变更点都要为全部 sta 点重算吸附候选（O(n)），
+ * 变更点过多时增量成本会超过一次全量重建
+ */
+export const clusterRestoreIncrementalLimit = 16
+
+/**
+ * 决定 undo/redo 恢复后 cluster 缓存的处理策略。
+ * 依据的不变量：patch 不含 points/lines 时，cluster 的全部输入
+ * （点位/状态/方向、吸附尺寸、free 点方向与 reach）都未变化，
+ * 邻接表与 cluster 可直接保留
+ * @param patch 本次 undo/redo 应用的补丁；undefined 表示无补丁信息（保守重建）
+ * @param alreadyBuilt 邻接表/cluster 是否已构建过
+ */
+export function decideClusterRestoreStrategy(
+    patch: SavePatch | undefined,
+    alreadyBuilt: boolean
+): ClusterRestoreStrategy {
+    if (!patch)
+        return 'rebuild'
+    if (patch.lines && patch.lines.length > 0)
+        return 'rebuild'
+    const pts = patch.points
+    if (!pts || pts.length === 0)
+        return 'preserve'
+    if (!alreadyBuilt || pts.length > clusterRestoreIncrementalLimit)
+        return 'rebuild'
+    return 'incremental'
 }
 
 /**

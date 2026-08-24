@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useSaveStore } from "../saveStore";
 import { useResetterStore } from "./resetterStore";
+import { SavePatch } from "../saveDerived/staClusterStore.pure";
 
 export const useUndoStore = defineStore('undo', ()=>{
     const saveStore = useSaveStore()
@@ -32,9 +33,11 @@ export const useUndoStore = defineStore('undo', ()=>{
     async function undo(){
         if(!urPatches || !canUndo.value)
             return
+        // undo 应用的是当前 pointer 处的 patch（应用后 pointer 才后移）
+        const patch = urPatches.history[urPatches.pointer] as unknown as SavePatch | undefined
         const state = urPatches.undo()
         if(state){
-            await restoreState(state)
+            await restoreState(state, patch)
         }
     }
 
@@ -43,14 +46,16 @@ export const useUndoStore = defineStore('undo', ()=>{
             return
         const state = urPatches.redo()
         if(state){
-            await restoreState(state)
+            // redo 先前移 pointer 再应用该处的 patch
+            const patch = urPatches.history[urPatches.pointer] as unknown as SavePatch | undefined
+            await restoreState(state, patch)
         }
     }
 
-    async function restoreState(state: Save){
+    async function restoreState(state: Save, patch?: SavePatch){
         // TODO: activeCvsDispatcher会因为获取不到画布报错一次，有点难看不过问题不大
         saveStore.save = state
-        resetterStore.resetDerivedStores()
+        resetterStore.resetDerivedStores(patch)
         await resetterStore.relaunchDerivedStores()
     }
 

@@ -71,6 +71,11 @@ const daysAgo = computed(()=>{
             return Math.floor(days)
     }
 })
+// 是否在 9 天以内（daysAgo 为 undefined 表示日期无效或为未来时间，视为近期）
+const withinNineDays = computed(()=>{
+    const days = daysAgo.value
+    return days === undefined || days <= 9
+})
 const agoDisplay = computed(()=>{
     const days = daysAgo.value
     if(days === undefined)
@@ -87,7 +92,7 @@ onMounted(async() => {
 
 <template>
   <!-- 查看更新按钮 -->
-  <div v-if="hasNewUpdate" class="view-update-btn" @click="scrollToView">
+  <div v-if="hasNewUpdate && withinNineDays" class="view-update-btn" @click="scrollToView">
     查看更新{{ agoDisplay }}
   </div>
   <div ref="componentRef" class="recent-updates" v-if="!isError">
@@ -98,6 +103,7 @@ onMounted(async() => {
         </div>
         <a href="https://gitee.com/au114514/aarc/commits/master" target="_blank">查看所有更新</a>
     </h2>
+    <div style="color: palevioletred; margin-bottom: 8px;">遇到意外情况，请加qq交流群并<b>私聊</b>群主提供存档号，不要在群里@</div>
     <div v-if="!data" class="loading">
       加载中...
     </div>
@@ -112,7 +118,7 @@ onMounted(async() => {
                 {{ update.date }}
             </div>
         </div>
-        <div class="update-content">{{ update.content }}</div>
+        <div class="update-content" v-html="update.content"></div>
       </li>
     </ul>
   </div>
@@ -200,6 +206,9 @@ onMounted(async() => {
     color: #666;
     font-size: 14px;
     white-space: pre-wrap;
+    &:deep(a){
+        color: cornflowerblue;
+    }
 }
 
 .view-update-btn {

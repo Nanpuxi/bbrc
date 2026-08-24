@@ -23,6 +23,8 @@ import { useMiniatureCvsDispatcher } from '@/models/cvs/dispatchers/miniatureCvs
 import { useCachePreventer } from '@/utils/timeUtils/cachePreventer';
 import { DocumentHiddenLongWatcher } from '@/utils/eventUtils/documentHiddenLong';
 import HiddenLongWarnPrompt from './components/HiddenLongWarnPrompt.vue';
+import HeartbeatFailWarnPrompt from './components/HeartbeatFailWarnPrompt.vue';
+import { useHeartbeatStatusStore } from '@/app/globalStores/heartbeatStatus';
 import WarnRulePrompts from './components/WarnRulePrompts.vue';
 import ChatRoom from '@/pages/chat/ChatRoom.vue';
 import UserFileFavorites from '@/components/common/userFile/UserFileFavorites.vue';
@@ -40,12 +42,14 @@ import { useSignalrStore } from '@/app/com/signalrStore';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
 import { coordRound } from '@/utils/coordUtils/coordRound';
+import { throttle } from '@/utils/lang/throttle';
 import { useUndoStore } from '@/models/stores/utils/undoStore';
 import { isFocusingInput } from '@/utils/domUtils/focusingInput';
 import { renderAndUploadCloudSvg } from '@/models/save/cloudSvgOps';
 import { kickedName } from './routes/routesNames.ts';
 
 const heartbeatIntervalSecs = 3 * 60 // 每3分钟心跳一次
+const heartbeatOnEditMinIntervalMs = 60 * 1000 // 编辑活动触发的心跳，一分钟内最多一次
 
 const props = defineProps<{saveId:string}>()
 const router = useRouter()
@@ -100,6 +104,11 @@ async function disableChat(){
 function onKicked(){
     releasePreventLeaving()
     router.replace({name:kickedName})
+}
+async function handleSaveAndKick(){
+    if(await saveData(false)){
+        onKicked()
+    }
 }
 
 async function load() {
@@ -218,10 +227,10 @@ const preventLeaveStore = usePreventLeavingUnsavedStore()
 const { preventLeaving, releasePreventLeaving } = preventLeaveStore
 const { showUnsavedWarning, preventLeavingDisabled } = storeToRefs(preventLeaveStore)
 let lastSavedTime = 0
-async function saveData(mustBackup:boolean){
+async function saveData(mustBackup:boolean):Promise<boolean>{
     if(lastSavedTime + 1000 > Date.now()){
         console.warn('保存过于频繁（1秒内），已忽略本次保存请求')
-        return
+        return false
     }
     lastSavedTime = Date.now()
     configStore.writeConfigToSave()
@@ -231,7 +240,7 @@ async function saveData(mustBackup:boolean){
             console.log(saveCopy)
         }
         showPop('此处不能保存', 'failed')
-        return
+        return false
     }
     const staCount = saveStore.getStaCount()
     const lineCount = saveStore.getLineCount()
@@ -278,7 +287,9 @@ async function saveData(mustBackup:boolean){
         //重新初始化心跳定时器周期，因为“保存”本身会触发一次心跳续约
         endHeartbeat()
         startHeartbeat()
+        return true
     }
+    return false
 }
 
 const notLogin = ref<boolean>()
@@ -307,21 +318,69 @@ function setLeavingPreventing(){
             savingDisabledWarningStore.onFirstEdit()
         }
         preventLeaving()
+        heartbeatOnEdit?.()
         if(saveStore.save)
             undoStore.push(saveStore.save)
     }
 }
 
 let heartbeatTimer = 0
+const heartbeatFailWarnMs = 6 * 60 * 1000 // 距上次成功心跳超过该时长后再失败则弹出警告
+const showHeartbeatFailWarn = ref(false)
+const heartbeatStolenWarn = ref(false) // true：心跳已被他人接管；false：网络问题导致多次失败
+const heartbeatStatusStore = useHeartbeatStatusStore()
+// 所有续约心跳的统一入口：记录上次成功时间；失败时先鉴别原因，再分别处理
+async function renewHeartbeat(){
+    const ok = await api.save.heartbeatRenewal(saveIdNum.value)
+    if(ok){
+        heartbeatStatusStore.markSuccess()
+        return
+    }
+    if(await isHeartbeatStolen()){
+        // 心跳已被他人抢走：续约不可能再成功，停止心跳以免持续报错，并弹出“被接管”警告
+        // （与被所有者请出语义不同，不复用 onKicked，留在原页面以便用户自行备份未保存内容）
+        endHeartbeat()
+        heartbeatStolenWarn.value = true
+        showHeartbeatFailWarn.value = true
+        return
+    }
+    // 其他失败（断网等）：距上次成功过久时弹出警告
+    if(heartbeatStatusStore.sinceLastSuccessMs() > heartbeatFailWarnMs){
+        showHeartbeatFailWarn.value = true
+    }
+}
+// 续约失败时鉴别是否“心跳已被抢”：loadStatus 能查到“他人在编辑”即为被抢；
+// 查不到占用者（或 loadStatus 本身也失败）则说明是网络等其他问题
+async function isHeartbeatStolen():Promise<boolean>{
+    const status = await api.save.loadStatus(saveIdNum.value, false)
+    if(!status || !status.editingByUserId)
+        return false
+    return status.editingByUserId !== userInfoStore.userInfo?.id
+}
+// 编辑活动本身也是在场证明：画布重新渲染（即发生编辑）时触发一次续约心跳，
+// 防止定时器被 webview/系统冻结导致的心跳误判（一分钟内最多一次）
+// 仅在 startHeartbeat 时（即确定处于可编辑模式后）才赋值，未赋值说明不可编辑，无需发送
+let heartbeatOnEdit: (() => void) | undefined
 function startHeartbeat(){
     // 开始心跳续约周期（不需要立即执行一次，因为loadData相当于已经执行过一次）
+    heartbeatStatusStore.markSuccess()
     heartbeatTimer = window.setInterval(async()=>{
-        await api.save.heartbeatRenewal(saveIdNum.value)
+        await renewHeartbeat()
     }, heartbeatIntervalSecs * 1000)
+    heartbeatOnEdit ??= throttle(()=>{
+        renewHeartbeat()
+    }, heartbeatOnEditMinIntervalMs)
+    document.addEventListener('visibilitychange', onVisibleHeartbeat)
 }
 function endHeartbeat(){
     // 结束心跳续约周期
     window.clearInterval(heartbeatTimer)
+    document.removeEventListener('visibilitychange', onVisibleHeartbeat)
+}
+function onVisibleHeartbeat(){
+    // 页面重新可见时立即补发一次续约心跳（隐藏期间定时器可能已被 webview/系统冻结）
+    if(document.visibilityState === 'visible')
+        renewHeartbeat()
 }
 
 watch(props, async()=>{
@@ -405,14 +464,15 @@ onBeforeUnmount(()=>{
     <Cvs v-if="loadComplete"></Cvs>
     <Menu v-if="loadComplete" @save-data="saveData"></Menu>
     <UnsavedLeavingWarning v-if="showUnsavedWarning" :release="releasePreventLeaving"
-        :save="()=>saveData(false)" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
+        :save="async()=>{ await saveData(false) }" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
     <HiddenLongWarnPrompt v-if="showHiddenLongWarn" @ok="showHiddenLongWarn=false"></HiddenLongWarnPrompt>
+    <HeartbeatFailWarnPrompt v-if="showHeartbeatFailWarn" :stolen="heartbeatStolenWarn" @ok="showHeartbeatFailWarn=false"></HeartbeatFailWarnPrompt>
     <WarnRulePrompts :save-status="saveStatus"></WarnRulePrompts>
     <SavingDisabledWarning></SavingDisabledWarning>
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
     <DontUseWeirdBrowser></DontUseWeirdBrowser>
     <div v-if="loadComplete && !isNaN(saveIdNum)" class="chatRoomWrap">
-        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" />
+        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
     </div>
     <UserFileFavorites ref="userFileFavorites" />
 </template>

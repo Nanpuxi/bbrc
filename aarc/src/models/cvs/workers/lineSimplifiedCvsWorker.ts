@@ -7,6 +7,7 @@ import { Line, LineType } from "@/models/save";
 import { useConfigStore } from "@/models/stores/configStore";
 import { keepOrderSort } from "@/utils/lang/keepOrderSort";
 import { useLineStateStore } from "@/models/stores/saveDerived/state/lineStateStore";
+import { formalize } from "@/utils/lineUtils/formalize";
 
 export const useLineSimplifiedCvsWorker = defineStore('lineSimplifiedCvsWorker', ()=>{
     const saveStore = useSaveStore()
@@ -35,7 +36,15 @@ export const useLineSimplifiedCvsWorker = defineStore('lineSimplifiedCvsWorker',
             lines = options.lines
         }
         lines.forEach(line=>{
-            const pts = formalizedLines.find(x=>x.lineId === line.id)?.pts
+            let pts = formalizedLines.find(x=>x.lineId === line.id)?.pts
+            if(!pts || pts.length===0){
+                // 主画布渲染会省略视野外线路并清除其formalPts缓存，此处按需现算并回填
+                // （缩略图与视角无关，必须拿到所有线路的数据）
+                const rawPts = saveStore.getPtsByIds(line.pts)
+                pts = rawPts.length>1 ? formalize(rawPts) : undefined
+                if(pts)
+                    formalizedLineStore.setLinesFormalPts(line.id, pts)
+            }
             //isFake的线不绘入略缩图
             if(pts && !line.isFake)
                 targets.push({lineInfo:line, pts}) 

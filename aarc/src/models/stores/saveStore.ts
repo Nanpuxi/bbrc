@@ -288,6 +288,14 @@ export const useSaveStore = defineStore('save', () => {
     function getLinesByPt(ptId:number){
         return ptBelongLineDict.value[ptId] || []
     }
+    // 吸附阈值缩放比例：取点所属线路的最小宽度，仅在小于1时缩小阈值（大于1不放大）
+    function getSnapThrsRatio(ptId:number):number{
+        const lines = getLinesByPt(ptId)
+        if(lines.length===0)
+            return 1
+        const minWidth = Math.min(...lines.map(l=>l.width||1))
+        return Math.min(minWidth, 1)
+    }
     function getLinesDecidedPtSize(ptId:number){
         return ptSize.value[ptId] || 1
     }
@@ -381,7 +389,13 @@ export const useSaveStore = defineStore('save', () => {
                 afterIdx = -1
             else if(afterIdx==='tail')
                 afterIdx = line.pts.length
-            line.pts.splice(afterIdx+1, 0, id)
+            // 插入位置两端任意一方是free点时，新点也是free点
+            const insertPos = Math.min(afterIdx+1, line.pts.length)
+            const beforePt = insertPos>0 ? getPtById(line.pts[insertPos-1]) : undefined
+            const afterPt = insertPos<line.pts.length ? getPtById(line.pts[insertPos]) : undefined
+            if(beforePt?.free || afterPt?.free)
+                newPt.free = true
+            line.pts.splice(insertPos, 0, id)
             return id;
         }
     }
@@ -624,6 +638,11 @@ export const useSaveStore = defineStore('save', () => {
         }
         return false
     }
+    // 只属于伪线(isFake)的点（搜索、重名判断等场景统一将其排除）
+    function isPtOnlyOnFakeLines(ptId:number){
+        const lines = getLinesByPt(ptId)
+        return lines.length > 0 && lines.every(l => l.isFake)
+    }
     function getStaCount(){
         if(save.value)
             return saveStaCount(save.value)
@@ -678,11 +697,11 @@ export const useSaveStore = defineStore('save', () => {
         save, getNewId, cvsWidth, cvsHeight, disposedStaNameOf, deletedPoint, deletedTextTag, linePtsChanged,
         getPtById, getPtsByIds, getLineById, getLinesByIds, linesSortedByZIndex,
         getLinesDecidedPtSize, getLinesDecidedPtSizes, getLinesDecidedPtNameSize, getLinesDecidedPtNameSnapSize, getLinesDecidedPtSnapSizes, getLinesDecidedPtSnapSize,
-        getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
+        getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getSnapThrsRatio, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
         insertNewPtToLine, insertPtToLine, createNewLine, arrangeLinesOfType, ensureLinesOrdered,
         removePt, removePtFromLine, removeNoLinePoints, removePointLinkByPt, removeDanglingPointLinks, tryMergePt, isNamedPt,
         removeTextTag, moveEverything, setCvsSize,
-        isLineTypeWithoutSta, isPtNoSta,
+        isLineTypeWithoutSta, isPtNoSta, isPtOnlyOnFakeLines,
         getLineCount, getStaCount
     }
 })

@@ -8,7 +8,8 @@ import { HttpUserInfo, UserType } from "../com/apiGenerated"
 export const useUserInfoStore = defineStore('userInfo', ()=>{
     const userInfo = ref(defaultValue)
     const isAdmin = computed<boolean>(() => (userInfo.value.type??0) >= UserType.Admin)
-    const isLoginedTourist = computed<boolean>(() => !!userInfo.value.id && (userInfo.value.type??0) <= UserType.Tourist)
+    const isLogined = computed<boolean>(() => !!userInfo.value.id)
+    const isLoginedTourist = computed<boolean>(() => isLogined.value && (userInfo.value.type??0) <= UserType.Tourist)
     const apiStore = useApiStore()
 
     /**
@@ -62,7 +63,7 @@ export const useUserInfoStore = defineStore('userInfo', ()=>{
     //TODO：过段时间删除下面这行和旧key
     localStorage.removeItem(localStorageKeyLegacy);
 
-    return { userInfo, isAdmin, isLoginedTourist, getIdentityInfo, clearCache }
+    return { userInfo, isAdmin, isLogined, isLoginedTourist, getIdentityInfo, clearCache }
 })
 
 

@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.DbModels.Enums;
+using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Identities;
 using AARC.WebApi.Repos.Identities;
 using AARC.WebApi.Services.App.ActionFilters;
@@ -21,24 +21,26 @@ namespace AARC.WebApi.Controllers.Identities
         TurnstileVerifyService turnstileVerifyService,
         EmailService emailService,
         HttpUserIdProvider httpUserIdProvider,
+        HttpUserInfoService httpUserInfoService,
         IConfiguration configuration
         ) : Controller
     {
         [AllowAnonymous]
         [HttpGet]
-        public List<UserDto> Index(string? search, string? orderby)
+        public List<UserDto> Index(string? search, string? orderby, bool exact = false)
         {
             //orderby: active(默认) 或 save
-            var list = userRepo.IndexUser(search, orderby);
+            var list = userRepo.IndexUser(search, orderby, exact);
             return list;
         }
 
         [AllowAnonymous]
         [HttpGet]
         public List<UserHistoryService.UserHistoryDto> LoadHistory(
-            int targetUserId, int operatorUserId, UserHistoryType type, string? comment, int skip)
+            int targetUserId, int operatorUserId, UserHistoryType type, string? comment, int skip,
+            UserType? targetUserType = null)
         {
-            return userHistoryService.Load(targetUserId, operatorUserId, type, comment, skip);
+            return userHistoryService.Load(targetUserId, operatorUserId, type, comment, skip, targetUserType);
         }
 
         [AllowAnonymous]
@@ -67,6 +69,15 @@ namespace AARC.WebApi.Controllers.Identities
             var registerEnabled = configuration.GetValue<bool?>("Register:Enabled") ?? true;
             if (!registerEnabled)
                 throw new RqEx("本站点不允许注册");
+            var requireUserType = configuration.GetValue<UserType?>("Register:RequireUserType") ?? UserType.Tourist;
+            if (requireUserType > UserType.Tourist)
+            {
+                var currentUserInfo = httpUserInfoService.UserInfo.Value;
+                if (currentUserInfo.Id <= 0)
+                    throw new RqEx("本站点注册需要登录，请登录后重试");
+                if (currentUserInfo.Type < requireUserType)
+                    throw new RqEx("当前账号权限不足，无法注册新用户");
+            }
             await turnstileVerifyService.Verify(turnstileToken);
             var success = userRepo.CreateUser(userName, password, out var errmsg);
             if (!success)

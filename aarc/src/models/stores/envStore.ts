@@ -5,9 +5,10 @@ import { Coord, SgnCoord } from "../coord";
 import { listenPureClick, PureClickType } from "@/utils/eventUtils/pureClick";
 import { eventClientCoord } from "@/utils/eventUtils/eventClientCoord";
 import { OpsBtn, useOpsStore } from "./opsStore";
-import { ColorPreset, ControlPoint, ControlPointDir, ControlPointSta, Line, LineType, TextTag } from "../save";
+import { ControlPoint, ControlPointDir, ControlPointSta, Line, LineType, TextTag } from "../save";
 import { useSnapStore } from "./snapStore";
-import { coordAdd, coordAvg, coordSub } from "@/utils/coordUtils/coordMath";
+import { useConfigStore } from "./configStore";
+import { coordAdd, coordSub } from "@/utils/coordUtils/coordMath";
 import { useNameEditStore } from "./nameEditStore";
 import { useNameSearchStore } from "./nameSearchStore";
 import { useFormalizedLineStore } from "./saveDerived/formalizedLineStore";
@@ -28,12 +29,15 @@ import { removeConsecutiveSameItem } from "@/utils/lang/removeConsecutiveSameIte
 import { useOptionsOpenerStore } from "./utils/optionsOpenerStore";
 import { useLineFocusorStore } from "./utils/lineFocusorStore";
 import { useLineStateStore } from "./saveDerived/state/lineStateStore";
+import { useLineCreation } from "./composables/lineCreation";
 
 export const useEnvStore = defineStore('env', ()=>{
     const saveStore = useSaveStore();
     const lineStateStore = useLineStateStore()
     const { cvsWidth, cvsHeight } = storeToRefs(saveStore)
     const opsStore = useOpsStore();
+    const configStore = useConfigStore()
+    const { snapRayAnglesForFreeEnabled } = storeToRefs(configStore)
     const activePt = ref<ControlPoint>()
     const movingPoint = ref<boolean>(false)
     const movedPoint = ref<boolean>(false)
@@ -147,7 +151,8 @@ export const useEnvStore = defineStore('env', ()=>{
 
         const isRightBtnOnly = clickType === 'right' 
         const isRightBtnAndCtrl = clickType === 'ctrlAndRight'
-        const isRightBtn = isRightBtnOnly || isRightBtnAndCtrl
+        const isRightBtnAndAlt = clickType === 'altAndRight'
+        const isRightBtn = isRightBtnOnly || isRightBtnAndCtrl || isRightBtnAndAlt
 
         snapStore.snapInterPtTargets = undefined
         //根据当前状态判断是否需要重新渲染主画布
@@ -224,7 +229,7 @@ export const useEnvStore = defineStore('env', ()=>{
 
         if(!noDetect){
             //判断是否在站名上
-            const staName = onStaName(coord)
+            const staName = onStaName(coord, true)
             if(staName){
                 //点到站名上了
                 endEveryEditing({exceptName:true})
@@ -289,6 +294,10 @@ export const useEnvStore = defineStore('env', ()=>{
                     else
                         pt.sta = ControlPointSta.sta
                     movedPoint.value = true
+                }else if(isRightBtnAndAlt){
+                    //右键+alt点击切换控制点free
+                    pt.free = !pt.free
+                    movedPoint.value = true
                 }else{
                     if(!opsStore.clientPos || activePtChanged){
                         //菜单不在时，弹出菜单
@@ -307,7 +316,7 @@ export const useEnvStore = defineStore('env', ()=>{
             
             //判断是否在线上
             //如果已经移动过点，这时formalPts还未更新，不应该进行点击线路判断，直接视为点击空白处
-            const lineMatches = onLine(coord);
+            const lineMatches = onLine(coord, [], true);
             if(lineMatches && lineMatches.length>0){
                 //点到线上了
                 const lineMatch = lineMatches[0]
@@ -638,6 +647,19 @@ export const useEnvStore = defineStore('env', ()=>{
                 textSub:'打开面板'
             })
         }
+        if(snapRayAnglesForFreeEnabled.value){
+            firstCol.push({
+                cb: ()=>{
+                    if(pt){
+                        pt.free = !pt.free
+                        movedPoint.value = true
+                        setOpsForPt()
+                    }
+                },
+                text: '自由',
+                textSub: pt?.free ? '已自由' : '非自由'
+            })
+        }
         const relatedLinks = saveStore.getPointLinksByPt(pt.id)
         if(relatedLinks.length>0){
             rmFromLines.push({
@@ -811,70 +833,10 @@ export const useEnvStore = defineStore('env', ()=>{
         if(!suppressRender)
             rerender.value([],[])
     }
-    function createLine(type:LineType, group:number|undefined, parentLineId:number|undefined){
-        if(!saveStore.save)
-            return
-        const viewCenter = getViewCenterOffset()
-        let viewCenterCoord:Coord|undefined = [viewCenter.x, viewCenter.y]
-        viewCenterCoord = translateFromOffset(viewCenterCoord)
-        if(!viewCenterCoord)
-            return
-        ensureCoordInCanvas(viewCenterCoord)
-        const pt1Pos:Coord = [...viewCenterCoord]
-        const pt2Pos:Coord = [...viewCenterCoord]
-        pt1Pos[0] -= 75
-        pt2Pos[0] += 75
-        ensureSpaceForNewPt(pt1Pos)
-        ensureSpaceForNewPt(pt2Pos)
-        const pt1:ControlPoint = {
-            id: saveStore.getNewId(),
-            pos: snapGrid(pt1Pos, undefined, undefined, true) ?? pt1Pos,
-            dir: ControlPointDir.vertical,
-            sta: ControlPointSta.sta
-        }
-        const pt2:ControlPoint = {
-            id: saveStore.getNewId(),
-            pos: snapGrid(pt2Pos, undefined, undefined, true) ?? pt2Pos,
-            dir: ControlPointDir.vertical,
-            sta: ControlPointSta.sta
-        }
-        saveStore.save.points.push(pt1, pt2)
-        let newLine:Line|undefined = undefined
-        let parent = parentLineId
-        if(type==LineType.common){
-            newLine = {
-                id: saveStore.getNewId(),
-                pts: [pt1.id, pt2.id],
-                name: '',
-                nameSub: '',
-                color: "#ff0000",
-                type: LineType.common,
-                group,
-                parent
-            }
-        }else if(type==LineType.terrain){
-            newLine = {
-                id: saveStore.getNewId(),
-                pts: [pt1.id, pt2.id],
-                name: '',
-                nameSub: '',
-                color: "#000000",
-                type: LineType.terrain,
-                colorPre: ColorPreset.water,
-                group
-            }
-        }
-        if(newLine){
-            saveStore.createNewLine(newLine)
-            if(parent){
-                ensureChildrenOptionsSame(parent)
-                newLine.style = -1 // 新创建的线路：style设为-1（表示跟随主线）
-            }
-            rerender.value([newLine.id], [pt1.id, pt2.id])
-            activeLine.value = newLine
-            cursorPos.value = coordAvg(pt1.pos, pt2.pos)
-        }
-    }
+    //新线路/新地形的创建逻辑已分离到 composables/lineCreation
+    const { createLine, createClosedTerrainLine } = useLineCreation({
+        rerender, activeLine, cursorPos, ensureCoordInCanvas, ensureChildrenOptionsSame
+    })
     function lineInfoChanged(line:Line, staSizeChanged?:boolean){
         const children = ensureChildrenOptionsSame(line.id)
         if(staSizeChanged){
@@ -988,29 +950,6 @@ export const useEnvStore = defineStore('env', ()=>{
         }
         return false
     }
-    function ensureSpaceForNewPt(coord:Coord){
-        const original:Coord = [...coord]
-        let safty = 16
-        let ok = false
-        let offset = 20;
-        let offsetSgn = 1
-        while(!ok){
-            ok = !onPt(coord)
-            if(ok)
-                ok = !onStaName(coord)
-            if(ok)
-                ok = onLine(coord).length == 0
-            if(!ok){
-                coord[1] = original[1] + offset*offsetSgn
-                offsetSgn *= -1
-                if(offsetSgn > 0)
-                    offset += 40
-            }
-            safty--;
-            if(safty<=0)
-                break;
-        }
-    }
     function ensureCoordInCanvas(coord:Coord, margin = 100){
         if(coord[1] >= cvsHeight.value - margin){
             coord[1] = cvsHeight.value - margin
@@ -1102,7 +1041,7 @@ export const useEnvStore = defineStore('env', ()=>{
         cursorPos, movingPoint, movedPoint, movingExtendedPointOriginated, movingTextTag,
         cvsWidth, cvsHeight, getDisplayRatio,
         rerender, rescaled, lineFocus, getActivePtOpsAvoidance,
-        delActivePt, delLine, createLine, lineInfoChanged, ensureChildrenOptionsSame,
+        delActivePt, delLine, createLine, createClosedTerrainLine, lineInfoChanged, ensureChildrenOptionsSame,
         createTextTag, duplicateTextTag, delActiveTextTag, createPlainPt,
         endEveryEditing, cancelActive, splitLineByPt, mergeLinesByPt,
         removeRepeatPtOnLines,

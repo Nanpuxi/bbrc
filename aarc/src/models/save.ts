@@ -41,6 +41,7 @@ export interface ControlPoint{
     anchorX?:SgnNumber
     anchorY?:SgnNumber
     noLeader?:boolean
+    free?:boolean
 }
 
 export enum ControlPointLinkType{
@@ -96,6 +97,11 @@ export interface Line{
     removeCarpet?:boolean
     time?: LineTimeInfo
     cap?: CanvasLineCap
+    /**
+     * 锁定：锁定的线路自身及其点不参与点击检测（无法选中）。
+     * 一个点同时属于多条线路时，必须所有线路都锁定才会被跳过。
+     */
+    locked?: boolean
 }
 export interface LineTimeInfo{
     propose?: number
