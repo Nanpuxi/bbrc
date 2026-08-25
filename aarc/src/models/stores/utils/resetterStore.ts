@@ -11,6 +11,7 @@ import { useIconStore } from "../iconStore";
 import { useDiscardAreaStore } from "../discardAreaStore";
 import { useNameEditStore } from "../nameEditStore";
 import { useTextTagEditStore } from "../textTagEditStore";
+import { useNamePosMemoryStore } from "./namePosMemoryStore";
 import { SavePatch } from "../saveDerived/staClusterStore.pure";
 
 /**
@@ -32,7 +33,8 @@ export const useResetterStore = defineStore('resetter', ()=>{
         useIconStore,
         useDiscardAreaStore,
         useNameEditStore,
-        useTextTagEditStore
+        useTextTagEditStore,
+        useNamePosMemoryStore
     ]
 
     /**

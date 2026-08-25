@@ -1,18 +1,17 @@
-import { Coord, RectCoord, SgnCoord, SgnNumber } from "@/models/coord";
+import { Coord, QuadCoord, RectCoord, SgnCoord, SgnNumber } from "@/models/coord";
 import { Line, LineType, TextOptions, TextTag } from "@/models/save";
 import { useColorProcStore } from "@/models/stores/utils/colorProcStore";
 import { useConfigStore } from "@/models/stores/configStore";
 import { useTextTagRectStore } from "@/models/stores/saveDerived/textTagRectStore";
 import { useSaveStore } from "@/models/stores/saveStore";
 import { useLineStateStore } from "@/models/stores/saveDerived/state/lineStateStore";
-import { coordSub } from "@/utils/coordUtils/coordMath";
 import { drawText, DrawTextBodyOption, drawTextForLineName, DrawTextStrokeOption, splitLines } from "@/utils/drawUtils/drawText";
 import { defineStore } from "pinia";
 import { CvsContext } from "../common/cvsContext";
-import { enlargeRect } from "@/utils/coordUtils/coordRect";
+import { enlargeQuad, quadBoundingRect, toQuadCoord } from "@/utils/coordUtils/coordRect";
 import { TextTagPerTypeGlobalConfig } from "@/models/config";
 import { TextTagIconData, useIconStore } from "@/models/stores/iconStore";
-import { drawRect } from "@/utils/drawUtils/drawRect";
+import { drawQuad, fillQuad } from "@/utils/drawUtils/drawRect";
 import { drawCross } from "@/utils/drawUtils/drawCross";
 
 export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
@@ -93,25 +92,21 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         const justifiedPos = needJustifyPos 
             ? justifyPosByAnchorAndPadding(t.pos, anchor, paddingValue) 
             : t.pos
+        const angle = t.angle ?? 0
         const drawLineNameRes = drawTextForLineName(
-            ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'measure', width, dropCap)
+            ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'measure', width, dropCap, angle)
         if(drawLineNameRes?.rect){
-            const rect = drawLineNameRes.rect
-            const lu = rect[0]
-            const wh = coordSub(rect[1], rect[0])
-            ctx.fillStyle = color
-            ctx.fillRect(...lu, ...wh)
+            const quad = drawLineNameRes.rect
+            fillQuad(ctx, quad, color)
             ctx.lineJoin = 'round'
-            ctx.strokeStyle = color
             if(paddingValue>0){
-                ctx.lineWidth = paddingLineWidth
-                ctx.strokeRect(...lu, ...wh)
+                drawQuad(ctx, quad, color, paddingLineWidth)
             }
-            drawTextForLineName(ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'draw', width, dropCap)
-            const rectEnlarged = enlargeRect(rect, paddingValue)
-            textTagRectStore.setTextTagRect(t.id, rectEnlarged)
+            drawTextForLineName(ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'draw', width, dropCap, angle)
+            const quadEnlarged = enlargeQuad(quad, paddingValue)
+            textTagRectStore.setTextTagRect(t.id, quadEnlarged)
             if(strokeRect){
-                drawRectAndAnchor(ctx, t.pos, rectEnlarged)
+                drawRectAndAnchor(ctx, t.pos, quadEnlarged)
             }
         }
     }
@@ -142,12 +137,12 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             width: cs.config.textTagFontSizeBase * mainRatio/4,
             color: terrainColor,
             opacity: t.opacity || 1
-        }, 'both')
+        }, 'both', undefined, undefined, t.angle ?? 0)
         if(drawLineNameRes?.rect){
-            const rect = drawLineNameRes.rect
-            textTagRectStore.setTextTagRect(t.id, rect)
+            const quad = drawLineNameRes.rect
+            textTagRectStore.setTextTagRect(t.id, quad)
             if(strokeRect){
-                drawRectAndAnchor(ctx, t.pos, rect)
+                drawRectAndAnchor(ctx, t.pos, quad)
             }
         }
     }
@@ -219,7 +214,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
                         //（否则锚点位置完全由文本左边缘决定，即使icon已经把边缘撑大）
                         //所以此处不得不measure一次
                         const textRect = drawText(ctx, t.pos, [0, 0], 0, optMain, optSub, false, 'measure')
-                        const rect = textRect?.rectFull
+                        const rect = textRect ? quadBoundingRect(textRect.rectFull) : undefined
                         let tw = 0
                         if(rect)
                             tw = rect[1][0] - rect[0][0]
@@ -285,15 +280,26 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         }
         if (t.removeCarpet)
             textCarpetOpts=false
-        let rectFull:RectCoord|undefined //不包括icon，只包括文字的rect
-        if(iconValid && onlyIcon){
+        const angle = t.angle ?? 0
+        const noTextToDraw = iconValid && onlyIcon
+        let rectFull:RectCoord|undefined //不包括icon，只包括文字的rect（未旋转的轴对齐矩形）
+        if(noTextToDraw){
             rectFull = undefined
         }
         else{
-            const drawTextResRect = drawText(ctx, textDrawPos, anchor, textAlign, optMain, optSub, textCarpetOpts, 'both')
-            rectFull = drawTextResRect?.rectFull
+            //布局（icon 位置、宽度撑开等）基于未旋转的轴对齐矩形计算
+            const measured = drawText(ctx, textDrawPos, anchor, textAlign, optMain, optSub, false, 'measure')
+            rectFull = measured ? quadBoundingRect(measured.rectFull) : undefined
         }
-        
+        //文字与 icon 的组合整体绕 t.pos 旋转绘制
+        if(angle){
+            ctx.save()
+            ctx.rotateAround(t.pos[0], t.pos[1], angle)
+        }
+        if(!noTextToDraw){
+            drawText(ctx, textDrawPos, anchor, textAlign, optMain, optSub, textCarpetOpts, 'draw')
+        }
+
         let iconRect:RectCoord|undefined
         if(icon && idata?.img && iconValid && getIconPosY && getIconPosX){
             let tw = 0, th = 0;
@@ -311,16 +317,19 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             iconRect = [[...iconPos], [...iconRightBottomPos]]
             ctx.drawImage(idata.img, ...iconPos, iconWidth, iconHeight)
         }
+        if(angle){
+            ctx.restore()
+        }
         if(!rectFull && iconRect){
             rectFull = iconRect
         }
         else if(rectFull && iconWidth && iconHeight){
             enlargeRectByIcon(rectFull, iconWidth, iconHeight, g, textAlign)
         }
-        //rectFull变为包括icon的rect
-        textTagRectStore.setTextTagRect(t.id, rectFull)
+        //rectFull变为包括icon的rect，存储时绕 t.pos 旋转为四边形
+        textTagRectStore.setTextTagRect(t.id, rectFull, t.pos, angle)
         if(strokeRect){
-            drawRectAndAnchor(ctx, t.pos, rectFull)
+            drawRectAndAnchor(ctx, t.pos, rectFull ? toQuadCoord(rectFull, t.pos, angle) : undefined)
         }
     }
     function getFontSize(textOptions:TextOptions|undefined, fallback:number):number{
@@ -382,11 +391,11 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             y += paddingValue
         return [ x, y ]
     }
-    function drawRectAndAnchor(ctx:CvsContext, anchorPos:Coord, rectFull?:RectCoord){
+    function drawRectAndAnchor(ctx:CvsContext, anchorPos:Coord, quad?:QuadCoord){
         const opacityOriginal = ctx.globalAlpha || 1
         ctx.globalAlpha = 1
-        if(rectFull)
-            drawRect(ctx, rectFull, 'black', 1.5)
+        if(quad)
+            drawQuad(ctx, quad, 'black', 1.5)
         drawCross(ctx, {
             pos: anchorPos,
             dir: "vertical",

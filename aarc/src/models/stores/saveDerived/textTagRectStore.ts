@@ -1,11 +1,15 @@
 import { defineStore } from "pinia";
 import { useKvStoreCore } from "./common/kvStoreCore";
-import { RectCoord } from "@/models/coord";
+import { Coord, QuadCoord, RectCoord } from "@/models/coord";
+import { toQuadCoord } from "@/utils/coordUtils/coordRect";
 
-export const useTextTagRectStore = defineStore('textTagRect', ()=>{
-    const { setItem, enumerateItems, clearItems } = useKvStoreCore<RectCoord>()
+export const useTextTagRectStore = defineStore('textTagRect', () => {
+    const { setItem, enumerateItems, clearItems } = useKvStoreCore<QuadCoord>()
+    function setTextTagRect(id: number, rect: RectCoord | QuadCoord | undefined, center: Coord = [0, 0], angle: number = 0) {
+        setItem(id, rect === undefined ? undefined : toQuadCoord(rect, center, angle))
+    }
     return {
-        setTextTagRect: setItem,
+        setTextTagRect,
         enumerateTextTagRects: enumerateItems,
         clearItems
     }

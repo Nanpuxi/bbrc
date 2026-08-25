@@ -7,7 +7,7 @@ import { useFormalizedLineStore } from "../formalizedLineStore";
 import { useConfigStore } from "../../configStore";
 import { coordOnLineOfFormalPts } from "@/utils/coordUtils/coordOnLine";
 import { useStaNameRectStore } from "../staNameRectStore";
-import { rectInside } from "@/utils/coordUtils/coordRect";
+import { quadInside } from "@/utils/coordUtils/coordRect";
 import { ExtendBtn, useLineExtendStore } from "./lineExtendStore";
 import { useTextTagRectStore } from "../textTagRectStore";
 import { useUniqueComponentsStore } from "@/app/globalStores/uniqueComponents";
@@ -93,8 +93,8 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
     function onStaName(c:Coord, notifyLocked?:boolean){
         let onPt:ControlPoint|undefined;
         let hitLockedPt:ControlPoint|undefined;
-        enumerateStaNameRects((ptId, rect)=>{
-            if(rectInside(rect, c)){
+        enumerateStaNameRects((ptId, quad)=>{
+            if(quadInside(quad, c)){
                 const pt = saveStore.save?.points.find(pt => pt.id == ptId)
                 if(pt && ptLockedByLines(pt.id)){
                     hitLockedPt = pt
@@ -131,8 +131,8 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
     }
     function onTextTag(c:Coord){
         let onTextTag:TextTag|undefined;
-        enumerateTextTagRects((id, rect)=>{
-            if(rectInside(rect, c)){
+        enumerateTextTagRects((id, quad)=>{
+            if(quadInside(quad, c)){
                 onTextTag = saveStore.save?.textTags.find(x=>x.id===id)
                 return true;
             }

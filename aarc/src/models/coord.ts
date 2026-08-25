@@ -6,6 +6,8 @@ export type Coord = [number, number]
 /** 矩形对角坐标对 */
 export type RectCoord = [Coord, Coord]
 
+export type QuadCoord = [Coord, Coord, Coord, Coord]
+
 /** 带符号整数 -1 / 0 / 1，用于表示网格方向的量化分量 */
 export type SgnNumber = -1 | 0 | 1
 

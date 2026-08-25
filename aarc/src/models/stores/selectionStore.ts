@@ -4,7 +4,7 @@ import { ControlPoint, TextTag } from "../save";
 import { Coord } from "../coord";
 import { useSaveStore } from "./saveStore";
 import { coordDistSqLessThan } from "@/utils/coordUtils/coordDist";
-import { rectCoordDistSqLessThan } from "@/utils/coordUtils/coordRect";
+import { quadCoordDistSqLessThan } from "@/utils/coordUtils/coordRect";
 import { useTextTagRectStore } from "./saveDerived/textTagRectStore";
 import { coordAdd, coordSub } from "@/utils/coordUtils/coordMath";
 import { isFocusingInput } from "@/utils/domUtils/focusingInput";
@@ -40,8 +40,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
                     selected.value.delete(p)
             }
         }
-        enumerateTextTagRects((id, rect)=>{
-            if(rectCoordDistSqLessThan(rect, coord, radiusSq)){
+        enumerateTextTagRects((id, quad)=>{
+            if(quadCoordDistSqLessThan(quad, coord, radiusSq)){
                 const t = saveStore.getTextTagById(id)
                 if(!t) return
                 if(mode.value == 'add')
