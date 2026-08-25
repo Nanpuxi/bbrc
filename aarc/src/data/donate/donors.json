@@ -1,170 +1,176 @@
-[
-    {
-        "name": "YAG",
-        "amount": 8.88
-    },
-    {
-        "name": "小万",
-        "amount": 10.00
-    },
-    {
-        "name": "仍没昵称",
-        "amount": 6.00
-    },
-    {
-        "name": "ethereal",
-        "amount": 0.50
-    },
-    {
-        "name": "崩铁棍母学教父",
-        "amount": 0.50
-    },
-    {
-        "name": "达鱼",
-        "amount": 1.15
-    },
-    {
-        "name": "Setreat",
-        "amount": 1.46,
-        "remark": "随机地形图"
-    },
-    {
-        "name": "金岩轩",
-        "amount": 0.10
-    },
-    {
-        "name": "南浦Xi（GoA2喵）",
-        "amount": 18.00
-    },
-    {
-        "name": "下湖AWA",
-        "amount": 18.00
-    },
-
-    {
-        "name": "江扬",
-        "amount": 6.00
-    },
-    {
-        "name": "刘弘毅（Hajdeno）",
-        "amount": 360.00
-    },
-    {
-        "name": "Coldifieds",
-        "amount": 6.66,
-        "remark": "区域复制"
-    },
-    {
-        "name": "藏星.",
-        "amount": 50
-    },
-    {
-        "name": "donghailu1145",
-        "amount": 6
-    },
-    {
-        "name": "钻石Daiyamondo",
-        "amount": 66
-    },
-    {
-        "name": "Asasa",
-        "amount": 9.99,
-        "remark": "客流模拟"
-    },
-    {
-        "name": "爱玩GEOfs的曹云融",
-        "amount": 18.00,
-        "remark": "游戏"
-    },
-    {
-        "name": "浪迹天涯的笔珠",
-        "amount": 18.00
-    },
-    {
-        "name": "Lawrence",
-        "amount": 10.00
-    },
-    {
-        "name": "地理课代表小张呀",
-        "amount": 6.00
-    },
-    {
-        "name": "王王的城市",
-        "amount": 1.00
-    },
-    {
-        "name": "三几几",
-        "amount": 1.00
-    },
-    {
-        "name": "苹果居士",
-        "amount": 1.00
-    },
-    {
-        "name": "株洲化的09038（祝你中考加油）",
-        "amount": 18.00
-    },
-    {
-        "name": "陈晨",
-        "amount": 18.00,
-        "remark": "客流模拟"
-    },
-    {
-        "name": "莲！",
-        "amount": 16.00
-    },
-    {
-        "name":"众星揽月_Dairy",
-        "amount": 3.00
-    },
-    {
-        "name":"Zbm15xm",
-        "amount": 1.88,
-        "remark": "贝塞尔"
-    },
-    {
-        "name":"Cindycy",
-        "amount": 1.00
-    },
-    {
-        "name":"13号线上的红豆企鹅",
-        "amount": 20.00
-    },
-    {
-        "name":"台北荷花",
-        "amount": 1.00
-    },
-    {
-        "name":"llexaiu",
-        "amount": 6.00
-    },
-    {
-        "name":"HalzonELLO",
-        "amount": 30.00
-    },
-    {
-        "name":"水川狼",
-        "amount": 18.00
-    },
-    {
-        "name":"我是awa",
-        "amount":0.50
-    },
-    {
-        "name":"603路开往崔各庄汽车站",
-        "amount":0.01
-    },
-    {
-        "name":"小叮当在渴望着的",
-        "amount":6.00
-    },
-    {
-        "name":"虚无调色盘",
-        "amount":6.00,
-        "remark":"北京上海"
-    },
-    {
-        "name":"小电摇",
-        "amount":3.00
-    }
-]
+{
+    "update_date": "2026/08/23",
+    "donor_list": [
+        {
+            "name": "泥巴",
+            "amount": 50.00
+        },
+        {
+            "name": "YAG",
+            "amount": 8.88
+        },
+        {
+            "name": "小万",
+            "amount": 10.00
+        },
+        {
+            "name": "仍没昵称",
+            "amount": 6.00
+        },
+        {
+            "name": "ethereal",
+            "amount": 0.50
+        },
+        {
+            "name": "崩铁棍母学教父",
+            "amount": 0.50
+        },
+        {
+            "name": "达鱼",
+            "amount": 1.15
+        },
+        {
+            "name": "Setreat",
+            "amount": 1.46,
+            "remark": "随机地形图"
+        },
+        {
+            "name": "金岩轩",
+            "amount": 0.10
+        },
+        {
+            "name": "南浦Xi（GoA2喵）",
+            "amount": 18.00
+        },
+        {
+            "name": "下湖AWA",
+            "amount": 18.00
+        },
+        {
+            "name": "江扬",
+            "amount": 6.00
+        },
+        {
+            "name": "刘弘毅（Hajdeno）",
+            "amount": 360.00
+        },
+        {
+            "name": "Coldifieds",
+            "amount": 6.66,
+            "remark": "区域复制"
+        },
+        {
+            "name": "藏星.",
+            "amount": 50
+        },
+        {
+            "name": "donghailu1145",
+            "amount": 6
+        },
+        {
+            "name": "钻石Daiyamondo",
+            "amount": 66
+        },
+        {
+            "name": "Asasa",
+            "amount": 9.99,
+            "remark": "客流模拟"
+        },
+        {
+            "name": "爱玩GEOfs的曹云融",
+            "amount": 18.00,
+            "remark": "游戏"
+        },
+        {
+            "name": "浪迹天涯的笔珠",
+            "amount": 18.00
+        },
+        {
+            "name": "Lawrence",
+            "amount": 10.00
+        },
+        {
+            "name": "地理课代表小张呀",
+            "amount": 6.00
+        },
+        {
+            "name": "王王的城市",
+            "amount": 1.00
+        },
+        {
+            "name": "三几几",
+            "amount": 1.00
+        },
+        {
+            "name": "苹果居士",
+            "amount": 1.00
+        },
+        {
+            "name": "株洲化的09038（祝你中考加油）",
+            "amount": 18.00
+        },
+        {
+            "name": "陈晨",
+            "amount": 18.00,
+            "remark": "客流模拟"
+        },
+        {
+            "name": "莲！",
+            "amount": 16.00
+        },
+        {
+            "name": "众星揽月_Dairy",
+            "amount": 3.00
+        },
+        {
+            "name": "Zbm15xm",
+            "amount": 1.88,
+            "remark": "贝塞尔"
+        },
+        {
+            "name": "Cindycy",
+            "amount": 1.00
+        },
+        {
+            "name": "13号线上的红豆企鹅",
+            "amount": 20.00
+        },
+        {
+            "name": "台北荷花",
+            "amount": 1.00
+        },
+        {
+            "name": "llexaiu",
+            "amount": 6.00
+        },
+        {
+            "name": "HalzonELLO",
+            "amount": 30.00
+        },
+        {
+            "name": "水川狼",
+            "amount": 18.00
+        },
+        {
+            "name": "我是awa",
+            "amount": 0.50
+        },
+        {
+            "name": "603路开往崔各庄汽车站",
+            "amount": 0.01
+        },
+        {
+            "name": "小叮当在渴望着的",
+            "amount": 6.00
+        },
+        {
+            "name": "虚无调色盘",
+            "amount": 6.00,
+            "remark": "北京上海"
+        },
+        {
+            "name": "小电摇",
+            "amount": 3.00
+        }
+    ]
+}

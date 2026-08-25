@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
 import { aboutName } from '../identities/routes/routesNames';
 
+const display = ref(false)
 
+onMounted(()=>{
+    window.setTimeout(()=>{
+        display.value = true
+    }, 10)
+})
 </script>
 
 <template>
-    <div class="sponsor">
+    <div class="sponsor" v-show="display">
         <h1>❤ 资助 AARC 开源项目 ❤</h1>
         <div class="section">
             <p>感谢大家对 AARC 的支持和喜爱，我是本项目的主要作者 Au，目前正在持续维护该项目。</p>
