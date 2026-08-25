@@ -13,7 +13,7 @@ import { useStaClusterStore } from "@/models/stores/saveDerived/staClusterStore"
 import { getClusterMaxSizePure } from "@/models/stores/saveDerived/staClusterStore.pure";
 import { useCvsFrameStore } from "@/models/stores/cvsFrameStore";
 import { useEditorLocalConfigStore } from "@/app/localConfig/editorLocalConfig";
-import { drawRect } from "@/utils/drawUtils/drawRect";
+import { drawQuad, fillQuad } from "@/utils/drawUtils/drawRect";
 import { sqrt2 } from "@/utils/consts";
 
 //糊弄阈值
@@ -108,10 +108,7 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
                 if(rect){
                     let oriAlpha = ctx.globalAlpha || 1
                     ctx.globalAlpha = 0.4
-                    ctx.fillStyle = '#666'
-                    const width = rect[1][0] - rect[0][0]
-                    const height = rect[1][1] - rect[0][1]
-                    ctx.fillRect(...rect[0], width, height)
+                    fillQuad(ctx, rect, '#666')
                     ctx.globalAlpha = oriAlpha
                     return
                 }
@@ -168,10 +165,10 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
         }, needReportRect ? 'both' : 'draw')
 
         if(rects){
-            staNameRectStore.setStaNameRect(pt.id, rects.rectFull, globalPos, 0)
-            staNameMainRectStore.setStaNameMainRect(pt.id, rects.rectMain, globalPos, 0)
+            staNameRectStore.setStaNameRect(pt.id, rects.rectFull)
+            staNameMainRectStore.setStaNameMainRect(pt.id, rects.rectMain)
             if(markRoot){
-                drawRect(ctx, rects.rectFull)
+                drawQuad(ctx, rects.rectFull)
             }
         }
 

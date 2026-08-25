@@ -123,6 +123,20 @@ export class CvsContext{
     translate(x:number, y:number){
         this.b.ctx2d.translate(x, y)
     }
+    save(){
+        this.b.ctx2d.save()
+    }
+    restore(){
+        this.b.ctx2d.restore()
+    }
+    /** 以逻辑坐标 (x, y) 为中心旋转画布（配合 save/restore 使用） */
+    rotateAround(x:number, y:number, angle:number){
+        const b = this.b
+        const dx = b.mapX(x), dy = b.mapY(y)
+        b.ctx2d.translate(dx, dy)
+        b.ctx2d.rotate(angle)
+        b.ctx2d.translate(-dx, -dy)
+    }
 
     getUnderlyingCanvas(){
         return this.b.ctx2d.canvas

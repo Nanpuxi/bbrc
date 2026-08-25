@@ -172,3 +172,8 @@ export function rotateRectToQuad(rect: RectCoord, center: Coord, angle: number):
         return [center[0] + dx * cos - dy * sin, center[1] + dx * sin + dy * cos] as Coord;
     }) as QuadCoord;
 }
+
+/** 统一 RectCoord（绕 center 旋转 angle）与已是 QuadCoord 的输入为 QuadCoord */
+export function toQuadCoord(rect: RectCoord | QuadCoord, center: Coord = [0, 0], angle: number = 0): QuadCoord {
+    return rect.length === 4 ? rect : rotateRectToQuad(rect, center, angle);
+}

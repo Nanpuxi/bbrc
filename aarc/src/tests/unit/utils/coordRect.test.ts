@@ -8,7 +8,8 @@ import {
   enlargeRectBy,
   rectToQuad,
   quadBoundingRect,
-  rotateRectToQuad
+  rotateRectToQuad,
+  toQuadCoord
 } from '@/utils/coordUtils/coordRect'
 import { Coord, QuadCoord, RectCoord } from '@/models/coord'
 
@@ -244,5 +245,22 @@ describe('enlargeRectBy', () => {
   it('按比例扩大', () => {
     const rect: RectCoord = [[0, 0], [10, 10]]
     expect(enlargeRectBy(rect, 0.1)).toEqual([[-1, -1], [11, 11]] as RectCoord)
+  })
+})
+
+describe('toQuadCoord', () => {
+  it('QuadCoord 输入原样返回（忽略 center/angle）', () => {
+    const quad: QuadCoord = [[1, 2], [3, 4], [5, 6], [7, 8]]
+    expect(toQuadCoord(quad, [100, 100], Math.PI / 2)).toBe(quad)
+  })
+
+  it('RectCoord 输入等价于 rotateRectToQuad', () => {
+    const rect: RectCoord = [[0, 0], [10, 20]]
+    expect(toQuadCoord(rect, [5, 10], Math.PI / 6)).toEqual(rotateRectToQuad(rect, [5, 10], Math.PI / 6))
+  })
+
+  it('RectCoord 输入且 angle=0 时等价于 rectToQuad', () => {
+    const rect: RectCoord = [[-5, -10], [5, 10]]
+    expect(toQuadCoord(rect)).toEqual(rectToQuad(rect))
   })
 })

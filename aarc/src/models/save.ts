@@ -38,6 +38,8 @@ export interface ControlPoint{
     nameS?:string
     nameP?:Coord
     nameSize?:number
+    /** 站名旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
+    nameAngle?:number
     anchorX?:SgnNumber
     anchorY?:SgnNumber
     noLeader?:boolean
@@ -157,6 +159,8 @@ export interface TextTag{
     dropCapLength?:number
     icon?:number
     opacity?:number
+    /** 旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
+    angle?:number
     removeCarpet?:boolean
     sunken?:boolean
     //rot?:FormalRotation

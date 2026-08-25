@@ -9,7 +9,7 @@ import { coordSub } from "@/utils/coordUtils/coordMath";
 import { drawText, DrawTextBodyOption, drawTextForLineName, DrawTextStrokeOption, splitLines } from "@/utils/drawUtils/drawText";
 import { defineStore } from "pinia";
 import { CvsContext } from "../common/cvsContext";
-import { enlargeRect } from "@/utils/coordUtils/coordRect";
+import { enlargeRect, quadBoundingRect } from "@/utils/coordUtils/coordRect";
 import { TextTagPerTypeGlobalConfig } from "@/models/config";
 import { TextTagIconData, useIconStore } from "@/models/stores/iconStore";
 import { drawRect } from "@/utils/drawUtils/drawRect";
@@ -96,7 +96,8 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         const drawLineNameRes = drawTextForLineName(
             ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'measure', width, dropCap)
         if(drawLineNameRes?.rect){
-            const rect = drawLineNameRes.rect
+            //TODO(text-rotate): 传入 t.angle 后此处需要保留四边形（padding/背景填充均需旋转感知）
+            const rect = quadBoundingRect(drawLineNameRes.rect)
             const lu = rect[0]
             const wh = coordSub(rect[1], rect[0])
             ctx.fillStyle = color
@@ -144,7 +145,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             opacity: t.opacity || 1
         }, 'both')
         if(drawLineNameRes?.rect){
-            const rect = drawLineNameRes.rect
+            const rect = quadBoundingRect(drawLineNameRes.rect)
             textTagRectStore.setTextTagRect(t.id, rect, t.pos, 0)
             if(strokeRect){
                 drawRectAndAnchor(ctx, t.pos, rect)
@@ -219,7 +220,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
                         //（否则锚点位置完全由文本左边缘决定，即使icon已经把边缘撑大）
                         //所以此处不得不measure一次
                         const textRect = drawText(ctx, t.pos, [0, 0], 0, optMain, optSub, false, 'measure')
-                        const rect = textRect?.rectFull
+                        const rect = textRect ? quadBoundingRect(textRect.rectFull) : undefined
                         let tw = 0
                         if(rect)
                             tw = rect[1][0] - rect[0][0]
@@ -291,7 +292,8 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         }
         else{
             const drawTextResRect = drawText(ctx, textDrawPos, anchor, textAlign, optMain, optSub, textCarpetOpts, 'both')
-            rectFull = drawTextResRect?.rectFull
+            //TODO(text-rotate): 传入 t.angle 后此处需要保留四边形（icon 需参与旋转）
+            rectFull = drawTextResRect ? quadBoundingRect(drawTextResRect.rectFull) : undefined
         }
         
         let iconRect:RectCoord|undefined
