@@ -7,6 +7,7 @@ import { useConfigStore } from '@/models/stores/configStore';
 import { useIconStore } from '@/models/stores/iconStore';
 import { storeToRefs } from 'pinia';
 import FontInput from '../shared/FontInput.vue';
+import AngleInput from '../shared/AngleInput.vue';
 
 const cs = useConfigStore()
 const iconStore = useIconStore()
@@ -138,6 +139,13 @@ defineExpose({
                         </select>
                     </td>
                 </tr>
+                <tr>
+                    <td>旋转</td>
+                    <td>
+                        <AngleInput v-model="editing.angle"/>
+                        <div class="smallNote">单位：角度制</div>
+                    </td>
+                </tr>
                 <tr v-if="editing.forId">
                     <td>宽度</td>
                     <td>
@@ -178,6 +186,13 @@ defineExpose({
                     </td>
                 </tr>
                 <tr v-if="!editing.forId">
+                    <td>去除<br/>白边</td>
+                    <td>
+                        <input type="checkbox" v-model="editing.removeCarpet"/>
+                        <div class="smallNote">标签将不会有底层的白边</div>
+                    </td>
+                </tr>
+                <tr v-if="!editing.forId">
                     <td>不透<br/>明度</td>
                     <td>
                         <div class="viewableRange">
@@ -187,18 +202,11 @@ defineExpose({
                         </div>
                     </td>
                 </tr>
-                <tr v-if="!editing.forId">
-                    <td>去除<br/>白边</td>
-                    <td>
-                        <input type="checkbox" v-model="editing.removeCarpet"/>
-                        <div class="smallNote">标签将不会有底层的白边</div>
-                    </td>
-                </tr>
                 <tr>
                     <td>置底</td>
                     <td>
                         <input type="checkbox" v-model="editing.sunken"/>
-                        <div class="smallNote">标签将置于线路下方</div>
+                        <div class="smallNote">标签将置于线路下方，用于区划名</div>
                     </td>
                 </tr>
                 <tr v-if="editing.forId">

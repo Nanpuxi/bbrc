@@ -138,7 +138,8 @@ export const devSave:Save = {
             sta: ControlPointSta.sta,
             name: '东南新城',
             nameS: 'S.E. New Town',
-            nameP: [0, 20]
+            nameP: [0, 20],
+            nameAngle: -Math.PI/6
         },
         {
             id: 35,
@@ -307,7 +308,8 @@ export const devSave:Save = {
             textS: "Lulupupu Int'l Airport",
             textOp: {size:0.7, color:'#999999'},
             textSOp: {size:0.8, color:'#999999'},
-            icon:1000000
+            icon:1000000,
+            angle: Math.PI/6
         },
         {
             id: 1008,

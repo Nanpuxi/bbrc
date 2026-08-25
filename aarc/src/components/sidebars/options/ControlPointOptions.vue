@@ -11,6 +11,7 @@ import { indicesInArrayByPred } from '@/utils/lang/indicesInArray';
 import { isRing } from '@/utils/lineUtils/isRing';
 import { isSameCoord } from '@/utils/sgn';
 import { Coord } from '@/models/coord';
+import AngleInput from '../shared/AngleInput.vue';
 
 const sidebar = useTemplateRef('sidebar')
 const nameEditStore = useNameEditStore()
@@ -219,6 +220,13 @@ defineExpose({
                                 <option :value="true">无</option>
                                 <option :value="false">有</option>
                             </select> 
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>旋转</td>
+                        <td>
+                            <AngleInput v-model="editing.nameAngle"/>
+                            <div class="smallNote">单位：角度制</div>
                         </td>
                     </tr>
                 </tbody></table>
