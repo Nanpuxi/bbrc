@@ -6,6 +6,7 @@ import {
   quadCoordDistSqLessThan,
   enlargeRect,
   enlargeRectBy,
+  enlargeQuad,
   rectToQuad,
   quadBoundingRect,
   rotateRectToQuad,
@@ -245,6 +246,56 @@ describe('enlargeRectBy', () => {
   it('按比例扩大', () => {
     const rect: RectCoord = [[0, 0], [10, 10]]
     expect(enlargeRectBy(rect, 0.1)).toEqual([[-1, -1], [11, 11]] as RectCoord)
+  })
+})
+
+describe('enlargeQuad', () => {
+  it('轴对齐矩形等价于 enlargeRect', () => {
+    const quad = rectToQuad([[0, 0], [10, 20]])
+    const enlarged = enlargeQuad(quad, 2)
+    const expected = rectToQuad([[-2, -2], [12, 22]])
+    for (let i = 0; i < 4; i++) {
+      expect(enlarged[i][0]).toBeCloseTo(expected[i][0], 6)
+      expect(enlarged[i][1]).toBeCloseTo(expected[i][1], 6)
+    }
+  })
+
+  it('delta=0 时顶点不变', () => {
+    const quad = rotateRectToQuad([[0, 0], [10, 10]], [5, 5], Math.PI / 6)
+    const enlarged = enlargeQuad(quad, 0)
+    for (let i = 0; i < 4; i++) {
+      expect(enlarged[i][0]).toBeCloseTo(quad[i][0], 6)
+      expect(enlarged[i][1]).toBeCloseTo(quad[i][1], 6)
+    }
+  })
+
+  it('旋转 45° 的正方形按边法向扩大', () => {
+    // 边长 10 的正方形旋转 45°，边心距（apothem）为 5；扩大 1 后边心距为 6，
+    // 顶点到中心距离从 5√2 变为 6√2
+    const quad = rotateRectToQuad([[0, 0], [10, 10]], [5, 5], Math.PI / 4)
+    const enlarged = enlargeQuad(quad, 1)
+    const r = 6 * Math.sqrt(2)
+    // 顶点顺序：上、右、下、左
+    expect(enlarged[0][0]).toBeCloseTo(5, 6)
+    expect(enlarged[0][1]).toBeCloseTo(5 - r, 6)
+    expect(enlarged[1][0]).toBeCloseTo(5 + r, 6)
+    expect(enlarged[1][1]).toBeCloseTo(5, 6)
+    expect(enlarged[2][0]).toBeCloseTo(5, 6)
+    expect(enlarged[2][1]).toBeCloseTo(5 + r, 6)
+    expect(enlarged[3][0]).toBeCloseTo(5 - r, 6)
+    expect(enlarged[3][1]).toBeCloseTo(5, 6)
+  })
+
+  it('逆时针环绕的四边形也能向外扩大', () => {
+    // 手动构造逆时针（屏幕坐标）顺序的轴对齐矩形
+    const quad: QuadCoord = [[0, 0], [0, 20], [10, 20], [10, 0]]
+    const enlarged = enlargeQuad(quad, 2)
+    // 顶点顺序不变，向外扩 2
+    const expected: Coord[] = [[-2, -2], [-2, 22], [12, 22], [12, -2]]
+    for (let i = 0; i < 4; i++) {
+      expect(enlarged[i][0]).toBeCloseTo(expected[i][0], 6)
+      expect(enlarged[i][1]).toBeCloseTo(expected[i][1], 6)
+    }
   })
 })
 

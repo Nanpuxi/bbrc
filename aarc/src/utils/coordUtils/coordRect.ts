@@ -177,3 +177,52 @@ export function rotateRectToQuad(rect: RectCoord, center: Coord, angle: number):
 export function toQuadCoord(rect: RectCoord | QuadCoord, center: Coord = [0, 0], angle: number = 0): QuadCoord {
     return rect.length === 4 ? rect : rotateRectToQuad(rect, center, angle);
 }
+
+/** 按各边法向向外平移 delta 扩大凸四边形（类似 enlargeRect），新顶点为相邻偏移边的交点 */
+export function enlargeQuad(quad: QuadCoord, delta: number): QuadCoord {
+    // 面积符号判断环绕方向（屏幕坐标系 y 向下，面积为正即顺时针）
+    let area2 = 0;
+    for (let i = 0; i < 4; i++) {
+        const [x0, y0] = quad[i];
+        const [x1, y1] = quad[(i + 1) % 4];
+        area2 += x0 * y1 - x1 * y0;
+    }
+    const winding = area2 >= 0 ? 1 : -1;
+    // 每条边向外偏移 delta：记录偏移后直线上一点、方向与单位外法向
+    const offPts: Coord[] = [];
+    const dirs: Coord[] = [];
+    const normals: Coord[] = [];
+    for (let i = 0; i < 4; i++) {
+        const [x0, y0] = quad[i];
+        const [x1, y1] = quad[(i + 1) % 4];
+        const dx = x1 - x0, dy = y1 - y0;
+        const len = Math.hypot(dx, dy) || 1;
+        // 顺时针（屏幕坐标）时外法向为 (dy, -dx)
+        const nx = (dy / len) * winding;
+        const ny = (-dx / len) * winding;
+        normals.push([nx, ny]);
+        offPts.push([x0 + nx * delta, y0 + ny * delta]);
+        dirs.push([dx, dy]);
+    }
+    // 新顶点 = 相邻两条偏移边的交点
+    const res: Coord[] = [];
+    for (let i = 0; i < 4; i++) {
+        const prev = (i + 3) % 4;
+        const [px, py] = offPts[prev];
+        const [pdx, pdy] = dirs[prev];
+        const [qx, qy] = offPts[i];
+        const [qdx, qdy] = dirs[i];
+        const denom = pdx * qdy - pdy * qdx;
+        if (Math.abs(denom) < 1e-12) {
+            // 相邻边平行（退化），退化为顶点沿两法向之和偏移
+            res.push([
+                quad[i][0] + (normals[prev][0] + normals[i][0]) * delta,
+                quad[i][1] + (normals[prev][1] + normals[i][1]) * delta,
+            ]);
+            continue;
+        }
+        const t = ((qx - px) * qdy - (qy - py) * qdx) / denom;
+        res.push([px + t * pdx, py + t * pdy]);
+    }
+    return res as QuadCoord;
+}
