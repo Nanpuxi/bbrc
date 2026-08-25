@@ -129,7 +129,8 @@ export const devSave:Save = {
             sta: ControlPointSta.sta,
             name: '火车南站\n西广场(假日酒店)',
             nameS: 'S. Railway Station\nW. Square (Holiday Inn)',
-            nameP: [0, 20]
+            nameP: [0, 20],
+            nameAngle: Math.PI/10
         },
         {
             id: 34,
@@ -139,7 +140,9 @@ export const devSave:Save = {
             name: '东南新城',
             nameS: 'S.E. New Town',
             nameP: [0, 20],
-            nameAngle: -Math.PI/6
+            nameAngle: -Math.PI/2,
+            anchorX: -1,
+            anchorY: 0
         },
         {
             id: 35,
@@ -309,6 +312,8 @@ export const devSave:Save = {
             textOp: {size:0.7, color:'#999999'},
             textSOp: {size:0.8, color:'#999999'},
             icon:1000000,
+            anchorX: 1,
+            textAlign: undefined,
             angle: Math.PI/6
         },
         {

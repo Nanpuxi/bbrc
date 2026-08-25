@@ -1,6 +1,36 @@
 {
-    "update_date": "2026/08/23",
+    "update_date": "2026/08/26",
     "donor_list": [
+        {
+            "name": "高咲侑",
+            "amount": 5.00
+        },
+        {
+            "name": "Corniche",
+            "amount": 20.00,
+            "remark": "精选作品集"
+        },
+        {
+            "name": "盘龙.Plate Dragon",
+            "amount": 12.00
+        },  
+        {
+            "name": "hahahahaha114514",
+            "amount": 6.00
+        },
+        {
+            "name": "猫天渊_珞",
+            "amount": 13.14,
+            "remark": "线路名搜索"
+        },
+        {
+            "name": "天月之穗",
+            "amount": 0.01
+        },
+        {
+            "name": "那兔独晓曼",
+            "amount": 6.00
+        },
         {
             "name": "泥巴",
             "amount": 50.00
