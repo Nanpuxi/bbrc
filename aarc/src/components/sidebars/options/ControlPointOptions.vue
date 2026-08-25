@@ -12,6 +12,7 @@ import { isRing } from '@/utils/lineUtils/isRing';
 import { isSameCoord } from '@/utils/sgn';
 import { Coord } from '@/models/coord';
 import AngleInput from '../shared/AngleInput.vue';
+import { useNamePosMemoryStore } from '@/models/stores/utils/namePosMemoryStore';
 
 const sidebar = useTemplateRef('sidebar')
 const nameEditStore = useNameEditStore()
@@ -126,6 +127,22 @@ const isLineTypeWithoutSta = computed<boolean>(()=>{
     return saveStore.isLineTypeWithoutSta(relatedLineTypes)
 })
 
+const namePosMemoryStore = useNamePosMemoryStore()
+const hasNamePosMemory = computed(()=>namePosMemoryStore.hasMem)
+function writeNamePosMemory(){
+    if(!editing.value)
+        return
+    namePosMemoryStore.write(editing.value)
+}
+function useNamePosMemory(){
+    if(!editing.value)
+        return
+    namePosMemoryStore.apply(editing.value)
+}
+function clearNamePosMemoryClick(){
+    namePosMemoryStore.clear()
+}
+
 const emit = defineEmits<{
     (e:'changed'):void
 }>()
@@ -230,6 +247,17 @@ defineExpose({
                         </td>
                     </tr>
                 </tbody></table>
+                <div class="namePosMemoryBtns" v-if="editing.nameP">
+                    <button v-if="!hasNamePosMemory" class="minor" @click="writeNamePosMemory">写入记忆</button>
+                    <template v-else>
+                        <button class="minor" @click="writeNamePosMemory">覆盖记忆</button>
+                        <button class="confirm" @click="useNamePosMemory">应用记忆</button>
+                        <button class="cancel" @click="clearNamePosMemoryClick">清空记忆</button>
+                    </template>
+                </div>
+                <div class="smallNote" v-if="editing.nameP && hasNamePosMemory" style="text-align: center;">
+                    “记忆”用于临时记录上方表格中的设置，可用于创建统一的站点视觉效果，新命名的站将自动使用记忆值设置，修改时请<b>覆盖</b>，不再需要时请<b>清空</b>（退出编辑时自动清空）
+                </div>
             </div>
             <h2>拆分线路</h2>
             <div class="optionSection">
@@ -321,5 +349,11 @@ defineExpose({
 <style scoped lang="scss">
 .lineMergeSelect{
     max-width: 180px;
+}
+.namePosMemoryBtns{
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 6px;
 }
 </style>

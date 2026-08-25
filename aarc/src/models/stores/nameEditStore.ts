@@ -10,6 +10,7 @@ import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
 import {useFormalizedLineStore} from "./saveDerived/formalizedLineStore.ts";
 import { ControlPoint } from "../save.ts";
 import { coordRound } from "@/utils/coordUtils/coordRound.ts";
+import { useNamePosMemoryStore } from "@/models/stores/utils/namePosMemoryStore";
 
 export const useNameEditStore = defineStore('nameEdit', ()=>{
     const saveStore = useSaveStore()
@@ -17,6 +18,7 @@ export const useNameEditStore = defineStore('nameEdit', ()=>{
     const snapStore = useSnapStore()
     const formalizedLineStore = useFormalizedLineStore()
     const staClusterStore = useStaClusterStore()
+    const namePosMemoryStore = useNamePosMemoryStore()
     const { disposedStaNameOf } = storeToRefs(saveStore)
     disposedStaNameOf.value = disposedStaNameHandler
     const targetPtId = ref<number>()
@@ -68,7 +70,8 @@ export const useNameEditStore = defineStore('nameEdit', ()=>{
             pt.name = nameMain.value
             pt.nameS = nameSub.value
             if(saveStore.isNamedPt(pt) && !pt.nameP){
-                pt.nameP = optimizedNamePos(pt.id)
+                if(!namePosMemoryStore.apply(pt))
+                    pt.nameP = optimizedNamePos(pt.id)
             }
         }
     }
