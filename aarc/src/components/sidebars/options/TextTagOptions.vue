@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { TextTag } from '@/models/save';
+import { LineType, TextTag } from '@/models/save';
 import { computed, ref, useTemplateRef, watch } from 'vue';
+import { useSaveStore } from '@/models/stores/saveStore';
 import SideBar from '../../common/SideBar.vue';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { useConfigStore } from '@/models/stores/configStore';
@@ -10,6 +11,7 @@ import FontInput from '../shared/FontInput.vue';
 import AngleInput from '../shared/AngleInput.vue';
 
 const cs = useConfigStore()
+const saveStore = useSaveStore()
 const iconStore = useIconStore()
 const { prefixSelected } = storeToRefs(iconStore)
 
@@ -38,6 +40,13 @@ function startEditing(tag: TextTag) {
 
 const editingDropCapActualEnabled = computed(()=>{
     return editing.value?.dropCap ?? cs.config.textTagForLineDropCap
+})
+
+const editingForLine = computed(()=>{
+    const forId = editing.value?.forId
+    if(!forId)
+        return
+    return saveStore.getLineById(forId)
 })
 
 function ensureIconInSelection(){
@@ -157,6 +166,19 @@ defineExpose({
                         </div>
                     </td>
                 </tr>
+                <tr v-if="editing.forId && editingForLine?.type===LineType.common">
+                    <td>文字<br/>颜色</td>
+                    <td>
+                        <div class="selectItem">
+                            <select v-model="editingForLine.tagTextColor">
+                                <option :value="undefined">自动颜色</option>
+                                <option :value="'black'">固定黑色</option>
+                                <option :value="'white'">固定白色</option>
+                            </select>
+                        </div>
+                        <div class="smallNote">此项是线路下所有<br/>线路名标签共享</div>
+                    </td>
+                </tr>
                 <tr v-if="editing.forId">
                     <td :rowspan="editingDropCapActualEnabled ? 2 : 1">数字<br/>放大</td>
                     <td>
@@ -171,7 +193,7 @@ defineExpose({
                 </tr>
                 <tr v-if="editing.forId && editingDropCapActualEnabled">
                     <td>
-                        <button v-if="editing.dropCapLength===undefined" class="lite" @click="editing.dropCapLength=1">
+                        <button v-if="editing.dropCapLength===undefined" class="lite confirm" @click="editing.dropCapLength=1">
                             启用长度设定(当前自动)
                         </button>
                         <template v-else>

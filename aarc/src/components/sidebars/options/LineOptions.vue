@@ -348,9 +348,9 @@ onMounted(()=>{
         <td>
             <div class="selectItem">
                 <select v-model="line.tagTextColor">
-                    <option :value="undefined">自动</option>
-                    <option :value="'black'">黑色</option>
-                    <option :value="'white'">白色</option>
+                    <option :value="undefined">自动颜色</option>
+                    <option :value="'black'">固定黑色</option>
+                    <option :value="'white'">固定白色</option>
                 </select>
             </div>
         </td>
