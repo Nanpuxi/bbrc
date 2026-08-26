@@ -229,12 +229,25 @@ function openProcessedInNewTab() {
     }
 }
 
-function onFileSelected(selected: File) {
+async function onFileSelected(selected: File) {
     if (originalUrl.value) URL.revokeObjectURL(originalUrl.value);
     if (processedUrl.value) URL.revokeObjectURL(processedUrl.value);
     if (thumbUrl.value) URL.revokeObjectURL(thumbUrl.value);
-    file.value = selected;
-    originalUrl.value = URL.createObjectURL(selected);
+    // 选中后一次性读入内存，后续处理都基于内存副本，
+    // 避免 File 引用的磁盘文件变动/失效导致 NotReadableError
+    let memFile: File;
+    try {
+        const buf = await selected.arrayBuffer();
+        memFile = new File([buf], selected.name, { type: selected.type });
+    } catch (err) {
+        file.value = undefined;
+        originalUrl.value = undefined;
+        processError.value = '无法读取文件，请确认文件未被移动或修改后重试';
+        console.error(err);
+        return;
+    }
+    file.value = memFile;
+    originalUrl.value = URL.createObjectURL(memFile);
 
     const img = new Image();
     img.onload = () => {
@@ -422,8 +435,8 @@ defineExpose({ open, close });
             </div>
 
             <div class="inputRow">
-                <label>显示名称:</label>
-                <input v-model="displayName" placeholder="分类名-图片名" />
+                <label>资源名称（必填）:</label>
+                <input v-model="displayName" placeholder="请输入资源名称" />
             </div>
             <Notice
                 v-if="showNameHint"
@@ -471,6 +484,9 @@ defineExpose({ open, close });
                             step="0.01"
                         />
                         <span class="qualityValue">{{ Math.round(quality * 100) }}%</span>
+                    </div>
+                    <div v-if="quality > 0.9" class="qualityWarn">
+                        质量过高可能导致图片加载缓慢
                     </div>
                 </template>
             </div>
@@ -642,6 +658,11 @@ defineExpose({ open, close });
             text-align: right;
             font-size: 13px;
         }
+    }
+    .qualityWarn {
+        text-align: center;
+        font-size: 14px;
+        color: #c00;
     }
     .ratioHint {
         font-size: 12px;
