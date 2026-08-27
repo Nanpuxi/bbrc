@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, watch, type Ref } from "vue";
 import { localConfigKeyPrefix } from "./common/keyPrefix";
+
+export const cvsRenderResolutionRatioLimits = { min: 0.5, max: 2 }
 
 export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const staNameFob = ref<number|string>()
@@ -12,6 +14,15 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const ignoreStyleAndSpan = ref<boolean>(false)
     const staNameSnapDiagonal = ref<'inner'|'outer'|'both'>('both')
     const gridLabelSize = ref<number>(0)
+    const cvsRenderResolutionRatio = ref<number>(2)
+    watch(cvsRenderResolutionRatio as Ref<number | string>, (v)=>{
+        if(v === '' || v == null || typeof v !== 'number' || isNaN(v))
+            return
+        if(v < cvsRenderResolutionRatioLimits.min)
+            cvsRenderResolutionRatio.value = cvsRenderResolutionRatioLimits.min
+        else if(v > cvsRenderResolutionRatioLimits.max)
+            cvsRenderResolutionRatio.value = cvsRenderResolutionRatioLimits.max
+    })
 
     //旧版兼容性
     function backCompat(){
@@ -33,6 +44,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         ignoreStyleAndSpan,
         staNameSnapDiagonal,
         gridLabelSize,
+        cvsRenderResolutionRatio,
         backCompat
     }
 },

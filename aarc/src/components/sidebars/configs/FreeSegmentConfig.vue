@@ -32,7 +32,7 @@ function applySnapRayAnglesForFree() {
 </script>
 
 <template>
-<ConfigSection :title="'自由区间方向（新）'">
+<ConfigSection :title="'自由区间方向'">
     <table><tbody>
         <tr><th>{{ snapRayAnglesForFreeEnabled ? '自由区间吸附角度' : '自由区间' }}</th></tr>
         <tr v-if="!snapRayAnglesForFreeEnabled">

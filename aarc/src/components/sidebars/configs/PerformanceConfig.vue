@@ -1,21 +1,64 @@
 <script lang="ts" setup>
-import { useEditorLocalConfigStore } from '@/app/localConfig/editorLocalConfig';
+import { useEditorLocalConfigStore, cvsRenderResolutionRatioLimits } from '@/app/localConfig/editorLocalConfig';
 import ConfigSection from './shared/ConfigSection.vue';
 import { storeToRefs } from 'pinia';
+import { ref, watch, computed } from 'vue';
+
+const ratioPlaceholder = computed(() => `${cvsRenderResolutionRatioLimits.min}-${cvsRenderResolutionRatioLimits.max}`)
 
 const configStore = useEditorLocalConfigStore()
-const { lineFob, staFob, staNameFob } = storeToRefs(configStore)
+const { lineFob, staFob, staNameFob, cvsRenderResolutionRatio } = storeToRefs(configStore)
+const ratioInputValue = ref<string|number>(cvsRenderResolutionRatio.value)
+watch(cvsRenderResolutionRatio, (v)=>{
+    ratioInputValue.value = v
+})
+function onRatioInputChange(){
+    const v = ratioInputValue.value
+    if(v === '' || v == null){
+        ratioInputValue.value = cvsRenderResolutionRatio.value
+        return
+    }
+    const num = typeof v === 'string' ? parseFloat(v) : v
+    if(typeof num !== 'number' || isNaN(num)){
+        ratioInputValue.value = cvsRenderResolutionRatio.value
+        return
+    }
+    // 在 UI 层直接 clamp，保证输入框能同步回弹到合法值
+    let clamped = num
+    if(num < cvsRenderResolutionRatioLimits.min)
+        clamped = cvsRenderResolutionRatioLimits.min
+    else if(num > cvsRenderResolutionRatioLimits.max)
+        clamped = cvsRenderResolutionRatioLimits.max
+    cvsRenderResolutionRatio.value = clamped
+    ratioInputValue.value = clamped
+}
 </script>
 
 <template>
-<ConfigSection :title="'性能优化'">
+<ConfigSection :title="'性能优化【新】'">
     <table><tbody>
+        <tr><th>画布渲染分辨率</th></tr>
         <tr>
-            <td class="explain">
-                <p>对于超大地图，此处的“糊弄机制”可以在视角拉远时明显提高编辑器速度，建议使用默认值。可根据需要调整其阈值，设备卡顿的话使用“标准”或“宽松”。</p>
+            <td>
+                <input v-model.lazy.number="ratioInputValue" @change="onRatioInputChange" :placeholder="ratioPlaceholder"/>
+                <div>
+                    <button class="minor" @click="cvsRenderResolutionRatio = 0.8">流畅</button>
+                    <button class="minor" @click="cvsRenderResolutionRatio = 1">低清</button>
+                    <button class="minor" @click="cvsRenderResolutionRatio = 1.5">高清</button>
+                    <button class="minor" @click="cvsRenderResolutionRatio = cvsRenderResolutionRatioLimits.max">超清</button>
+                </div>
+                <div class="explain">
+                    <p>可牺牲编辑时的清晰度，换取响应速度（大屏幕设备推荐调小）</p>
+                    <p style="color:cornflowerblue">值越小，渲染像素越少（越糊、但越快），范围 {{ ratioPlaceholder }}</p>
+                </div>
             </td>
         </tr>
         <tr><th>线路糊弄机制</th></tr>
+        <tr>
+            <td class="explain" style="font-size: 14px;">
+                <p>对于超大地图，此处的“糊弄机制”可以在视角拉远时明显提高编辑器速度，建议使用默认值。可根据需要调整其阈值，设备卡顿的话使用“标准”或“宽松”。</p>
+            </td>
+        </tr>
         <tr>
             <td>
                 <input v-model="lineFob" placeholder="0.1-10"/>

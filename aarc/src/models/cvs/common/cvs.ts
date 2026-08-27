@@ -1,8 +1,9 @@
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { CvsBlock, CvsContext } from "./cvsContext";
 import { useCvsFrameStore } from "@/models/stores/cvsFrameStore";
 import { defineStore, storeToRefs } from "pinia";
 import { useSaveStore } from "@/models/stores/saveStore";
+import { useEditorLocalConfigStore } from "@/app/localConfig/editorLocalConfig";
 import { cvsRenderingBleed } from "@/utils/consts";
 
 export function useCvs(canvasIdPrefix:string){
@@ -51,7 +52,8 @@ export interface BlockControl{
 }
 export const useCvsBlocksControlStore = defineStore('cvsBlocksControl', ()=>{
     const fStore = useCvsFrameStore()
-    //const editorLocalConfig = useEditorLocalConfigStore()
+    const editorLocalConfig = useEditorLocalConfigStore()
+    const { cvsRenderResolutionRatio } = storeToRefs(editorLocalConfig)
     const blocksControl = ref<BlockControl[]>([])
     //原思路：将整个canvas分成若干块，每块的大小和位置都是固定的，这样就可以避免放大（高清）时canvas过大造成爆内存
     //后来发现canvas块状况在切换时会不响应用户的操作，非常影响使用体验，所以放弃了这个方案
@@ -76,8 +78,12 @@ export const useCvsBlocksControlStore = defineStore('cvsBlocksControl', ()=>{
     }
 
     function clientToCvsSizeRatio(){
-        return 2
+        return cvsRenderResolutionRatio.value
     }
+
+    watch(cvsRenderResolutionRatio, ()=>{
+        refreshBlocks()
+    })
 
     const bleed = cvsRenderingBleed
     function refreshBlocks(callReformedHandler = true){
