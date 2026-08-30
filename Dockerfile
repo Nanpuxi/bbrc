@@ -40,21 +40,22 @@ RUN ./gen-ts-client.sh --dll --here
 FROM mcr.azure.cn/azurelinux/base/nodejs:24 AS frontend-build
 WORKDIR /web
 
-# 复制前端依赖文件
-COPY aarc/package.json aarc/pnpm-lock.yaml* aarc/.npmrc aarc/pnpm-workspace.yaml ./
+# 复制 workspace 配置与前端依赖文件
+COPY pnpm-workspace.yaml .npmrc package.json pnpm-lock.yaml* ./
+COPY aarc-web/package.json aarc-web/
 
 # 安装 pnpm 并安装依赖
 RUN npm install -g pnpm --registry=https://registry.npmmirror.com
 RUN pnpm install --frozen-lockfile
 
 # 复制前端源码
-COPY aarc/ .
+COPY aarc-web/ aarc-web/
 
 # 复制生成的 API 客户端文件到前端源码目录
-COPY --from=api-gen /src/publish/apiGenerated.ts ./src/app/com/apiGenerated.ts
+COPY --from=api-gen /src/publish/apiGenerated.ts ./aarc-web/src/app/com/apiGenerated.ts
 
 ENV CI=true
-RUN pnpm build-here
+RUN pnpm --filter aarc-web build-here
 
 # 阶段四：运行
 FROM mcr.azure.cn/dotnet/aspnet:10.0 AS runtime
@@ -64,7 +65,7 @@ WORKDIR /app
 COPY --from=backend-build /app/publish .
 
 # 复制前端构建产物到 wwwroot（ASP.NET Core 默认静态文件目录）
-COPY --from=frontend-build /web/dist ./wwwroot
+COPY --from=frontend-build /web/aarc-web/dist ./wwwroot
 
 # 显式设置 HTTP 监听端口（HTTPS 需在运行时配置证书后启用）
 ENV ASPNETCORE_HTTP_PORTS=8080

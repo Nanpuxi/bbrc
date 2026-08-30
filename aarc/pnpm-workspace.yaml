@@ -1,6 +1,0 @@
-allowBuilds:
-  "@parcel/watcher": true
-  esbuild: true
-minimumReleaseAgeExclude:
-  - '@aurouscia/svgcanvas@2.6.1'
-  - '@aurouscia/image-compress@0.2.0'

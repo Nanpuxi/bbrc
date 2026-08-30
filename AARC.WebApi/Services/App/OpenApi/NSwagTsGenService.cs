@@ -1,4 +1,4 @@
-﻿using NJsonSchema.CodeGeneration.TypeScript;
+using NJsonSchema.CodeGeneration.TypeScript;
 using NSwag;
 using NSwag.CodeGeneration.TypeScript;
 
@@ -8,7 +8,7 @@ namespace AARC.WebApi.Services.App.OpenApi
         IHttpContextAccessor httpContextAccessor)
     {
         public const string defaultOutputPath
-            = "../aarc/src/app/com/apiGenerated.ts";
+            = "../aarc-web/src/app/com/apiGenerated.ts";
         public const string hereOutputPath
             = "./apiGenerated.ts";
         public async Task<int> GenApiTsClient(bool writeHere = false)

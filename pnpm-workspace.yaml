@@ -1,0 +1,6 @@
+packages:
+  - 'aarc-web'
+
+allowBuilds:
+  "@parcel/watcher": true
+  esbuild: true

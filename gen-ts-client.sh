@@ -3,7 +3,7 @@
 # 成功则退出码 0，否则退出码 1
 #
 # 用法:
-#   ./gen-ts-client.sh                  # 使用 dotnet run 启动（默认），写到 ../aarc/src/app/com/apiGenerated.ts
+#   ./gen-ts-client.sh                  # 使用 dotnet run 启动（默认），写到 ../aarc-web/src/app/com/apiGenerated.ts
 #   ./gen-ts-client.sh --dll            # 使用已发布的 dotnet <dll> 启动
 #   ./gen-ts-client.sh --dll --here     # 使用 DLL 启动，并写到当前目录 ./apiGenerated.ts
 # 注意:

@@ -2,7 +2,7 @@
 
 本文分析把编辑器核心（`Cvs.vue` + `Menu.vue` 及其依赖闭包）拆分为独立包 `aarc-core`、剩余部分改名 `aarc-web`、共同置于 pnpm-workspace 下的实施步骤与主要阻碍。约束：**不改变任何运行时行为**；目标：未来新增 `aarc-tauri`，为 `aarc-core` 提供本地文件访问能力。
 
-分析基于 `aarc/analyze-deps.mjs` 生成的依赖闭包 `temp.txt`，以及对闭包外文件的反向依赖扫描（2026-02 时点）。
+分析基于 `aarc-web/analyze-deps.mjs` 生成的依赖闭包 `temp.txt`，以及对闭包外文件的反向依赖扫描（2026-02 时点）。
 
 ---
 
@@ -105,18 +105,20 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 0：准备（已完成）
 
-1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。
+1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc-web/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。
 2. ✅ 已清理残留：删除 `vite.config.ts` 中无人使用的 `~` 别名。
 
-### 阶段 1：workspace 化（不改代码归属，先改布局）
+### 阶段 1：workspace 化（不改代码归属，先改布局）（已完成）
 
-3. 根目录建 `pnpm-workspace.yaml`：`packages: ['aarc-web', 'aarc-core']`（现有 aarc/pnpm-workspace.yaml 只有 `allowBuilds` 等配置，不构成 workspace，其内容并入根配置）。
-4. `git mv aarc aarc-web`，修正根级引用：
-   - `Dockerfile:44,51`（COPY 路径）
-   - `gen-ts-client.ps1:6` / `gen-ts-client.sh:6`（输出路径注释与实际路径）
-   - 根 `AGENTS.md`、`.dockerignore`
-   - `aarc-web/vite.config.ts:59` 的 `outDir: "../AARC.WebApi/wwwroot"` 因目录层级变化要改为 `../../AARC.WebApi/wwwroot`
-5. 此时 `aarc-web` 仍应能独立 `pnpm install && pnpm build && pnpm dev`，验证布局变更无行为影响。
+3. ✅ 根目录已建 `pnpm-workspace.yaml`：`packages: ['aarc-web']`（aarc-core 将在阶段 2 加入；原 aarc/pnpm-workspace.yaml 的 `allowBuilds`/`minimumReleaseAgeExclude` 配置已并入根配置），并新建根 `package.json`；`pnpm-lock.yaml`、`.npmrc` 已上移到根目录。
+4. ✅ `aarc` 已改名 `aarc-web`（包名同步改为 `aarc-web`），修正的引用：
+   - `Dockerfile` 前端构建阶段（workspace 布局复制 + `pnpm --filter aarc-web build-here`，产物路径 `/web/aarc-web/dist`）
+   - `gen-ts-client.ps1` / `gen-ts-client.sh` 注释
+   - `AARC.WebApi/Services/App/OpenApi/NSwagTsGenService.cs:11` 的 `defaultOutputPath`（硬编码的 ts 客户端输出路径）
+   - 根 `AGENTS.md`、`README.md`、`aarc-web/AGENTS.md`
+   - `.dockerignore` 无 aarc 路径引用，无需改动
+   - 注意：`vite.config.ts` 的 `outDir: "../AARC.WebApi/wwwroot"` **无需改动**——`aarc` → `aarc-web` 为同级改名，目录深度不变（本文档早先版本对此判断有误）
+5. ✅ 已验证：根目录 `pnpm install`（lockfile importers 迁移为 `aarc-web`）、`pnpm --filter aarc-web type-check`、`pnpm --filter aarc-web build`（产物正确输出到 `AARC.WebApi/wwwroot`）、`dotnet build`、完整 `docker build`。
 
 ### 阶段 2：core 包骨架与文件迁移
 
