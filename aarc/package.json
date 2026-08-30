@@ -14,8 +14,8 @@
   "scripts": {
     "dev": "vite",
     "dev-host": "vite --host",
-    "build": "tsx build.ts",
-    "build-here": "tsx build.ts --here",
+    "build": "node analyze-deps.mjs && tsx build.ts",
+    "build-here": "node analyze-deps.mjs && tsx build.ts --here",
     "type-check": "tsx build.ts --check-only",
     "toggleEnvLocal": "tsx env/toggleLocalEnvFile.ts",
     "gitInfoGen": "tsx src/utils/gitInfo/gitInfoGen.ts",

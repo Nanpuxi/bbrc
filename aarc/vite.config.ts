@@ -73,8 +73,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve:{
       alias:{
-        '@': resolve(__dirname, './src'),
-        '~': resolve('')
+        '@': resolve(__dirname, './src')
       }
     },
     envDir: envDir
