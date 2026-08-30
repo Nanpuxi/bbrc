@@ -1,6 +1,19 @@
 {
-    "update_date": "2026/08/26",
+    "update_date": "2026/08/28 3:25",
     "donor_list": [
+        {
+            "name": "兰媛渝熙",
+            "amount": 3.55
+        },
+        {
+            "name": "Jamie",
+            "amount": 0.5
+        },
+        {
+            "name": "Setreat",
+            "amount": 8.55,
+            "remark": "随机地形图、scaler 优化"
+        },
         {
             "name": "高咲侑",
             "amount": 5.00
@@ -58,11 +71,6 @@
         {
             "name": "达鱼",
             "amount": 1.15
-        },
-        {
-            "name": "Setreat",
-            "amount": 1.46,
-            "remark": "随机地形图"
         },
         {
             "name": "金岩轩",
