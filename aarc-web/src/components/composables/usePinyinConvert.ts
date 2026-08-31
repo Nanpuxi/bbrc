@@ -1,4 +1,4 @@
-import { PinyinConvertRequest } from "@/app/com/apiGenerated";
+import { PinyinConvertRequest } from "@/models/types/apiShapes";
 import { useConfigStore } from "@/models/stores/configStore";
 import { storeToRefs } from "pinia";
 import { computed, ref, Ref } from "vue";

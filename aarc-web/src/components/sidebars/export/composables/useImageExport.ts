@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { useBrowserInfoStore } from '@/app/globalStores/browserInfo';
 import { useExportLocalConfigStore } from '@/app/localConfig/exportLocalConfig';
-import { SaveDto } from '@/app/com/apiGenerated';
+import { SaveDto } from '@/models/types/apiShapes';
 import { useSaveStore } from '@/models/stores/saveStore';
 import { useRoute } from 'vue-router';
 import { editorParamNameSaveId } from '@/pages/editors/routes/routesNames';

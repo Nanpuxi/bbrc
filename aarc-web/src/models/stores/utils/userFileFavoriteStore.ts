@@ -1,4 +1,4 @@
-import { UserFileDto } from "@/app/com/apiGenerated";
+import { UserFileDto } from "@/models/types/apiShapes";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 

@@ -3,7 +3,7 @@ import { useConfigStore } from '@/models/stores/configStore';
 import { storeToRefs } from 'pinia';
 import ConfigSection from './shared/ConfigSection.vue';
 import { onMounted, watch } from 'vue';
-import { PinyinCaseType, PinyinVariantType } from '@/app/com/apiGenerated';
+import { PinyinCaseType, PinyinVariantType } from '@/models/types/apiShapes';
 import { useEditorLocalConfigStore } from '@/app/localConfig/editorLocalConfig';
 import { usePreventLeavingUnsavedStore } from '@/utils/eventUtils/preventLeavingUnsaved';
 

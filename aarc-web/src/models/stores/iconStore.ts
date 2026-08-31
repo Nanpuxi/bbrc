@@ -5,7 +5,7 @@ import { TextTagIcon } from "../save";
 import { convertToProxyUrlIfNeeded } from "@/utils/urlUtils/proxyUrl";
 import { checkUrlIsImage } from "@/utils/urlUtils/checkUrl";
 import { useUserFileFavoriteStore } from "./utils/userFileFavoriteStore";
-import { UserFileDto } from "@/app/com/apiGenerated";
+import { UserFileDto } from "@/models/types/apiShapes";
 
 export interface TextTagIconData{
     img?:HTMLImageElement
