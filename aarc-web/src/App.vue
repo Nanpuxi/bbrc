@@ -9,6 +9,7 @@ import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
 import { initCloudSvgUploader } from './models/save/cloudSvgOps';
 import { initPinyinConvertProvider } from './components/composables/usePinyinConvert';
+import { initSaveInfoProvider } from './components/sidebars/export/composables/useImageExport';
 
 const uniq = useUniqueComponentsStore()
 const { topbarShow } = storeToRefs(uniq)
@@ -30,6 +31,7 @@ onMounted(()=>{
         return res === true
     })
     initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))
+    initSaveInfoProvider(saveId => api.save.loadInfo(saveId))
 })
 </script>
 

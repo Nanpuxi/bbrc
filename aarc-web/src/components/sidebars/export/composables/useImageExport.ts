@@ -1,18 +1,26 @@
 import { ref } from 'vue';
 import { useBrowserInfoStore } from '@/app/globalStores/browserInfo';
 import { useExportLocalConfigStore } from '@/app/localConfig/exportLocalConfig';
-import { useApiStore } from '@/app/com/apiStore';
+import { SaveDto } from '@/app/com/apiGenerated';
 import { useSaveStore } from '@/models/stores/saveStore';
 import { useRoute } from 'vue-router';
 import { editorParamNameSaveId } from '@/pages/editors/routes/routesNames';
 import { timeStr } from '@/utils/timeUtils/timeStr';
 import { storeToRefs } from 'pinia';
 
+/** 存档信息提供者，由宿主注入（web 用后端 HTTP 接口，tauri 可读本地文件） */
+export type SaveInfoProvider = (saveId: number) => Promise<SaveDto|null|undefined>
+
+let saveInfoProvider: SaveInfoProvider | undefined
+
+export function initSaveInfoProvider(p: SaveInfoProvider) {
+    saveInfoProvider = p
+}
+
 export function useImageExport() {
     const { browserInfo, isIPhoneOrIPad, isWebkit } = storeToRefs(useBrowserInfoStore())
     const exportLocalConfig = useExportLocalConfigStore()
     const { fileNameStyle } = storeToRefs(exportLocalConfig)
-    const api = useApiStore()
     const saveStore = useSaveStore()
     const route = useRoute()
     
@@ -97,7 +105,11 @@ export function useImageExport() {
         if (isNaN(saveIdNum))
             saveName = saveId
         else {
-            const info = await api.save.loadInfo(saveIdNum)
+            if(!saveInfoProvider){
+                console.error('存档信息提供者未注入')
+                return undefined
+            }
+            const info = await saveInfoProvider(saveIdNum)
             saveName = info?.name ?? '??'
         }
         let name = ''

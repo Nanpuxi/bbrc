@@ -90,10 +90,10 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 3.4 API 层的两阶段处理
 
-`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。~~core 闭包内真正发 HTTP 的只有 `cloudSvgOps.ts`（svg 上传）~~（已注入化，见 §3.1"保存/上传"行）；`usePinyinConvert.ts`（拼音转换）亦已注入化（`PinyinConvertProvider` + `initPinyinConvertProvider()`，宿主 `App.vue` 注册 `api.saveUtils.pinyinConvert` 实现，签名复用 `PinyinConvertRequest` 类型）。当前闭包内对 api 层的残余引用（2026-02 实测）：实际发 HTTP 的仅剩 `useImageExport.ts:100`（`api.save.loadInfo`）一处；`iconStore.ts:8`、`userFileFavoriteStore.ts:1`、`PinyinConvertConfig.vue:6`、`usePinyinConvert.ts` 仅 import DTO/枚举类型。
+`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。闭包内三处实际发 HTTP 的调用均已注入化（2026-02，均由宿主 `App.vue` 注册实现）：`cloudSvgOps.ts`（svg 上传，`initCloudSvgUploader`，见 §3.1"保存/上传"行）、`usePinyinConvert.ts`（拼音转换，`initPinyinConvertProvider`，签名复用 `PinyinConvertRequest`）、`useImageExport.ts`（存档信息，`initSaveInfoProvider`，签名复用 `SaveDto`）。**此后 `apiStore.ts` 已完全退出闭包**；闭包内对 api 层仅剩 `apiGenerated.ts` 的 DTO/枚举类型 import（`iconStore.ts:8`、`userFileFavoriteStore.ts:1`、`PinyinConvertConfig.vue:6`、`usePinyinConvert.ts`、`useImageExport.ts`）。
 
-- **阶段一（求稳）**：api 层整体留在 core 包内，web 从 `aarc-core` import。行为零变化，但 core 名义上含 web 专属 API（评论、用户、聊天等），语义被稀释。
-- **阶段二（为 tauri 瘦身）**：把 `apiGenerated.ts` 的 DTO 类型与 Client 拆分——DTO 类型留在 core（或独立 `types` 文件），HTTP Client 移到 web；core 内 `cloudSvgOps` 等改为依赖注入的上传接口。tauri 实现同一接口写本地文件。
+- **阶段一（求稳）**：`apiStore.ts` 已退出闭包，**留在 web 即可**；`apiGenerated.ts` 整体留在 core 包内（闭包仅引用其 DTO/枚举类型），web 从 `aarc-core` import。行为零变化。
+- **阶段二（为 tauri 瘦身）**：把 `apiGenerated.ts` 的 DTO 类型与 Client 拆分——DTO 类型留在 core（或独立 `types` 文件），HTTP Client 移到 web。三处注入点（svg 上传/拼音转换/存档信息）已就绪，tauri 实现同一接口即可。
 
 推荐阶段一先合、阶段二再分，避免一次改动过大。
 
@@ -151,7 +151,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 1. **共享物归属裁定（§1.2 的 85 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。
 2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。
-3. **apiStore/apiGenerated 在闭包内且被 web 重度引用**：两阶段处理（§3.4），切勿一步到位。
+3. ~~**apiStore/apiGenerated 在闭包内且被 web 重度引用**~~ ✅ 大幅缓解（2026-02）：三处 HTTP 调用已注入化，`apiStore` 退出闭包可留 web；闭包仅剩 `apiGenerated` 的 DTO/枚举类型引用，按 §3.4 两阶段处理即可。
 4. ~~**`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**~~ ✅ 已解决（见 §3.1"路由跳转"行）：Menu 改用 `leave` 事件，该 store 整体留 web，core 不再涉及。
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
 6. **全局 scss 隐式依赖（§3.10）**：样式缺失不会报错，只会静默变形——迁移后需目检全部 core 组件。
