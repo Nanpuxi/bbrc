@@ -122,7 +122,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 2：core 包骨架与文件迁移
 
-6. 建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`）、tsconfig、`src/`。
+6. ✅ 已建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`，按第 8 步建议预置 `"exports": {"./*": "./src/*"}` 源码导出）、tsconfig（与 aarc-web 对齐，`@/*` 指向自身 src）、空的 `src/`；根 `pnpm-workspace.yaml` 的 `packages` 已加入 `'aarc-core'`，`pnpm install` 通过（lockfile 新增 `aarc-core` importer）。dependencies 留待第 12 步按实际 import 分配。
 7. 按 `temp.txt` 用 `git mv` 整体迁移 330 个闭包文件（保持相对目录结构，则**文件间的相对 import 全部不用改**）；同时迁移 §3.3 裁定的共享物（apiStore/apiGenerated/common 组件/guideInfo/browserInfo/tests/assets/ui 等）——迁移后闭包会扩大，重新运行 `analyze-deps.mjs` 直至 core 闭包再次自洽。
 8. `@/` 别名处理：core 的 tsconfig 与 web 的 vite alias 分别把 `@` 指向各自 src；web 侧对 core 内容的 import 统一改为包名 `aarc-core`（在 core 的 package.json 用 `exports` 暴露 `./src/**` 或建立 barrel 文件）。**建议短期直接 exports 源码**（`"exports": {"./*": "./src/*"}`），由宿主 vite 编译，避免 core 独立构建产物带来的双重 vue 实例、env 注入失效等问题。
 9. web 侧 85 处反向 import 改为从 `aarc-core` 导入（编辑器 WebStorm/VSCode 的 move-symbol 或全局替换可批量处理）。

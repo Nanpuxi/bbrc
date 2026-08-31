@@ -8,6 +8,8 @@ importers:
 
   .: {}
 
+  aarc-core: {}
+
   aarc-web:
     dependencies:
       '@anilkumarthakur/vue3-json-viewer':

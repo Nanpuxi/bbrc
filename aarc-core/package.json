@@ -1,0 +1,17 @@
+{
+  "name": "aarc-core",
+  "private": "true",
+  "version": "0.0.0",
+  "type": "module",
+  "author": {
+    "name": "Au"
+  },
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11"
+  },
+  "exports": {
+    "./*": "./src/*"
+  }
+}

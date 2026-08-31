@@ -1,5 +1,6 @@
 packages:
   - 'aarc-web'
+  - 'aarc-core'
 
 allowBuilds:
   "@parcel/watcher": true
