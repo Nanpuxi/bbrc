@@ -66,7 +66,7 @@ AARC/                          # 仓库根（现有后端不动）
 |---|---|---|
 | 全局弹窗/等待 | `uniqueComponents` store 存回调，App.vue 用 `initCallbacks` 注册（`App.vue:15-24`），闭包内 20+ 处调 `showPop/showWait` | **已是注入模式**，原样保留在 core，文档化为 core 的初始化契约 |
 | 保存/上传 | `Menu.vue:91-102` 通过 `@save-data` 事件委托给 Editor.vue（良好）；但 `models/save/cloudSvgOps.ts:1,13` 直接调 `api.saveSvg.upload` | 上传动作改为注入函数，web 用 HTTP 实现，tauri 用本地 fs 实现 |
-| 路由跳转 | `Menu.vue:90` 经 `enteredCanvasFromStore.goBackToWhereWeEntered()` 直接跳路由；该 store（`enteredCanvasFrom.ts:1,10`）import `vue-router` 和 `@/pages/homes/routes/routesNames` | "返回来源页"改为注入回调；路由名常量下移（见 §3.3） |
+| 路由跳转 | ~~`Menu.vue:90` 经 `enteredCanvasFromStore.goBackToWhereWeEntered()` 直接跳路由~~（该 store import `vue-router` 和 `@/pages/homes/routes/routesNames`） | ✅ 已改造（2026-02）：`Menu.vue` 的"离开"按钮改为 emit `leave` 事件，宿主 `Editor.vue` 以 `@leave="goBackToWhereWeEntered"` 接线；`enteredCanvasFrom.ts` 经此改造后不再被闭包引用，**整个留在 web，不进 core** |
 | 环境变量 | 闭包内 6 个文件用 `import.meta.env`：`apiStore.ts:80`（VITE_ApiUrlBase）、`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
 | localStorage 持久化 | 5 个 core store 依赖 `pinia-plugin-persistedstate`，插件由宿主 `main.ts:11` 全局注册；`editorLocalConfig.ts:28-35` 还有直接读写 localStorage 的 legacy 迁移 | core 文档声明"宿主必须注册 persist 插件"，或 core 导出 `createCorePinia()` 工厂；tauri 侧可换持久化适配层 |
 | 后端 HTTP | `apiStore.ts`（JWT/cookie/axios）在闭包内 | 见 §3.4 |
@@ -82,7 +82,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 3.3 需下移/裁决归属的模块
 
-- `pages/*/routes/routesNames.ts`（4 个文件被闭包 import：`enteredCanvasFrom.ts:1`、`useImageExport.ts:7`、`CloudSvgConfig.vue:8`、`FaqAsConfig.vue:2,5`）：纯常量，移到 core 或 web 的 `app/router/` 中立位置。注意 `pages/identities/routes/routesNames.ts` 同时被 8 个 web 文件用，移动后两边都要改 import。
+- `pages/*/routes/routesNames.ts`（被闭包 import：`useImageExport.ts:7`、`CloudSvgConfig.vue:8`、`FaqAsConfig.vue:2,5`；原 `enteredCanvasFrom.ts:1` 的一处引用已随 Menu 改造消除）：纯常量，移到 core 或 web 的 `app/router/` 中立位置。注意 `pages/identities/routes/routesNames.ts` 同时被 8 个 web 文件用，移动后两边都要改 import。
 - `app/guideInfo.ts`、`app/globalStores/browserInfo.ts`：app 级模块但被 core 侧边栏（`EtcConfig.vue:24`、`ExportImage.vue:34`、`FaqAsConfig.vue`）直接使用，随 core 走并由 core re-export。
 - 单元测试 `src/tests/`：大量引用闭包内 store 与 `models/coord.ts`，**随 core 迁移**，vitest 配置一并搬。
 - `src/assets/ui/**.svg`（闭包内 9 个组件 import）随 core；`defaultAvatar.svg`/`defaultMini.svg` 留 web。
@@ -152,7 +152,7 @@ AARC/                          # 仓库根（现有后端不动）
 1. **共享物归属裁定（§1.2 的 85 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。
 2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。
 3. **apiStore/apiGenerated 在闭包内且被 web 重度引用**：两阶段处理（§3.4），切勿一步到位。
-4. **`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**：core 不能依赖 vue-router（tauri 可能不用 hash 路由），返回导航必须注入化。
+4. ~~**`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**~~ ✅ 已解决（见 §3.1"路由跳转"行）：Menu 改用 `leave` 事件，该 store 整体留 web，core 不再涉及。
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
 6. **全局 scss 隐式依赖（§3.10）**：样式缺失不会报错，只会静默变形——迁移后需目检全部 core 组件。
 7. **`import.meta.env` 散落 core 闭包 6 个文件**：tauri 阶段必须改配置注入，阶段一可暂不处理但要在文档中登记。

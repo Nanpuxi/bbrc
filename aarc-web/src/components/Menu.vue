@@ -18,7 +18,6 @@ import snapNeighborExtendImg from '@/assets/ui/editor/snapNeighborExtend.svg';
 import snapNeighborExtendEnabledImg from '@/assets/ui/editor/snapNeighborExtendEnabled.svg';
 import undoImg from '@/assets/ui/editor/undo.svg';
 import ToolBox from './sidebars/ToolBox.vue';
-import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom';
 import NameSearch from './NameSearch.vue';
 import { AuShortcutListener } from '@aurouscia/keyboard-shortcut';
 import { useEnvStore } from '@/models/stores/envStore';
@@ -87,18 +86,18 @@ function openSidebarOf(name:SidebarNames){
 }
 
 const mustBackup = ref(false)
-const { goBackToWhereWeEntered } = useEnteredCanvasFromStore()
 function saveData(){
     if(saveBtnMode.value=='save'){
         emit('saveData', mustBackup.value)
         mustBackup.value = false // 复位
     }
     else if(saveBtnMode.value=='leave'){
-        goBackToWhereWeEntered()
+        emit('leave')
     }
 }
 const emit = defineEmits<{
     (e:'saveData', mustBackup:boolean):void
+    (e:'leave'):void
 }>()
 
 const searchShortcut = new AuShortcutListener(nameSearchStore.toggleShow, {code: 'KeyF', ctrl: true})

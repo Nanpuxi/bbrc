@@ -462,7 +462,7 @@ onBeforeUnmount(()=>{
         <button class="minor" @click="goBackToWhereWeEntered">点击返回</button>
     </div>
     <Cvs v-if="loadComplete"></Cvs>
-    <Menu v-if="loadComplete" @save-data="saveData"></Menu>
+    <Menu v-if="loadComplete" @save-data="saveData" @leave="goBackToWhereWeEntered"></Menu>
     <UnsavedLeavingWarning v-if="showUnsavedWarning" :release="releasePreventLeaving"
         :save="async()=>{ await saveData(false) }" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
     <HiddenLongWarnPrompt v-if="showHiddenLongWarn" @ok="showHiddenLongWarn=false"></HiddenLongWarnPrompt>
