@@ -10,18 +10,16 @@
 
 ### 1.1 依赖闭包
 
-从 `src/components/Cvs.vue`、`src/components/Menu.vue` 出发递归解析全部 import（含 `@/` 别名、动态 `import()`），闭包共 **330 个文件**，无未解析的相对/别名 import——即闭包在静态 import 层面是自洽的，这是拆分的有利条件。
+从 `src/components/Cvs.vue`、`src/components/Menu.vue` 出发递归解析全部 import（含 `@/` 别名、动态 `import()`），闭包共 **325 个文件**（初次分析时为 330，后经 §3.1/§3.4 的去耦改造收缩），无未解析的相对/别名 import——即闭包在静态 import 层面是自洽的，这是拆分的有利条件。
 
 ### 1.2 反向依赖（闭包外 → 闭包内）
 
-闭包内共 **85 个文件被闭包外引用**。热点如下（括号内为外部引用方数量）：
+闭包内共 **84 个文件被闭包外引用**（2026-02 重扫；初次分析为 85，`apiStore.ts`、`apiGenerated.ts`、`enteredCanvasFrom.ts` 已经改造退出闭包，见 §3.1/§3.4）。热点如下（括号内为外部引用方数量）：
 
 | 闭包内文件 | 外部引用方数 | 性质 |
 |---|---|---|
-| `app/com/apiStore.ts` | 39 | axios 实例 + 全部 API Client 封装 |
-| `app/com/apiGenerated.ts` | 33 | NSwag 生成的 DTO/Client |
 | `models/save.ts` | 32 | 存档数据模型（纯类型+常量） |
-| `app/globalStores/uniqueComponents.ts` | 30 | 全局 Pop/Wait 回调总线 |
+| `app/globalStores/uniqueComponents.ts` | 31 | 全局 Pop/Wait 回调总线 |
 | `models/coord.ts` | 13 | 坐标工具（含 12 个测试文件） |
 | `components/common/SideBar.vue` | 11 | 通用侧栏组件 |
 | `components/common/Prompt.vue` | 10 | 通用弹窗组件 |
@@ -29,12 +27,11 @@
 | `pages/identities/routes/routesNames.ts` | 8 | 路由名常量 |
 | `app/guideInfo.ts` | 8 | 指引文案配置 |
 | `components/common/Notice.vue` | 7 | 通用提示组件 |
-| `app/globalStores/enteredCanvasFrom.ts` | 6 | "从哪进入画布"记录（依赖 vue-router） |
 | `app/localConfig/common/keyPrefix.ts` | 6 | localStorage key 前缀 |
 
 闭包外对核心 store（`envStore`/`saveStore`/`configStore`/`undoStore`/各 dispatcher）的直接读写**几乎全部集中在 `pages/editors/Editor.vue`**（507 行，是唯一的装配宿主），外加单元测试。`Cvs.vue`/`Menu.vue` 全项目仅被 `Editor.vue:2-3` 引用（模板在 `Editor.vue:464-465`）。
 
-**结论**：装配面极窄（一个宿主组件），但共享面很宽——API 层、通用组件、数据模型被 web 侧大量反向引用。拆分的关键不是"把核心搬走"，而是"裁定共享物的归属"。
+**结论**：装配面极窄（一个宿主组件），但共享面很宽——通用组件、数据模型被 web 侧大量反向引用（API 层曾是最大热点，已经 §3.4 的改造整体退出闭包）。拆分的关键不是"把核心搬走"，而是"裁定共享物的归属"。
 
 ---
 
@@ -52,7 +49,7 @@ AARC/                          # 仓库根（现有后端不动）
 └── AARC.WebApi/ ...           # 后端，不受影响
 ```
 
-**不建议**引入第三个 `aarc-shared` 包放置共享物，理由：共享物（apiStore、uniqueComponents、common 组件、save 模型）几乎全部被核心闭包引用，若放第三包则 core 必然依赖它，而未来 tauri 也要依赖它——三包结构与"core 自带共享物、web 依赖 core"等价，但多一层包管理开销。推荐 **core 包容纳共享物并统一 re-export，web 只 import `aarc-core`**。唯一例外见 §4.4（API 层的最终形态）。
+**不建议**引入第三个 `aarc-shared` 包放置共享物，理由：共享物（uniqueComponents、common 组件、save 模型）几乎全部被核心闭包引用，若放第三包则 core 必然依赖它，而未来 tauri 也要依赖它——三包结构与"core 自带共享物、web 依赖 core"等价，但多一层包管理开销。推荐 **core 包容纳共享物并统一 re-export，web 只 import `aarc-core`**。唯一例外见 §3.4（API 层的最终形态：已整体归属 web）。
 
 ---
 
@@ -67,15 +64,19 @@ AARC/                          # 仓库根（现有后端不动）
 | 全局弹窗/等待 | `uniqueComponents` store 存回调，App.vue 用 `initCallbacks` 注册（`App.vue:15-24`），闭包内 20+ 处调 `showPop/showWait` | **已是注入模式**，原样保留在 core，文档化为 core 的初始化契约 |
 | 保存/上传 | `Menu.vue` 通过 `@save-data` 事件委托给 Editor.vue（良好）；~~`models/save/cloudSvgOps.ts` 直接调 `api.saveSvg.upload`~~ | ✅ 已改造（2026-02）：`cloudSvgOps.ts` 导出 `CloudSvgUploader` 类型与 `initCloudSvgUploader()` 注入入口，宿主 `App.vue` 在 `onMounted` 注册 HTTP 实现（`api.saveSvg.upload`）；tauri 届时注入本地 fs 实现 |
 | 路由跳转 | ~~`Menu.vue:90` 经 `enteredCanvasFromStore.goBackToWhereWeEntered()` 直接跳路由~~（该 store import `vue-router` 和 `@/pages/homes/routes/routesNames`） | ✅ 已改造（2026-02）：`Menu.vue` 的"离开"按钮改为 emit `leave` 事件，宿主 `Editor.vue` 以 `@leave="goBackToWhereWeEntered"` 接线；`enteredCanvasFrom.ts` 经此改造后不再被闭包引用，**整个留在 web，不进 core** |
-| 环境变量 | 闭包内 6 个文件用 `import.meta.env`：`apiStore.ts:80`（VITE_ApiUrlBase）、`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
+| 环境变量 | 闭包内 5 个文件用 `import.meta.env`（2026-02 重扫；原 `apiStore.ts:80` 的一处已随 api 层退出闭包）：`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
 | localStorage 持久化 | 5 个 core store 依赖 `pinia-plugin-persistedstate`，插件由宿主 `main.ts:11` 全局注册；`editorLocalConfig.ts:28-35` 还有直接读写 localStorage 的 legacy 迁移 | core 文档声明"宿主必须注册 persist 插件"，或 core 导出 `createCorePinia()` 工厂；tauri 侧可换持久化适配层 |
-| 后端 HTTP | `apiStore.ts`（JWT/cookie/axios）在闭包内 | 见 §3.4 |
+| 后端 HTTP | ~~`apiStore.ts`（JWT/cookie/axios）在闭包内~~ 已退出闭包（见 §3.4） | api 层整体归属 web；core 只持有 `models/types/apiShapes.ts` 的 DTO 投影与三个注入 provider |
+| 路由参数/守卫 | 闭包内仍有 3 个文件 import `vue-router`（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts`（均用 `useRoute` 取 saveId 路由参数）、`preventLeavingUnsaved.ts`（用 `router.beforeEach` 注册"阻止未保存离开"守卫） | 待改造：saveId 改由宿主注入或从 saveStore 获取；路由守卫注册上移到宿主（`window.onbeforeunload` 部分可留 core） |
 
 ### 3.2 回调注入式隐性接口清单
 
 拆包前这些接口必须梳理成 core 的显式 API，否则会退化成"web 深层 import core 内部文件"：
 
 - `uniqueComponents.initCallbacks`（Pop/Wait，App.vue 注册）
+- `initCloudSvgUploader`（svg 云上传，App.vue 注册，见 §3.1"保存/上传"行）✅ 新增
+- `initPinyinConvertProvider`（拼音转换，App.vue 注册，见 §3.4）✅ 新增
+- `initSaveInfoProvider`（存档信息，App.vue 注册，见 §3.4）✅ 新增
 - `mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67,134`，Editor.vue:316-324 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
 - `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**）
 - `envStore.rerender / rescaled / getActivePtOpsAvoidance / lineFocus`（dispatchers 与 store 互相给函数 ref 赋值接线）
@@ -122,15 +123,15 @@ AARC/                          # 仓库根（现有后端不动）
 ### 阶段 2：core 包骨架与文件迁移
 
 6. ✅ 已建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`，按第 8 步建议预置 `"exports": {"./*": "./src/*"}` 源码导出）、tsconfig（与 aarc-web 对齐，`@/*` 指向自身 src）、空的 `src/`；根 `pnpm-workspace.yaml` 的 `packages` 已加入 `'aarc-core'`，`pnpm install` 通过（lockfile 新增 `aarc-core` importer）。dependencies 留待第 12 步按实际 import 分配。
-7. 按 `temp.txt` 用 `git mv` 整体迁移 330 个闭包文件（保持相对目录结构，则**文件间的相对 import 全部不用改**）；同时迁移 §3.3 裁定的共享物（apiStore/apiGenerated/common 组件/guideInfo/browserInfo/tests/assets/ui 等）——迁移后闭包会扩大，重新运行 `analyze-deps.mjs` 直至 core 闭包再次自洽。
+7. 按 `temp.txt` 用 `git mv` 整体迁移 325 个闭包文件（保持相对目录结构，则**文件间的相对 import 全部不用改**）；同时迁移 §3.3 裁定的共享物（common 组件/guideInfo/browserInfo/tests/assets/ui 等；apiStore/apiGenerated 已退出闭包、留 web）——迁移后闭包会扩大，重新运行 `analyze-deps.mjs` 直至 core 闭包再次自洽。
 8. `@/` 别名处理：core 的 tsconfig 与 web 的 vite alias 分别把 `@` 指向各自 src；web 侧对 core 内容的 import 统一改为包名 `aarc-core`（在 core 的 package.json 用 `exports` 暴露 `./src/**` 或建立 barrel 文件）。**建议短期直接 exports 源码**（`"exports": {"./*": "./src/*"}`），由宿主 vite 编译，避免 core 独立构建产物带来的双重 vue 实例、env 注入失效等问题。
-9. web 侧 85 处反向 import 改为从 `aarc-core` 导入（编辑器 WebStorm/VSCode 的 move-symbol 或全局替换可批量处理）。
+9. web 侧 84 处反向 import 改为从 `aarc-core` 导入（编辑器 WebStorm/VSCode 的 move-symbol 或全局替换可批量处理）。
 
 ### 阶段 3：构建与样式拆分
 
 10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出。
 11. 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web；`vite.config.ts` 的 `fullReload` 监听列表（`vite.config.ts:17-19`，监听 `src/app|models|utils`）要改为包含 core 路径，否则 core 改动不触发整页刷新。
-12. 依赖拆分：两个 package.json 按实际 import 分配 dependencies（vue/pinia 为 core 的 dependencies，web 经 core 传递或自行声明；`@microsoft/signalr`、`axios` 阶段一随 api 层在 core，`vue-router` 留 web）。注意 pinia、vue 必须保证单实例——core 用源码导出 + web 的 vite 统一打包可天然保证。
+12. 依赖拆分：两个 package.json 按实际 import 分配 dependencies（vue/pinia 为 core 的 dependencies，web 经 core 传递或自行声明；`@microsoft/signalr`、`axios` 随 api 层留 web）。`vue-router` 注意：闭包内仍有 3 处引用（§3.1"路由参数/守卫"行），改造完成前需暂作 core 的 dependency，或先完成该改造再令其留 web。注意 pinia、vue 必须保证单实例——core 用源码导出 + web 的 vite 统一打包可天然保证。
 13. 环境变量：env 目录随 web（宿主），core 内 `import.meta.env` 用法阶段一保持不变（宿主 vite 构建时注入）。
 
 ### 阶段 4：验证与收尾
@@ -141,26 +142,26 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 5（未来）：接口化与 tauri
 
-17. 执行 §3.4 阶段二：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。
+17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。
 18. 新增 `aarc-tauri` 包：复用 `aarc-core`，实现 fs 版 HostServices，替换 persist 存储与上传逻辑。
 
 ---
 
 ## 5. 主要阻碍清单（按风险排序)
 
-1. **共享物归属裁定（§1.2 的 85 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。
+1. **共享物归属裁定（§1.2 的 84 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。（最大的两个热点 apiStore/apiGenerated 已退出闭包，剩余为通用组件与数据模型。）
 2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。
 3. ~~**apiStore/apiGenerated 在闭包内且被 web 重度引用**~~ ✅ 已解决（2026-02）：三处 HTTP 调用注入化 + core 自有 `models/types/apiShapes.ts` 承载所需 DTO 投影/枚举，api 层整体退出闭包、归属 web（见 §3.4）。
 4. ~~**`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**~~ ✅ 已解决（见 §3.1"路由跳转"行）：Menu 改用 `leave` 事件，该 store 整体留 web，core 不再涉及。
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
-6. **全局 scss 隐式依赖（§3.10）**：样式缺失不会报错，只会静默变形——迁移后需目检全部 core 组件。
-7. **`import.meta.env` 散落 core 闭包 6 个文件**：tauri 阶段必须改配置注入，阶段一可暂不处理但要在文档中登记。
+6. **全局 scss 隐式依赖（§4 第 10 步）**：样式缺失不会报错，只会静默变形——迁移后需目检全部 core 组件。
+7. **`import.meta.env` 散落 core 闭包 5 个文件**（原 6 个，`apiStore.ts` 已退出闭包）：tauri 阶段必须改配置注入，阶段一可暂不处理但要在文档中登记（清单见 §3.1"环境变量"行）。
 8. **构建耦合点**：outDir 指向后端 wwwroot、fullReload 监听列表、build.ts 的两个拷贝动作、Dockerfile/gen-ts-client 的路径——workspace 化后全部要跟着改。
 9. **vue/pinia 单实例约束**：若未来 core 改为预构建产物（而非源码导出），必须用 `peerDependencies` + vite `dedupe`，否则会出现双 pinia 实例导致 store 错位。源码导出方案下无此问题。
 
 ## 6. 有利条件
 
-- 闭包静态自洽（330 文件，无未解析 import），有 `analyze-deps.mjs` 可持续验证。
+- 闭包静态自洽（325 文件，无未解析 import），有 `analyze-deps.mjs` 可持续验证。
 - 宿主仅 `Editor.vue` 一处，装配改动面小。
 - 闭包内无对 `public/` 运行时路径的依赖（`/icons/`、`/demoDataSource/` 均不在闭包内）。
 - `uniqueComponents` 已是注入模式，证明该项目代码风格可容纳"宿主注入"，扩展此模式阻力小。
