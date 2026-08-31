@@ -65,7 +65,7 @@ AARC/                          # 仓库根（现有后端不动）
 | 环境依赖 | 现状 | 拆分后 |
 |---|---|---|
 | 全局弹窗/等待 | `uniqueComponents` store 存回调，App.vue 用 `initCallbacks` 注册（`App.vue:15-24`），闭包内 20+ 处调 `showPop/showWait` | **已是注入模式**，原样保留在 core，文档化为 core 的初始化契约 |
-| 保存/上传 | `Menu.vue:91-102` 通过 `@save-data` 事件委托给 Editor.vue（良好）；但 `models/save/cloudSvgOps.ts:1,13` 直接调 `api.saveSvg.upload` | 上传动作改为注入函数，web 用 HTTP 实现，tauri 用本地 fs 实现 |
+| 保存/上传 | `Menu.vue` 通过 `@save-data` 事件委托给 Editor.vue（良好）；~~`models/save/cloudSvgOps.ts` 直接调 `api.saveSvg.upload`~~ | ✅ 已改造（2026-02）：`cloudSvgOps.ts` 导出 `CloudSvgUploader` 类型与 `initCloudSvgUploader()` 注入入口，宿主 `App.vue` 在 `onMounted` 注册 HTTP 实现（`api.saveSvg.upload`）；tauri 届时注入本地 fs 实现 |
 | 路由跳转 | ~~`Menu.vue:90` 经 `enteredCanvasFromStore.goBackToWhereWeEntered()` 直接跳路由~~（该 store import `vue-router` 和 `@/pages/homes/routes/routesNames`） | ✅ 已改造（2026-02）：`Menu.vue` 的"离开"按钮改为 emit `leave` 事件，宿主 `Editor.vue` 以 `@leave="goBackToWhereWeEntered"` 接线；`enteredCanvasFrom.ts` 经此改造后不再被闭包引用，**整个留在 web，不进 core** |
 | 环境变量 | 闭包内 6 个文件用 `import.meta.env`：`apiStore.ts:80`（VITE_ApiUrlBase）、`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
 | localStorage 持久化 | 5 个 core store 依赖 `pinia-plugin-persistedstate`，插件由宿主 `main.ts:11` 全局注册；`editorLocalConfig.ts:28-35` 还有直接读写 localStorage 的 legacy 迁移 | core 文档声明"宿主必须注册 persist 插件"，或 core 导出 `createCorePinia()` 工厂；tauri 侧可换持久化适配层 |
@@ -90,7 +90,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 3.4 API 层的两阶段处理
 
-`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用），而 core 闭包内真正发 HTTP 的只有 `cloudSvgOps.ts`（svg 上传），`iconStore.ts:8`、`userFileFavoriteStore.ts:1` 等仅 import 其 DTO 类型。
+`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。~~core 闭包内真正发 HTTP 的只有 `cloudSvgOps.ts`（svg 上传）~~（已注入化，见 §3.1"保存/上传"行）。当前闭包内对 api 层的残余引用（2026-02 实测）：实际发 HTTP 的有 `usePinyinConvert.ts:37`（`api.saveUtils.pinyinConvert`）与 `useImageExport.ts:100`（`api.save.loadInfo`）两处；`iconStore.ts:8`、`userFileFavoriteStore.ts:1`、`PinyinConvertConfig.vue:6` 仅 import DTO/枚举。
 
 - **阶段一（求稳）**：api 层整体留在 core 包内，web 从 `aarc-core` import。行为零变化，但 core 名义上含 web 专属 API（评论、用户、聊天等），语义被稀释。
 - **阶段二（为 tauri 瘦身）**：把 `apiGenerated.ts` 的 DTO 类型与 Client 拆分——DTO 类型留在 core（或独立 `types` 文件），HTTP Client 移到 web；core 内 `cloudSvgOps` 等改为依赖注入的上传接口。tauri 实现同一接口写本地文件。

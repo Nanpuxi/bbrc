@@ -6,9 +6,12 @@ import { storeToRefs } from 'pinia';
 import TopbarParent from './components/common/topbar/TopbarParent.vue';
 import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
+import { useApiStore } from './app/com/apiStore';
+import { initCloudSvgUploader } from './models/save/cloudSvgOps';
 
 const uniq = useUniqueComponentsStore()
 const { topbarShow } = storeToRefs(uniq)
+const api = useApiStore()
 
 const pop = useTemplateRef('pop')
 const wait = useTemplateRef('wait')
@@ -20,6 +23,10 @@ onMounted(()=>{
         waitCallback: (reason, value)=>{
             wait.value?.setShowing(reason, value)
         }
+    })
+    initCloudSvgUploader(async (saveId, svgBlob)=>{
+        const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
+        return res === true
     })
 })
 </script>
