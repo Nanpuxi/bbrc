@@ -8,6 +8,7 @@ import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
 import { initCloudSvgUploader } from './models/save/cloudSvgOps';
+import { initPinyinConvertProvider } from './components/composables/usePinyinConvert';
 
 const uniq = useUniqueComponentsStore()
 const { topbarShow } = storeToRefs(uniq)
@@ -28,6 +29,7 @@ onMounted(()=>{
         const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
         return res === true
     })
+    initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))
 })
 </script>
 

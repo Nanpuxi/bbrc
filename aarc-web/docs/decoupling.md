@@ -90,7 +90,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 3.4 API 层的两阶段处理
 
-`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。~~core 闭包内真正发 HTTP 的只有 `cloudSvgOps.ts`（svg 上传）~~（已注入化，见 §3.1"保存/上传"行）。当前闭包内对 api 层的残余引用（2026-02 实测）：实际发 HTTP 的有 `usePinyinConvert.ts:37`（`api.saveUtils.pinyinConvert`）与 `useImageExport.ts:100`（`api.save.loadInfo`）两处；`iconStore.ts:8`、`userFileFavoriteStore.ts:1`、`PinyinConvertConfig.vue:6` 仅 import DTO/枚举。
+`apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。~~core 闭包内真正发 HTTP 的只有 `cloudSvgOps.ts`（svg 上传）~~（已注入化，见 §3.1"保存/上传"行）；`usePinyinConvert.ts`（拼音转换）亦已注入化（`PinyinConvertProvider` + `initPinyinConvertProvider()`，宿主 `App.vue` 注册 `api.saveUtils.pinyinConvert` 实现，签名复用 `PinyinConvertRequest` 类型）。当前闭包内对 api 层的残余引用（2026-02 实测）：实际发 HTTP 的仅剩 `useImageExport.ts:100`（`api.save.loadInfo`）一处；`iconStore.ts:8`、`userFileFavoriteStore.ts:1`、`PinyinConvertConfig.vue:6`、`usePinyinConvert.ts` 仅 import DTO/枚举类型。
 
 - **阶段一（求稳）**：api 层整体留在 core 包内，web 从 `aarc-core` import。行为零变化，但 core 名义上含 web 专属 API（评论、用户、聊天等），语义被稀释。
 - **阶段二（为 tauri 瘦身）**：把 `apiGenerated.ts` 的 DTO 类型与 Client 拆分——DTO 类型留在 core（或独立 `types` 文件），HTTP Client 移到 web；core 内 `cloudSvgOps` 等改为依赖注入的上传接口。tauri 实现同一接口写本地文件。

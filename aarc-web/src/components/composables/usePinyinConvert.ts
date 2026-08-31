@@ -1,11 +1,19 @@
-import { useApiStore } from "@/app/com/apiStore";
+import { PinyinConvertRequest } from "@/app/com/apiGenerated";
 import { useConfigStore } from "@/models/stores/configStore";
 import { storeToRefs } from "pinia";
 import { computed, ref, Ref } from "vue";
 
+/** 拼音转换实现，由宿主注入（web 用后端 HTTP 接口） */
+export type PinyinConvertProvider = (req: PinyinConvertRequest) => Promise<string|null|undefined>
+
+let provider: PinyinConvertProvider | undefined
+
+export function initPinyinConvertProvider(p: PinyinConvertProvider) {
+    provider = p
+}
+
 type TargetRef = Ref<string|undefined|null>
 export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void)=>{
-    const api = useApiStore()
     const { config } = storeToRefs(useConfigStore())
     const overridingForSource = ref<string>()
     const overridingToDest = ref<string>()
@@ -33,8 +41,12 @@ export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=
             res = overridingToDest.value
         }
         else{
+            if(!provider){
+                console.error('拼音转换实现未注入')
+                return
+            }
             const c = config.value.pinyinConvert
-            res = await api.saveUtils.pinyinConvert({
+            res = await provider({
                 text: source.value,
                 options:{
                     rules: rules.value,
