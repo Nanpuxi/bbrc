@@ -67,7 +67,7 @@ AARC/                          # 仓库根（现有后端不动）
 | 环境变量 | 闭包内 5 个文件用 `import.meta.env`（2026-02 重扫；原 `apiStore.ts:80` 的一处已随 api 层退出闭包）：`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
 | localStorage 持久化 | 5 个 core store 依赖 `pinia-plugin-persistedstate`，插件由宿主 `main.ts:11` 全局注册；`editorLocalConfig.ts:28-35` 还有直接读写 localStorage 的 legacy 迁移 | core 文档声明"宿主必须注册 persist 插件"，或 core 导出 `createCorePinia()` 工厂；tauri 侧可换持久化适配层 |
 | 后端 HTTP | ~~`apiStore.ts`（JWT/cookie/axios）在闭包内~~ 已退出闭包（见 §3.4） | api 层整体归属 web；core 只持有 `models/types/apiShapes.ts` 的 DTO 投影与三个注入 provider |
-| 路由参数/守卫 | 闭包内仍有 3 个文件 import `vue-router`（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts`（均用 `useRoute` 取 saveId 路由参数）、`preventLeavingUnsaved.ts`（用 `router.beforeEach` 注册"阻止未保存离开"守卫） | 待改造：saveId 改由宿主注入或从 saveStore 获取；路由守卫注册上移到宿主（`window.onbeforeunload` 部分可留 core） |
+| 路由参数/守卫 | ~~闭包内 3 个文件 import `vue-router`~~（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts` 用 `useRoute` 取 saveId 路由参数；`preventLeavingUnsaved.ts` 用 `router.beforeEach` 注册"阻止未保存离开"守卫 | ✅ saveId 提取已改造：新增 `models/save/currentSaveId.ts`（`setCurrentSaveIdRaw`/`getCurrentSaveIdRaw`/`getCurrentSaveIdNum`），宿主 `Editor.vue` 用 `watch(props.saveId, immediate)` 设置，core 不再读 route。**剩余**：`preventLeavingUnsaved.ts` 的 `beforeEach` 守卫待上移到宿主（`window.onbeforeunload` 部分可留 core），届时 core 即与 vue-router 完全解耦 |
 
 ### 3.2 回调注入式隐性接口清单
 
@@ -77,13 +77,14 @@ AARC/                          # 仓库根（现有后端不动）
 - `initCloudSvgUploader`（svg 云上传，App.vue 注册，见 §3.1"保存/上传"行）✅ 新增
 - `initPinyinConvertProvider`（拼音转换，App.vue 注册，见 §3.4）✅ 新增
 - `initSaveInfoProvider`（存档信息，App.vue 注册，见 §3.4）✅ 新增
+- `setCurrentSaveIdRaw`（当前存档 id，Editor.vue 用 `watch(props.saveId)` 设置，见 §3.1"路由参数/守卫"行）✅ 新增
 - `mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67,134`，Editor.vue:316-324 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
 - `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**）
 - `envStore.rerender / rescaled / getActivePtOpsAvoidance / lineFocus`（dispatchers 与 store 互相给函数 ref 赋值接线）
 
 ### 3.3 需下移/裁决归属的模块
 
-- `pages/*/routes/routesNames.ts`（被闭包 import：`useImageExport.ts:7`、`CloudSvgConfig.vue:8`、`FaqAsConfig.vue:2,5`；原 `enteredCanvasFrom.ts:1` 的一处引用已随 Menu 改造消除）：纯常量，移到 core 或 web 的 `app/router/` 中立位置。注意 `pages/identities/routes/routesNames.ts` 同时被 8 个 web 文件用，移动后两边都要改 import。
+- `pages/*/routes/routesNames.ts`（被闭包 import：现仅剩 `FaqAsConfig.vue:2,5` 一处；原 `enteredCanvasFrom.ts`、`useImageExport.ts`、`CloudSvgConfig.vue` 的引用已随 Menu/saveId 提取改造消除）：纯常量，移到 core 或 web 的 `app/router/` 中立位置。注意 `pages/identities/routes/routesNames.ts` 同时被 8 个 web 文件用，移动后两边都要改 import。
 - `app/guideInfo.ts`、`app/globalStores/browserInfo.ts`：app 级模块但被 core 侧边栏（`EtcConfig.vue:24`、`ExportImage.vue:34`、`FaqAsConfig.vue`）直接使用，随 core 走并由 core re-export。
 - 单元测试 `src/tests/`：大量引用闭包内 store 与 `models/coord.ts`，**随 core 迁移**，vitest 配置一并搬。
 - `src/assets/ui/**.svg`（闭包内 9 个组件 import）随 core；`defaultAvatar.svg`/`defaultMini.svg` 留 web。

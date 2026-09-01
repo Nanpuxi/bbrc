@@ -2,16 +2,14 @@
 import { useSaveStore } from '@/models/stores/saveStore';
 import ConfigSection from './shared/ConfigSection.vue';
 import { storeToRefs } from 'pinia';
-import { useRoute } from 'vue-router';
 import { renderAndUploadCloudSvg } from '@/models/save/cloudSvgOps';
 import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
-import { editorParamNameSaveId } from '@/pages/editors/routes/routesNames';
+import { getCurrentSaveIdNum } from '@/models/save/currentSaveId';
 import copy from 'copy-to-clipboard'
 
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const { showPop } = useUniqueComponentsStore()
-const route = useRoute()
 
 if (save.value) {
     save.value.meta ??= {}
@@ -19,17 +17,8 @@ if (save.value) {
     save.value.meta.autoUpdateCloudSvg.enabled ??= false
 }
 
-function getCurrentSaveId(): number | undefined {
-    const saveIdRaw = route.params[editorParamNameSaveId]
-    const saveIdStr = Array.isArray(saveIdRaw) ? saveIdRaw[0] : saveIdRaw
-    const saveId = parseInt(saveIdStr ?? '')
-    if (isNaN(saveId))
-        return undefined
-    return saveId
-}
-
 async function manualUpdate() {
-    const saveId = getCurrentSaveId()
+    const saveId = getCurrentSaveIdNum()
     if (saveId === undefined) {
         showPop('无法获取当前存档ID', 'failed')
         return
@@ -40,7 +29,7 @@ async function manualUpdate() {
 }
 
 function copyShareLink() {
-    const saveId = getCurrentSaveId()
+    const saveId = getCurrentSaveIdNum()
     if (saveId === undefined) {
         showPop('无法获取当前存档ID', 'failed')
         return

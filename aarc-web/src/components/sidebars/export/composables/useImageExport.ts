@@ -3,8 +3,7 @@ import { useBrowserInfoStore } from '@/app/globalStores/browserInfo';
 import { useExportLocalConfigStore } from '@/app/localConfig/exportLocalConfig';
 import { SaveDto } from '@/models/types/apiShapes';
 import { useSaveStore } from '@/models/stores/saveStore';
-import { useRoute } from 'vue-router';
-import { editorParamNameSaveId } from '@/pages/editors/routes/routesNames';
+import { getCurrentSaveIdRaw } from '@/models/save/currentSaveId';
 import { timeStr } from '@/utils/timeUtils/timeStr';
 import { storeToRefs } from 'pinia';
 
@@ -22,7 +21,6 @@ export function useImageExport() {
     const exportLocalConfig = useExportLocalConfigStore()
     const { fileNameStyle } = storeToRefs(exportLocalConfig)
     const saveStore = useSaveStore()
-    const route = useRoute()
     
     const exporting = ref<boolean>(false)
     const exported = ref<boolean>(false)
@@ -97,9 +95,7 @@ export function useImageExport() {
     }
 
     async function getExportFileName(ext?: string, suffix?: string): Promise<string | undefined> {
-        let saveId = route.params[editorParamNameSaveId]
-        if (typeof saveId === 'object')
-            saveId = saveId[0] || 'err'
+        const saveId = getCurrentSaveIdRaw() ?? ''
         const saveIdNum = parseInt(saveId)
         let saveName: string
         if (isNaN(saveIdNum))

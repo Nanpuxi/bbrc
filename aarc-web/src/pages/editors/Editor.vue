@@ -33,6 +33,7 @@ import { useIconStore } from '@/models/stores/iconStore';
 import { autoUpdateDataSources } from '@/models/save/dataSourceOps';
 import { compressObjectToGzip } from '@/utils/dataUtils/compressObjectToGzip';
 import { useLoadedSave } from '@/models/stores/utils/loadedSave';
+import { setCurrentSaveIdRaw } from '@/models/save/currentSaveId';
 import { HttpUserInfo, SaveDto, SavePreflightStatus } from '@/app/com/apiGenerated';
 import { useSavingDisabledWarningStore } from './components/savingDisabledWarningStore';
 import SavingDisabledWarning from './components/SavingDisabledWarning.vue';
@@ -52,6 +53,8 @@ const heartbeatIntervalSecs = 3 * 60 // 每3分钟心跳一次
 const heartbeatOnEditMinIntervalMs = 60 * 1000 // 编辑活动触发的心跳，一分钟内最多一次
 
 const props = defineProps<{saveId:string}>()
+// 把当前存档 id 提供给 core（core 不直接读 route）
+watch(() => props.saveId, id => setCurrentSaveIdRaw(id), { immediate: true })
 const router = useRouter()
 const { someonesSavesRoute } = useSavesRoutesJump()
 const enteredFromStore = useEnteredCanvasFromStore()
