@@ -1,10 +1,17 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+
+/** 路由守卫注册器，由宿主注入（web 用 router.beforeEach 实现）；传入守卫函数，返回移除守卫的函数 */
+export type RouteGuardRegistrar = (guard: () => boolean) => () => void
+
+let routeGuardRegistrar: RouteGuardRegistrar | undefined
+
+export function initRouteGuardRegistrar(r: RouteGuardRegistrar) {
+    routeGuardRegistrar = r
+}
 
 const aLongTimeForUnsavedStatusMs = 3*60*1000 //三分钟
 export const usePreventLeavingUnsavedStore = defineStore('preventLeavingUnsaved', ()=>{
-    const router = useRouter();
     const preventingLeaving = ref<boolean>(false);
     const showUnsavedWarning = ref<boolean>(false);
     const unsavedForALongTime = ref<boolean>(false);
@@ -21,7 +28,7 @@ export const usePreventLeavingUnsavedStore = defineStore('preventLeavingUnsaved'
         }
         console.log("限制离开")
         window.onbeforeunload = leavingHandler
-        removeRouteGuard = router.beforeEach(()=>{
+        removeRouteGuard = routeGuardRegistrar?.(()=>{
             showUnsavedWarning.value = true;
             return false;
         });

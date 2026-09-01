@@ -67,7 +67,7 @@ AARC/                          # 仓库根（现有后端不动）
 | 环境变量 | 闭包内 5 个文件用 `import.meta.env`（2026-02 重扫；原 `apiStore.ts:80` 的一处已随 api 层退出闭包）：`proxyUrl.ts:20`、`guideInfo.ts:2-4`（VITE_Guide\*）、`mainCvsDispatcher.ts:69`（VITE_LogMainCvsRendering）、`adsCvsWorker.ts:8-9`（VITE_AdsText\*）、`CloudSvgConfig.vue:48` | 短期：core 作为源码由宿主 vite 构建，env 注入天然有效；长期（tauri）改为 core 导出 `configure({...})` 配置入口 |
 | localStorage 持久化 | 5 个 core store 依赖 `pinia-plugin-persistedstate`，插件由宿主 `main.ts:11` 全局注册；`editorLocalConfig.ts:28-35` 还有直接读写 localStorage 的 legacy 迁移 | core 文档声明"宿主必须注册 persist 插件"，或 core 导出 `createCorePinia()` 工厂；tauri 侧可换持久化适配层 |
 | 后端 HTTP | ~~`apiStore.ts`（JWT/cookie/axios）在闭包内~~ 已退出闭包（见 §3.4） | api 层整体归属 web；core 只持有 `models/types/apiShapes.ts` 的 DTO 投影与三个注入 provider |
-| 路由参数/守卫 | ~~闭包内 3 个文件 import `vue-router`~~（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts` 用 `useRoute` 取 saveId 路由参数；`preventLeavingUnsaved.ts` 用 `router.beforeEach` 注册"阻止未保存离开"守卫 | ✅ saveId 提取已改造：新增 `models/save/currentSaveId.ts`（`setCurrentSaveIdRaw`/`getCurrentSaveIdRaw`/`getCurrentSaveIdNum`），宿主 `Editor.vue` 用 `watch(props.saveId, immediate)` 设置，core 不再读 route。**剩余**：`preventLeavingUnsaved.ts` 的 `beforeEach` 守卫待上移到宿主（`window.onbeforeunload` 部分可留 core），届时 core 即与 vue-router 完全解耦 |
+| 路由参数/守卫 | ~~闭包内 3 个文件 import `vue-router`~~（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts` 用 `useRoute` 取 saveId 路由参数；`preventLeavingUnsaved.ts` 用 `router.beforeEach` 注册"阻止未保存离开"守卫 | ✅ 已全部改造（2026-09）：saveId 提取——新增 `models/save/currentSaveId.ts`（`setCurrentSaveIdRaw`/`getCurrentSaveIdRaw`/`getCurrentSaveIdNum`），宿主 `Editor.vue` 用 `watch(props.saveId, immediate)` 设置；路由守卫上移——`preventLeavingUnsaved.ts` 新增 `initRouteGuardRegistrar()` 注入入口，`Editor.vue` 以 `router.beforeEach` 实现注册，`window.onbeforeunload` 部分留 core。**至此 core 闭包对 vue-router 的 import 依赖清零**（残留：`FaqAsConfig.vue` 模板仍用全局组件 `RouterLink`，属运行时依赖，随 §3.3 的组件归属裁决一并处理） |
 
 ### 3.2 回调注入式隐性接口清单
 
@@ -78,6 +78,7 @@ AARC/                          # 仓库根（现有后端不动）
 - `initPinyinConvertProvider`（拼音转换，App.vue 注册，见 §3.4）✅ 新增
 - `initSaveInfoProvider`（存档信息，App.vue 注册，见 §3.4）✅ 新增
 - `setCurrentSaveIdRaw`（当前存档 id，Editor.vue 用 `watch(props.saveId)` 设置，见 §3.1"路由参数/守卫"行）✅ 新增
+- `initRouteGuardRegistrar`（"阻止未保存离开"的路由守卫注册，Editor.vue 以 `router.beforeEach` 实现，见 §3.1"路由参数/守卫"行）✅ 新增
 - `mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67,134`，Editor.vue:316-324 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
 - `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**）
 - `envStore.rerender / rescaled / getActivePtOpsAvoidance / lineFocus`（dispatchers 与 store 互相给函数 ref 赋值接线）

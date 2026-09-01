@@ -12,7 +12,7 @@ import { useRouter } from 'vue-router';
 import { devSave } from '@/data/dev/devSave';
 import { useApiStore } from '@/app/com/apiStore';
 import { normalizeSave } from '@/models/save/saveNormalize';
-import { usePreventLeavingUnsavedStore } from '@/utils/eventUtils/preventLeavingUnsaved';
+import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from '@/utils/eventUtils/preventLeavingUnsaved';
 import { useMainCvsDispatcher } from '@/models/cvs/dispatchers/mainCvsDispatcher';
 import { useResetterStore } from '@/models/stores/utils/resetterStore';
 import rfdc from 'rfdc';
@@ -56,6 +56,8 @@ const props = defineProps<{saveId:string}>()
 // 把当前存档 id 提供给 core（core 不直接读 route）
 watch(() => props.saveId, id => setCurrentSaveIdRaw(id), { immediate: true })
 const router = useRouter()
+// 把路由守卫注册能力注入 core（core 不直接用 vue-router）
+initRouteGuardRegistrar(guard => router.beforeEach(guard))
 const { someonesSavesRoute } = useSavesRoutesJump()
 const enteredFromStore = useEnteredCanvasFromStore()
 const { goBackToWhereWeEntered } = enteredFromStore
