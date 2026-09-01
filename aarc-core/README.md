@@ -47,7 +47,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
   - `VITE_GuideResetPassword` / `VITE_GuideFindHelp` / `VITE_GuideExtra` — `app/guideInfo.ts:2-4`
   - `VITE_LogMainCvsRendering` — `models/cvs/dispatchers/mainCvsDispatcher.ts:69`
   - `VITE_AdsTextLess` / `VITE_AdsTextMore` — `models/cvs/workers/adsCvsWorker.ts:8-9`
-- **全局样式**：core 组件模板依赖全局 class（`.sqrBtn` / `.withShadow` / `.statusDisplay` 等）以及 sidebars shared 样式（`configSection` / `options` / `arrangableList`），由宿主全局加载。web：`src/styles/styles.scss`（`main.ts:5` 引入，内部 `@use` 三份 shared scss）
+- **全局样式**：core 自带 `src/styles/global.scss`（base 元素样式 + `.sqrBtn` / `.withShadow` / `.statusDisplay` 等全局 class + `configSection` / `options` / `arrangableList` / `bangPanel` 四份 partial），**宿主必须全局引入一次**，否则 core 组件会静默变形。web：`src/styles/styles.scss` 顶部 `@use 'aarc-core/styles/global.scss'`（经包 `exports` 通配解析，由宿主 vite 编译）
 - **第三方组件全局 CSS**：core 组件使用 `@aurouscia/au-color-picker` 但不引入其样式表，由宿主加载。web：`main.ts:6` `import '@aurouscia/au-color-picker/style.css'`
 - **静态资源打包**：core 内以模块形式 import `aarc-core/assets/ui/*.svg`，需宿主打包器支持静态资源 import（vite 默认支持）。
 
