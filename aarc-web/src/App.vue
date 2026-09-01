@@ -10,10 +10,15 @@ import { useApiStore } from './app/com/apiStore';
 import { initCloudSvgUploader } from './models/save/cloudSvgOps';
 import { initPinyinConvertProvider } from './components/composables/usePinyinConvert';
 import { initSaveInfoProvider } from './components/sidebars/export/composables/useImageExport';
+import { initSiteLinks } from './app/siteLinks';
+import { useRouter } from 'vue-router';
+import { aboutName } from './pages/identities/routes/routesNames';
+import { forkAarcName } from './pages/etc/routes/routesNames';
 
 const uniq = useUniqueComponentsStore()
 const { topbarShow } = storeToRefs(uniq)
 const api = useApiStore()
+const router = useRouter()
 
 const pop = useTemplateRef('pop')
 const wait = useTemplateRef('wait')
@@ -32,6 +37,10 @@ onMounted(()=>{
     })
     initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))
     initSaveInfoProvider(saveId => api.save.loadInfo(saveId))
+    initSiteLinks({
+        about: router.resolve({ name: aboutName }).href,
+        forkAarc: router.resolve({ name: forkAarcName }).href
+    })
 })
 </script>
 

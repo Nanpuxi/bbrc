@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { aboutName } from '@/pages/identities/routes/routesNames.ts';
 import ConfigSection from './shared/ConfigSection.vue';
 import { guideInfo } from '@/app/guideInfo';
-import { forkAarcName } from '@/pages/etc/routes/routesNames.ts';
+import { getSiteLinks } from '@/app/siteLinks';
 
 const showGuideInfos = guideInfo.findHelp || guideInfo.extra
+const siteLinks = getSiteLinks()
 </script>
 
 <template>
@@ -34,7 +34,7 @@ const showGuideInfos = guideInfo.findHelp || guideInfo.extra
         <h3>收费</h3>
         <div>
             <p>本项目永远不会以任何理由收费，现有以及未来更新的所有功能（包括云服务）全部开源免费。</p>
-            <p>你可以在<RouterLink :to="{name: aboutName}">关于页</RouterLink>找到本项目全部源代码并自己修改或私下使用。</p>
+            <p>你可以在<a v-if="siteLinks.about" :href="siteLinks.about">关于页</a><span v-else>关于页</span>找到本项目全部源代码并自己修改或私下使用。</p>
         </div>
     </div>
     <div>
@@ -53,7 +53,7 @@ const showGuideInfos = guideInfo.findHelp || guideInfo.extra
         <div>
             <p>这意味着：</p>
             <p>如果某项功能不对你的胃口，你可以自行修改或添加源代码，并开私服给自己和其他人使用（这个私服是否开源、是否收费无所谓）</p>
-            <p><RouterLink :to="{name: forkAarcName}">请在这里查看私服使用案例</RouterLink></p>
+            <p v-if="siteLinks.forkAarc"><a :href="siteLinks.forkAarc">请在这里查看私服使用案例</a></p>
         </div>
     </div>
     <div>
