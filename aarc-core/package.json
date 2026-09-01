@@ -16,7 +16,8 @@
   },
   "scripts": {
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@aurouscia/au-color-picker": "^1.1.0",
@@ -38,8 +39,12 @@
   "devDependencies": {
     "@types/color": "^4.2.1",
     "@types/color-convert": "^2.0.4",
+    "@types/node": "^25.6.0",
     "@types/omggif": "^1.0.5",
     "@types/upng-js": "^2.1.5",
-    "vitest": "^4.1.6"
+    "typescript": "^6.0.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.6",
+    "vue-tsc": "^3.2.7"
   }
 }
