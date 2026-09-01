@@ -137,9 +137,9 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 3：构建与样式拆分
 
-10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；~~`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出~~（2026-09 更新：`_globalMixins.scss` 实际仅 core 的 `CvsBlocks.vue` 使用，已内联进该组件并删除文件；`_globalValues.scss` 仅 web 自用，留 web，两包不再共用 scss partial）。
+10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；~~`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出~~（2026-09 更新：`_globalMixins.scss` 实际仅 core 的 `CvsBlocks.vue` 使用，已内联进该组件并删除文件；`_globalValues.scss` 仅 web 自用，留 web，两包不再共用 scss partial）。（2026-09 补充调查：core 组件实际依赖的全局 class 约 20 个——`.sqrBtn`/`withShadow`（`Menu.vue:114-154` 等 13 处）、`.statusDisplay`（`Cvs.vue:97-110`）、`.arrangeableList`（`Lines.vue:160`、`Terrains.vue:49`）、`.options`/`.optionSection`（LineOptions/TextTagOptions/ControlPointOptions）、`.configSection`（`configs/shared/ConfigSection.vue:28`）、`.smallNote` 系约 20 个 sidebars 组件；三份 shared partial 物理留在 web 但目录结构镜像 core 的组件树，类名契约纯靠人肉同步，缺失不报错、只静默变形）。
 11. 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web（未改动）；~~`vite.config.ts` 的 `fullReload` 监听列表要改为包含 core 路径~~ ✅ 已完成（2026-09）：监听列表已加入 `../aarc-core/src/**`。Dockerfile 前端阶段已补 `aarc-core` 的 package.json 与源码 COPY，✅ 完整 `docker build` 已重跑通过（2026-09，产物 chunk 哈希与本地构建一致）。
-12. 依赖拆分：✅ core 侧已完成（2026-09）——按迁移集实际 import 分配：vue/pinia/pinia-plugin-persistedstate、@aurouscia/*（au-color-picker/au-undo-redo/keyboard-shortcut/svgcanvas）、bowser/color/color-convert/copy-to-clipboard/omggif/rfdc/svgo/upng-js 及对应 @types；vitest 随测试迁至 core（含 vitest.config.ts 与 test 脚本，web 的 `test`/`test:run` 改为 `pnpm --filter aarc-core` 透传）。`vue-router`/`@microsoft/signalr`/`axios` 等留 web（闭包内 vue-router 引用已在 §3.1 改造中清零，原注意事项失效）。web 侧 dependencies 暂未瘦身（仍声明全部包，含 core 也用的那些），可后续清理。pinia、vue 单实例由源码导出 + web vite 统一打包保证。
+12. 依赖拆分：✅ core 侧已完成（2026-09）——按迁移集实际 import 分配：vue/pinia/pinia-plugin-persistedstate、@aurouscia/*（au-color-picker/au-undo-redo/keyboard-shortcut/svgcanvas）、bowser/color/color-convert/copy-to-clipboard/omggif/rfdc/svgo/upng-js 及对应 @types；vitest 随测试迁至 core（含 vitest.config.ts 与 test 脚本，web 的 `test`/`test:run` 改为 `pnpm --filter aarc-core` 透传）。`vue-router`/`@microsoft/signalr`/`axios` 等留 web（闭包内 vue-router 引用已在 §3.1 改造中清零，原注意事项失效）。web 侧 dependencies 暂未瘦身（仍声明全部包，含 core 也用的那些），可后续清理——已查明可删清单，见第 21 步。pinia、vue 单实例由源码导出 + web vite 统一打包保证。
 13. 环境变量：env 目录随 web（宿主），core 内 `import.meta.env` 用法阶段一保持不变（宿主 vite 构建时注入）。
 
 ### 阶段 4：验证与收尾
@@ -148,17 +148,26 @@ AARC/                          # 仓库根（现有后端不动）
 15. 手动回归清单：编辑器打开/保存/离开拦截、缩略图上传、svg 云上传、图标收藏夹（双向回调）、导出图片、Pop/Wait 弹窗、路由返回来源页、demo 模式。
 16. 更新两级 `AGENTS.md`（启动命令、type-check 命令的作用范围）与根 README。
 
+### 阶段 4.5：耦合收尾（2026-09 调查新增，均为小改动，建议按序执行）
+
+本阶段源于一次 core↔web 耦合复查（结论：单向依赖约束执行良好，无 core→web 逃逸；以下为遗留的隐式契约类问题）。执行顺序按"先文档、再接线、后清理"排列；第 10 步（样式）与第 17 步（装配收口）不在本阶段，随各自阶段排期。
+
+19. **补登 core 的隐式环境依赖到 `aarc-core/README.md`**（纯文档）：core 并非零出站请求——`utils/urlUtils/checkUrl.ts:3`、`models/save/dataSourceOps.ts:19` 直接 `fetch()`；`proxyUrl.ts:15`、`iconStore.ts:40,174`、`CloudSvgConfig.vue:38` 用 `window.location.origin` 拼 URL（隐式要求静态资源与页面同源，或正确配置 `VITE_ApiUrlBase`）；`models/save/upgrade/textTagIcons.ts:9-10` 硬编码 `/icons/a/*.svg` 默认图标路径（依赖宿主 `public/icons/`）。tauri 阶段这些 fetch 应随 §3.1 模式 provider 化。
+20. **裸 ref 接线改为 `init*` 注册函数**（与既有注入接口风格统一，未注册被调用时 `console.warn`）：`mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67`，宿主在 `Editor.vue:321` 赋值、`:451` 置回）与 `userFileFavoriteStore.openFavoritesSidebar`（`userFileFavoriteStore.ts:6`，宿主在 `UserFileFavorites.vue:36` 赋值）目前默认 noop、漏接时静默失败。改完同步更新 `aarc-core/README.md`。
+21. **web 侧 dependencies 瘦身**（承接第 12 步）：删除 `aarc-web/src` 已零 import 的 8 个包——`omggif`、`upng-js`、`svgo`、`color`、`color-convert`、`bowser`、`@aurouscia/svgcanvas`、`@aurouscia/au-undo-redo`。注意 `vite.config.ts:65-66` manualChunks 按 `'svgo'` 分包分的是 core 的依赖，该配置保留不动。验证：`pnpm install` + `pnpm build-here`。
+22. **删除冗余解析通道**：`aarc-core` 的解析目前三处并存——workspace `exports` 通配、`vite.config.ts:77` 显式 alias、两边 tsconfig `paths`。workspace `exports` 在 vite 下已验证可用，可删 vite alias 减少一处同步维护；tsconfig `paths` 对编辑器跳转仍有用，保留。验证：build + dev 各跑一遍。
+
 ### 阶段 5（未来）：接口化与 tauri
 
-17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。
-18. 新增 `aarc-tauri` 包：复用 `aarc-core`，实现 fs 版 HostServices，替换 persist 存储与上传逻辑。
+17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。**同期建议收敛 `Editor.vue` 的装配面**（2026-09 调查）：目前宿主直接操作 core 的 `mainCvsDispatcher`/`miniatureCvsDispatcher`/`resetterStore`/`undoStore`/`iconStore`/`saveStore` 且需知晓内部调用时序（如 `Editor.vue:169-173` 依次 `saveStore.save = normalizeSave(...)`——直接写 store 字段、`resetDerivedStores()`、`ensureAllLoaded()`）；宜由 core 提供"编辑器会话"入口（如 `loadSaveIntoEditor()` / `disposeEditor()`）把时序收进 core 内部，宿主只传数据与回调。另可在 web 侧为 `apiGenerated.ts` ↔ core `apiShapes.ts` 的字段投影加编译期断言（`satisfies`/类型互赋测试），防止后端 DTO 改了 core 未用字段时零告警。
+18. 新增 `aarc-tauri` 包：复用 `aarc-core`，实现 fs 版 HostServices，替换 persist 存储与上传逻辑。注意 core 内还有十余处 `window.confirm/alert`（`Lines.vue:64`、`stashStore.ts:22,35`、`ControlPointOptions.vue:96,108,115` 等）与 `contextMenu.ts:4` 对 `document.oncontextmenu` 的全局改写——浏览器宿主下可接受，tauri 阶段若要替换原生对话框/右键行为，需统一抽象为宿主 UI 服务。
 
 ---
 
-## 5. 主要阻碍清单（按风险排序)
+## 5. 主要阻碍清单（按风险排序）
 
 1. **共享物归属裁定（§1.2 的 84 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。（最大的两个热点 apiStore/apiGenerated 已退出闭包，剩余为通用组件与数据模型。）
-2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。
+2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。（2026-09 调查：`afterMainCvsRendered`、`openFavoritesSidebar` 两处仍是裸 ref 赋值、漏接时静默 noop，整改见第 20 步。）
 3. ~~**apiStore/apiGenerated 在闭包内且被 web 重度引用**~~ ✅ 已解决（2026-02）：三处 HTTP 调用注入化 + core 自有 `models/types/apiShapes.ts` 承载所需 DTO 投影/枚举，api 层整体退出闭包、归属 web（见 §3.4）。
 4. ~~**`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**~~ ✅ 已解决（见 §3.1"路由跳转"行）：Menu 改用 `leave` 事件，该 store 整体留 web，core 不再涉及。
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
