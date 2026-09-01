@@ -1,0 +1,582 @@
+<script setup lang="ts">
+import { onMounted, ref, useTemplateRef, watch } from 'vue';
+import SideBar from '../../common/SideBar.vue';
+import { MainCvsRenderingOptions, useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
+import { useExportLocalConfigStore } from 'aarc-core/app/localConfig/exportLocalConfig';
+import { toYMD, fromYMD } from 'aarc-core/utils/timeUtils/timeStr';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import { CvsBlock, CvsContext } from 'aarc-core/models/cvs/common/cvsContext';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
+import { useMiniatureCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/miniatureCvsDispatcher';
+import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtils/contextMenu';
+import Notice from '../../common/Notice.vue';
+import ExportWatermarkConfig from './configs/ExportWatermarkConfig.vue';
+import ConfigSection from '../configs/shared/ConfigSection.vue';
+import ExportInfo from './ExportInfo.vue'
+import { storeToRefs } from 'pinia';
+import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
+import ExportAccentuationConfig from './configs/ExportAccentuationConfig.vue';
+import { useRenderOptionsStore } from 'aarc-core/models/stores/renderOptionsStore';
+import ExportEtcConfig from './configs/ExportEtcConfig.vue';
+import ExportTimeConfig from './configs/ExportTimeConfig.vue';
+import Prompt from '../../common/Prompt.vue';
+import { useImageExport } from './composables/useImageExport';
+import { useApngExport } from './composables/useApngExport';
+import { useGifExport } from './composables/useGifExport';
+import { useAnimatedExport } from './composables/useAnimatedExport';
+import ExportAnimationMiniConfig from './configs/ExportAnimationMiniConfig.vue';
+import ExportMiniConfig from './configs/ExportMiniConfig.vue';
+
+const sidebar = useTemplateRef('sidebar')
+const mainCvsDispatcher = useMainCvsDispatcher()
+const miniatureCvsDispatcher = useMiniatureCvsDispatcher()
+const saveStore = useSaveStore()
+const { isWindows } = storeToRefs(useBrowserInfoStore())
+const { showPop } = useUniqueComponentsStore()
+
+const renderOptionsStore = useRenderOptionsStore()
+const exportLocalConfig = useExportLocalConfigStore()
+const { 
+    fileNameStyle, fileFormat, fileQuality, pixelRestrict, pixelRestrictMode, ads, bgRefImage, animationMini, miniImage, grid
+} = storeToRefs(exportLocalConfig)
+
+// 使用 composables
+const { 
+    exporting, 
+    exported, 
+    exportFailedMsg, 
+    downloadAnchorElementId,
+    canEncodeWebP,
+    cvsToDataUrl,
+    triggerDownload,
+    getExportFileName,
+    startExport,
+    finishExport,
+    setExportFailed
+} = useImageExport()
+
+const {
+    exporting: apngExporting,
+    exported: apngExported,
+    exportFailedMsg: apngExportFailedMsg,
+    exportApng
+} = useApngExport()
+
+const {
+    exporting: gifExporting,
+    exported: gifExported,
+    exportFailedMsg: gifExportFailedMsg,
+    exportGif
+} = useGifExport()
+
+const {
+    getAnimationTimePoints
+} = useAnimatedExport()
+
+async function renderMainCvsToSvgBlobUrl(): Promise<string | null> {
+    const blob = await mainCvsDispatcher.renderMainCvsToSvgBlob({
+        withAds: ads.value,
+        withBgRefImage: bgRefImage.value,
+        withGridLayer: grid.value.layer,
+        withGridLevel: grid.value.level
+    })
+    return URL.createObjectURL(blob)
+}
+
+/**
+ * 渲染主画布并返回 Data URL
+ */
+async function renderMainCvsToDataUrl(): Promise<string | null> {
+    const { scale, cvsWidth, cvsHeight } = getExportRenderSize()
+    const cvs = new OffscreenCanvas(cvsWidth, cvsHeight)
+    const ctx2d = cvs.getContext('2d')!
+    const ctx = new CvsContext(new CvsBlock(scale, 0, 0, ctx2d))
+    const mainRenderingOptions:MainCvsRenderingOptions = {
+        movedStaNames:[],
+        suppressRenderedCallback:true,
+        ctx,
+        withAds: ads.value,
+        withBgRefImage: bgRefImage.value,
+        withGridLayer: grid.value.layer,
+        withGridLevel: grid.value.level
+    }
+    mainCvsDispatcher.renderMainCvs(mainRenderingOptions)
+    return await cvsToDataUrl(cvs, fileFormat.value, fileQuality.value)
+}
+
+async function downloadMainCvsAsImage() {
+    if(exporting.value)
+        return
+    if(fileFormat.value == 'jpeg' && renderOptionsStore.bgOpacity < 1){
+        showPop('jpg不支持背景透明\n请改用其他格式', 'failed')
+        return
+    }
+    startExport()
+
+    const fileName = await getExportImageFileName()
+    if(fileName){
+        renderOptionsStore.exporting = true; // 启用导出模式
+
+        let imageDataUrl
+        try{
+            if(fileFormat.value === 'svg'){
+                imageDataUrl = await renderMainCvsToSvgBlobUrl()
+            }else{
+                imageDataUrl = await renderMainCvsToDataUrl()
+            }
+        }
+        catch(e){
+            console.error(e)
+            showPop('导出失败\n请查看指引', 'failed')
+            setExportFailed('可能是浏览器像素上限，请查看指引')
+            renderOptionsStore.exporting = false;
+            return
+        }
+        if(!imageDataUrl){
+            renderOptionsStore.exporting = false;
+            return
+        }
+        triggerDownload(imageDataUrl, fileName)
+
+        renderOptionsStore.exporting = false; // 复位导出模式
+    }
+    finishExport()
+}
+let activeUrl:string|undefined = undefined;
+async function downloadMiniatureCvsAsImage() {
+    if(exporting.value)
+        return
+    startExport()
+    const fileName = await getExportImageFileName(true, miniImage.value.fileFormat)
+    if(fileName){
+        if(activeUrl)
+            URL.revokeObjectURL(activeUrl)
+        let appliedTime = false
+        renderOptionsStore.exporting = true
+        try{
+            if(miniImage.value.timeStr){
+                const t = fromYMD(miniImage.value.timeStr, msg=>showPop(msg, 'failed'))
+                if(typeof t === 'number'){
+                    renderOptionsStore.setTimeMomentOverride(t)
+                    appliedTime = true
+                }
+            }
+            if(miniImage.value.fileFormat === 'svg'){
+                activeUrl = await miniatureCvsDispatcher.renderMiniatureCvsToSvgBlobUrl({
+                    sideLength: miniImage.value.sideLength,
+                    lineWidth: miniImage.value.lineWidth,
+                    filterNotOpened: miniImage.value.hideNotOpened
+                })
+            }else{
+                const cvs = miniatureCvsDispatcher.renderMiniatureCvs({
+                    sideLength: miniImage.value.sideLength,
+                    lineWidth: miniImage.value.lineWidth,
+                    filterNotOpened: miniImage.value.hideNotOpened
+                })
+                activeUrl = await cvsToDataUrl(cvs, miniImage.value.fileFormat, fileQuality.value)
+            }
+        }catch(e){
+            console.error(e)
+            showPop('导出失败\n请查看指引', 'failed')
+            setExportFailed('可能是浏览器格式限制，请查看指引')
+            return
+        }finally{
+            renderOptionsStore.exporting = false
+            if(appliedTime){
+                renderOptionsStore.setTimeMomentOverride(undefined)
+            }
+        }
+        if(!activeUrl){
+            finishExport()
+            return
+        }
+        triggerDownload(activeUrl, fileName)
+    }
+    finishExport()
+}
+async function downloadMainCvsAtAllTimePoints(){
+    if(exporting.value)
+        return
+    
+    const timePoints = getAnimationTimePoints()
+    if(!timePoints){
+        showPop('请为线路添加\n开通时间设置', 'failed')
+        return
+    }
+    
+    startExport()
+    renderOptionsStore.exporting = true
+    
+    const baseFileName = await getExportImageFileName()
+    
+    if(!baseFileName){
+        finishExport()
+        renderOptionsStore.exporting = false
+        return
+    }
+    
+    try{
+        for(let i = 0; i < timePoints.length; i++){
+            const time = timePoints[i]
+            
+            // 设置当前时间点
+            renderOptionsStore.setTimeMomentOverride(time)
+            
+            // 渲染画布并获取 Data URL
+            const imageDataUrl = await renderMainCvsToDataUrl()
+            if(!imageDataUrl){
+                continue
+            }
+            
+            // 生成文件名（添加年月日后缀）并下载
+            const dateSuffix = toYMD(time, { hyphen: false, pad: true }) || `${i + 1}`
+            const fileName = baseFileName.replace(/(\.\w+)$/, `-${dateSuffix}$1`)
+            triggerDownload(imageDataUrl, fileName)
+            
+            // 小延迟，避免浏览器阻塞
+            await new Promise(resolve => setTimeout(resolve, 200))
+        }
+    } catch(e){
+        console.error(e)
+        showPop('导出失败\n请查看指引', 'failed')
+        setExportFailed('导出过程中出错')
+    } finally {
+        renderOptionsStore.setTimeMomentOverride(undefined)
+        renderOptionsStore.exporting = false
+        finishExport()
+    }
+}
+
+/**
+ * 导出略缩图动画（根据设置中的格式决定导出 APNG 或 GIF）
+ */
+async function downloadMiniatureAnimation() {
+    const fileName = await getExportImageFileName(true)
+    if(!fileName){
+        return
+    }
+
+    if(animationMini.value.fileFormat === 'gif'){
+        if(gifExporting.value)
+            return
+        await exportGif({ fileName })
+    } else {
+        if(apngExporting.value)
+            return
+        await exportApng({ fileName })
+    }
+}
+
+async function getExportImageFileName(isMini?:boolean, miniFormat?: 'png'|'webp'|'jpeg'|'svg'){
+    const suffix = isMini ? 'mini' : undefined
+    const ext = miniFormat ?? fileFormat.value
+    const fileName = await getExportFileName(ext, suffix)
+    return fileName
+}
+
+function getExportRenderSize():{scale:number, cvsWidth:number, cvsHeight:number}{
+    const epr = Number(pixelRestrict.value||'')
+    const asIs = ()=>{
+        return{
+            scale:1,
+            cvsWidth:saveStore.cvsWidth,
+            cvsHeight:saveStore.cvsHeight
+        }
+    }
+    if(isNaN(epr) || epr<=100){
+        return asIs()
+    }
+    const biggerSide = Math.max(saveStore.cvsWidth, saveStore.cvsHeight)
+    if(biggerSide <= epr && pixelRestrictMode.value=='max')
+        return asIs()
+    const scale = epr/biggerSide
+    return {
+        scale,
+        cvsWidth: saveStore.cvsWidth*scale,
+        cvsHeight: saveStore.cvsHeight*scale
+    }
+}
+
+watch(ads, ()=>{
+    if(ads.value && ads.value !== 'no'){
+        showPop('感谢支持', 'success')
+    }
+})
+
+defineExpose({
+    comeOut: ()=>{sidebar.value?.extend()},
+    fold: ()=>{sidebar.value?.fold()}
+})
+
+function explainPixelMode(){
+    showPixelModePrompt.value = true
+}
+function explainFileFormat(){
+    showFileFormatPrompt.value = true
+}
+
+onMounted(()=>{
+    // 如果浏览器不支持webp，自动改为png
+    if(!canEncodeWebP()){
+        if(fileFormat.value == 'webp'){
+            fileFormat.value = 'png'
+        }
+    }
+})
+
+// 同步 apng 导出状态到组件
+watch(apngExporting, (val) => {
+    exporting.value = val
+})
+watch(apngExported, (val) => {
+    exported.value = val
+})
+watch(apngExportFailedMsg, (val) => {
+    exportFailedMsg.value = val
+})
+
+// 同步 gif 导出状态到组件
+watch(gifExporting, (val) => {
+    exporting.value = val
+})
+watch(gifExported, (val) => {
+    exported.value = val
+})
+watch(gifExportFailedMsg, (val) => {
+    exportFailedMsg.value = val
+})
+
+const showApngExportNotice = ref(false)
+const showPixelModePrompt = ref(false)
+const showFileFormatPrompt = ref(false)
+</script>
+
+<template>
+    <SideBar ref="sidebar" @extend="enableContextMenu()" @fold="disableContextMenu();exported=false;exportFailedMsg=false">
+        <div class="exportOps">
+            <div class="configItem">
+                <div class="itemName">文件名</div>
+                <select v-model="fileNameStyle">
+                    <option :value="'plain'">仅存档名</option>
+                    <option :value="'date'">日期</option>
+                    <option :value="'dateTime'">日期时间</option>
+                    <option :value="'lineCount'">线路站点</option>
+                </select>
+            </div>
+            <div class="configItem">
+                <div class="itemName">长边像素</div>
+                <input v-model="pixelRestrict" type="number" placeholder='参考"已知限制"'/>
+            </div>
+            <div class="configItem">
+                <div class="itemName">
+                    像素模式
+                    <div class="questionMark" @click="explainPixelMode">?</div>
+                </div>
+                <select v-model="pixelRestrictMode">
+                    <option :value="'max'">上限</option>
+                    <option :value="'exact'">指定</option>
+                </select>
+            </div>
+            <div class="configItem">
+                <div class="itemName">
+                    图片格式
+                    <div class="questionMark questionMarkBlue" @click="explainFileFormat">?</div>
+                </div>
+                <select v-model="fileFormat">
+                    <option :value="'png'">PNG(不推荐)</option>
+                    <option :value="'webp'">WEBP</option>
+                    <option :value="'jpeg'">JPG(不推荐)</option>
+                    <option :value="'svg'">SVG</option>
+                </select>
+            </div>
+            <div class="configItem" v-if="fileFormat!='png' && fileFormat!='svg'">
+                <div class="itemName">图片质量</div>
+                <div>
+                    <input v-model.number="fileQuality" type="range" :min="0" :max="1" :step="0.01"/>
+                    <div class="rangeDisplay">{{ fileQuality?.toFixed(2) }}</div>
+                </div>
+            </div>
+            <div class="configItem">
+                <div class="itemName">宣传水印</div>
+                <select v-model="ads">
+                    <option :value="'no'">无</option>
+                    <option :value="'less'">简略</option>
+                    <option :value="'more'">详细</option>
+                </select>
+            </div>
+            <button @click="downloadMainCvsAsImage" class="ok">导出为图片</button>
+            <button @click="downloadMiniatureCvsAsImage" class="minor">导出为略缩图</button>
+            <button @click="downloadMiniatureAnimation" class="minor">导出发展史略缩动图（{{ animationMini.fileFormat }}）</button>
+            <div v-show="!exported" class="note apng-notice-entry" @click="showApngExportNotice=true">
+                动图功能有关注意事项
+            </div>
+            <Prompt v-if="showPixelModePrompt" @close="showPixelModePrompt=false" :bg-click-close="true">
+                <p>选择“指定”模式后，将严格按“像素”的值进行导出，“像素”值较大时可获得高清图片</p>
+            </Prompt>
+            <Prompt v-if="showFileFormatPrompt" @close="showFileFormatPrompt=false" :bg-click-close="true">
+                <p><b class="fileFormatName">PNG</b>文件较大，但兼容性好且无损</p>
+                <p><b class="fileFormatName">WEBP</b>（最推荐）文件较小且可以设置画质，但老设备可能无法查看</p>
+                <p><b class="fileFormatName">JPG</b>不建议使用，视觉效果较差，且不支持透明度</p>
+                <p><b class="fileFormatName">SVG</b>矢量格式，可无限缩放，或在 InkScape 等工具进一步编辑</p>
+                <p class="smallNoteVital" style="margin-top: 10px;">目前导出的svg文件内若含有图片，则只能联网查看，图片无法访问将导致其位置变为空白</p>
+            </Prompt>
+            <Prompt v-if="showApngExportNotice" @close="showApngExportNotice=false" :bg-click-close="true">
+                <p>请先为每条线路设置“开通时间”，才能使用本功能。</p><br/>
+                <p>本功能可在下方的“略缩图动画”中设置。</p><br/>
+                <p>建议使用 GIF 格式，一般不会有放不出来的破事。如果导出 APNG 格式，仅在部分软件中能呈现动态效果。在 QQ 聊天中发送和查看时请选择“原图”。</p>
+                <template v-if="isWindows">
+                    <br/>
+                    <p v-if="isWindows">Windows 自带相册无法查看 APNG，请右键选择打开方式 Edge 查看。</p>
+                </template>
+            </Prompt>
+            <div v-show="exported" class="note">
+                若点击导出后没有开始下载<br />请尝试<a :id="downloadAnchorElementId" class="downloadAnchor">点击此处</a>
+            </div>
+            <Notice v-show="exporting && !exportFailedMsg" :title="'请等待'" :type="'info'">
+                正在导出，可能需要几秒
+            </Notice>
+            <Notice v-show="exportFailedMsg" :title="'导出失败'" :type="'danger'">
+                {{ exportFailedMsg }}
+            </Notice>
+            <div v-show="exporting || exported || exportFailedMsg" class="note"
+                :style="{color: exportFailedMsg?'red':undefined}">
+                若导出失败或长时间无响应<br />请查看本页下方“浏览器限制”部分
+            </div>
+            <div class="exportConfigs">
+                <ExportMiniConfig></ExportMiniConfig>
+                <ExportAnimationMiniConfig></ExportAnimationMiniConfig>
+                <ExportTimeConfig></ExportTimeConfig>
+                <ConfigSection :title="'导出所有时间点'">
+                    <button @click="downloadMainCvsAtAllTimePoints" class="ok"
+                        style="display: block; margin: auto; margin-top: 20px;">
+                        导出所有时间点（试验性）
+                    </button>
+                    <Notice :title="'注意'" :type="'info'">
+                        理论上本按钮会触发：连续下载多张图片，每张图片是一个时间点的线网图。如果需要使用本功能但行为异常，请改用 PC 端 Edge 浏览器。
+                    </Notice>
+                </ConfigSection>
+                <ExportAccentuationConfig></ExportAccentuationConfig>
+                <ExportWatermarkConfig></ExportWatermarkConfig>
+                <ExportEtcConfig></ExportEtcConfig>
+                <ConfigSection :title="'已知的浏览器限制'">
+                    <table class="fullWidth browserLimit">
+                        <tbody>
+                            <tr>
+                                <td colspan="2">
+                                    若导出失败，可能由于系统/浏览器限制了画布像素上限，
+                                    请尝试设置<b>“像素上限”</b>为你的浏览器对应值，若仍然失败则逐步调低直至导出成功。
+                                    需要清晰的图片，请换用其他设备/浏览器。
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>浏览器</th>
+                                <th>导出像素上限</th>
+                            </tr>
+                            <tr>
+                                <td>Chrome/Edge/<br />常见自带浏览器</td>
+                                <td>16000</td>
+                            </tr>
+                            <tr>
+                                <td>Firefox</td>
+                                <td>16000</td>
+                            </tr>
+                            <tr>
+                                <td>iOS系统上<br />任意浏览器</td>
+                                <td>4000</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" class="smallNote">欢迎向我们反馈更多</td>
+                            </tr>
+                            <tr>
+                                <th colspan="2">建议</th>
+                            </tr>
+                            <tr>
+                                <td colspan="2">
+                                    请尽可能使用推荐的站距（线路延长手柄的长度）控制合适的站点密度，让线路图变得实用、美观、易于分享<br />
+                                    作为参考：一张上海的线路图一般仅需要4000x3200的画布
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </ConfigSection>
+                <ExportInfo></ExportInfo>
+            </div>
+        </div>
+    </SideBar>
+</template>
+
+<style scoped lang="scss">
+.ok{
+    margin-top: 20px;
+}
+.configItem{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .itemName{
+        color:#666;
+    }
+    input{
+        max-width: 140px;
+    }
+}
+.explainItem{
+    color: #333;
+    font-size: 14px;
+}
+.exportOps{
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.note{
+    margin: 8px 0px;
+    font-size: 14px;
+    color: #999;
+    text-align: center;
+    .downloadAnchor{
+        color: cornflowerblue;
+        text-decoration: underline;
+    }
+}
+.browserLimit{
+    font-size: 14px;
+}
+
+.questionMark{
+    height: 12px;
+    width: 12px;
+    border: 1.5px solid #aaa;
+    color: #aaa;
+    font-size: 10px;
+    line-height: 12px;
+    text-align: center;
+    border-radius: 100px;
+    cursor: pointer;
+    display: inline-block;
+}
+.questionMarkBlue{
+    border-color: cornflowerblue;
+    color: cornflowerblue;
+}
+
+.rangeDisplay{
+    margin-top: -10px;
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+}
+.fileFormatName{
+    color: cornflowerblue;
+    margin-right: 4px;
+}
+
+.exportConfigs{
+    padding: 20px 0px 100px;
+}
+
+.apng-notice-entry{
+    cursor: pointer;
+    color: #999
+}
+</style>

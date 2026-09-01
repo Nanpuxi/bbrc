@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { UserDto } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 import { ref, computed, onMounted, useTemplateRef } from 'vue';
 
 const api = useApiStore()

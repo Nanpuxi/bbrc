@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { useBrowserInfoStore } from '@/app/globalStores/browserInfo';
+import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
 import { useOneTimeNoticeStore } from '@/app/localConfig/oneTimeNotice';
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 

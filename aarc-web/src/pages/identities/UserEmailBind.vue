@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
-import { guideInfo } from '@/app/guideInfo';
-import Notice from '@/components/common/Notice.vue';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
+import { guideInfo } from 'aarc-core/app/guideInfo';
+import Notice from 'aarc-core/components/common/Notice.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

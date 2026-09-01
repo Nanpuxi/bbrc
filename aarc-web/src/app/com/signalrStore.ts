@@ -2,7 +2,7 @@ import { defineStore } from "pinia"
 import { ref, computed } from "vue"
 import { HubConnectionBuilder, HubConnection, HubConnectionState, LogLevel } from "@microsoft/signalr"
 import { useApiStore } from "./apiStore"
-import { useUniqueComponentsStore } from "../globalStores/uniqueComponents"
+import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents"
 
 export interface ChatMessage {
     messageId: string

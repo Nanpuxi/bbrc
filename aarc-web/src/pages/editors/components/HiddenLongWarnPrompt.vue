@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 const emit = defineEmits<{
     (e:'ok'):void

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia"
 import { useApiStore } from "../com/apiStore"
 import { computed, ref } from "vue"
-import { timestampMS } from "@/utils/timeUtils/timestamp"
+import { timestampMS } from "aarc-core/utils/timeUtils/timestamp"
 import { HttpUserInfo, UserType } from "../com/apiGenerated"
 
 

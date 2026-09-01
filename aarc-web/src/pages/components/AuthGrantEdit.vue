@@ -2,11 +2,11 @@
 import { AuthGrant, AuthGrantOn, AuthGrantTo, AuthGrantTypeOfSave, AuthGrantTypeOfUserFile, UserDtoSimple } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
 import { useNameMapStore } from '@/app/globalStores/nameMap';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { computed, onMounted, ref, watch } from 'vue';
 import UserSelect from './UserSelect.vue';
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 const props = defineProps<{
     on: AuthGrantOn,

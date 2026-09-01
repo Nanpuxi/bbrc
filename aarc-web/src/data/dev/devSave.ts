@@ -1,5 +1,5 @@
-import { ColorPreset, ControlPointLinkType, LineType, Save } from "@/models/save";
-import { ControlPointDir, ControlPointSta } from "@/models/save";
+import { ColorPreset, ControlPointLinkType, LineType, Save } from "aarc-core/models/save";
+import { ControlPointDir, ControlPointSta } from "aarc-core/models/save";
 
 //开发/展示用存档数据
 export const devSave:Save = {

@@ -2,9 +2,9 @@
 import { ref, computed } from 'vue';
 import { UserFileType } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { dataSizeStr } from '@/utils/fileUtils/dataSizeStr';
-import SideBar from '../SideBar.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
 
 const props = defineProps<{
     type: UserFileType;

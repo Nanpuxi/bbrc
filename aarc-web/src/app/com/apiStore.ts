@@ -1,6 +1,6 @@
 import axios, { CanceledError } from "axios";
 import { defineStore } from "pinia";
-import { useUniqueComponentsStore } from "../globalStores/uniqueComponents";
+import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 import { ref } from "vue";
 import * as api from "./apiGenerated";
 import { getTypeName as tn } from "@/utils/lang/getTypeName";

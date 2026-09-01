@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { BoxType } from './types/pop';
+import { BoxType } from 'aarc-core/components/common/types/pop';
 
 const rightDefault = -200;
 const height = 70;

@@ -22,7 +22,7 @@
 
     "types": ["node"],
     "paths": {
-      "@/*": ["./src/*"]
+      "aarc-core/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]

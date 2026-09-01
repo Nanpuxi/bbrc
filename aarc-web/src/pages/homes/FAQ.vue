@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useCommonLocalConfigStore } from '@/app/localConfig/commonLocalConfig';
-import FaqAsConfig from '@/components/sidebars/configs/FaqAsConfig.vue';
+import FaqAsConfig from 'aarc-core/components/sidebars/configs/FaqAsConfig.vue';
 
 const common = useCommonLocalConfigStore()
 const uniq = useUniqueComponentsStore()

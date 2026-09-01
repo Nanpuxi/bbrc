@@ -4,7 +4,7 @@ import { useApiStore } from '@/app/com/apiStore';
 import { onMounted, ref } from 'vue';
 import UserSelect from '../components/UserSelect.vue';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useRouter } from 'vue-router';
 import { loginName } from './routes/routesNames';
 

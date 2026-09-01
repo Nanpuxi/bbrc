@@ -43,6 +43,7 @@ WORKDIR /web
 # 复制 workspace 配置与前端依赖文件
 COPY pnpm-workspace.yaml .npmrc package.json pnpm-lock.yaml* ./
 COPY aarc-web/package.json aarc-web/
+COPY aarc-core/package.json aarc-core/
 
 # 安装 pnpm 并安装依赖
 RUN npm install -g pnpm --registry=https://registry.npmmirror.com
@@ -50,6 +51,7 @@ RUN pnpm install --frozen-lockfile
 
 # 复制前端源码
 COPY aarc-web/ aarc-web/
+COPY aarc-core/ aarc-core/
 
 # 复制生成的 API 客户端文件到前端源码目录
 COPY --from=api-gen /src/publish/apiGenerated.ts ./aarc-web/src/app/com/apiGenerated.ts

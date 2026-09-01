@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { guideInfo } from '@/app/guideInfo';
+import { guideInfo } from 'aarc-core/app/guideInfo';
 import NewestSaves from '../components/NewestSaves.vue';
 import GiteeInfo from '@/components/common/GiteeGitInfo.vue';
 import { onMounted } from 'vue';
@@ -9,7 +9,7 @@ import DonorList from '../components/DonorList.vue';
 import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import RecentUpdates from '../components/RecentUpdates.vue';
-import Notice from '@/components/common/Notice.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 import { userUpgradeToMemberName } from '../identities/routes/routesNames';
 import { storeToRefs } from 'pinia';
 import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig.ts';

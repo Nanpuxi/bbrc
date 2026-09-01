@@ -1,5 +1,5 @@
-import { Coord } from "@/models/coord";
-import { coordDist } from "./coordDist";
+import { Coord } from "aarc-core/models/coord";
+import { coordDist } from "aarc-core/utils/coordUtils/coordDist";
 
 export function coordInterpRange(coord:Coord[], maxDist:number){
     const res:Coord[] = []

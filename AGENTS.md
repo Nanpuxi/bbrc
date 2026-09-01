@@ -32,7 +32,11 @@ rm -rf temp-build
 
 ## 前端 workspace
 
-前端位于 pnpm-workspace 中（根 `pnpm-workspace.yaml`），目前包含 `aarc-web`（由原 `aarc` 目录改名而来）。在根目录或 `aarc-web` 目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter aarc-web <script>` 指定包。
+前端位于 pnpm-workspace 中（根 `pnpm-workspace.yaml`），包含两个包：
+- `aarc-core`：编辑器核心（Cvs/Menu 及其依赖闭包、单元测试），以源码经 `exports` 通配导出，内部 import 一律用 `aarc-core/` 自引用，不依赖 web 侧任何东西
+- `aarc-web`：站点（pages、router、API 层等），依赖 `aarc-core`（`workspace:*`）
+
+在根目录或包目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter <包名> <script>` 指定包。`aarc-web` 的 `test`/`test:run` 已透传到 `aarc-core`（测试随核心迁移）。详见 `aarc-web/docs/decoupling.md`。
 
 ## 当用户要求“从 upstream 同步”
 

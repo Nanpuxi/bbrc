@@ -1,0 +1,81 @@
+<script setup lang="ts">
+import SideBar from '../../common/SideBar.vue';
+import { onMounted, onUnmounted, useTemplateRef } from 'vue';
+import { LineType } from 'aarc-core/models/save';
+import { useSideListShared } from './shared/useSideListShared';
+import LineOptions from '../options/LineOptions.vue';
+import LineDelPrompt from './shared/LineDelPrompt.vue';
+import LineItemBtns from './shared/LineItemBtns.vue';
+import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtils/contextMenu';
+import ColorPickerForTerrain from '../shared/ColorPickerForTerrain.vue';
+
+const sidebar = useTemplateRef('sidebar')
+const lineOptions = useTemplateRef('lineOptions')
+const linesContainer = useTemplateRef('linesContainer')
+const { 
+    lines: terrains,
+    registerLinesArrange, disposeLinesArrange, mouseDownLineArrange, arrangingId,
+    createLine, editingInfoLine, editInfoOfLine,
+    wantDelLine, delLineStart, delLineAbort, delLineExe,
+    showingLineGroup, lineGroupCheck, lineGroupsSelectable, autoInitShowingGroup,
+    showListSidebar, hideListSidebar,
+    flashingLineId, focusLine, envStore
+} = useSideListShared(LineType.terrain, sidebar, lineOptions, undefined, linesContainer, 'focusTerrainLine')
+
+function createClosedTerrain(){
+    envStore.createClosedTerrainLine(showingLineGroup.value)
+}
+
+const pickers = useTemplateRef('pickers')
+function clickContainer(){
+    pickers.value?.forEach(cp => cp?.close())
+}
+
+defineExpose({
+    comeOut: showListSidebar,
+    fold: hideListSidebar,
+    focusLine
+})
+onMounted(()=>{
+    //因为本组件在编辑器中始终存在，所以仅会执行一次
+    autoInitShowingGroup()
+})
+onUnmounted(()=>{
+    disposeLinesArrange()
+})
+</script>
+
+<template>
+    <SideBar ref="sidebar" :shrink-way="'v-show'" class="arrangeableList" :body-no-position="true"
+    @extend="registerLinesArrange();lineGroupCheck();enableContextMenu()"
+    @fold="disposeLinesArrange();disableContextMenu()" @click="clickContainer">
+        <div class="filter">
+            <select v-model="showingLineGroup">
+                <option :value="undefined">默认分组</option>
+                <option v-for="g in lineGroupsSelectable" :value="g.id">
+                    {{ g.name }}
+                </option>
+            </select>
+        </div>
+        <div ref="linesContainer" class="lines" :class="{arranging: arrangingId >= 0}">
+            <div v-for="l,idx in terrains" :key="l.id" :data-line-id="l.id" :class="{arranging: arrangingId==l.id, flash: flashingLineId===l.id}">
+                <ColorPickerForTerrain ref="pickers" :line="l" :z-index="idx"></ColorPickerForTerrain>
+                <LineItemBtns :showing-btns="'arrange'"
+                    :mouse-down-line-arrange="mouseDownLineArrange" :del-line-start="delLineStart"
+                    :edit-info-of-line="editInfoOfLine" :show-children-of="()=>{}" :leave-parent="()=>{}"
+                    :arranging-id="arrangingId" :l="l" :line-type-called="'地形'"
+                    @close-sidebar="sidebar?.fold()"></LineItemBtns>
+            </div>
+            <div class="newLine" @click="createLine">
+                +新地形（条状）
+            </div>
+            <div class="newLine" @click="createClosedTerrain">
+                +新地形（闭合）
+            </div>
+        </div>
+    </SideBar>
+    <LineDelPrompt :line="wantDelLine" :line-called="'地形'" :pt-called="'节点'" :with-sta-default="true"
+        @abort="delLineAbort" @exe="delLineExe"></LineDelPrompt>
+    <LineOptions ref="lineOptions" v-if="editingInfoLine" :line="editingInfoLine"
+        :line-type-called="'地形'" :line-width-range="{min:0.5, max:12, step:0.5}"></LineOptions>
+</template>

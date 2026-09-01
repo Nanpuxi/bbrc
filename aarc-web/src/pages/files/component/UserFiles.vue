@@ -2,10 +2,10 @@
 import { ref } from 'vue';
 import { UserFileDto, UserFavoriteType, AuthGrantOn, AuthGrantTypeOfUserFile } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import UserFavoriteStar from '@/pages/components/UserFavoriteStar.vue';
 import AuthGrantEdit from '@/pages/components/AuthGrantEdit.vue';
-import SideBar from '@/components/common/SideBar.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { isSvg } from '@/utils/fileUtils/ext';
 import copy from 'copy-to-clipboard';
 import linkIcon from '@/assets/ui/chain.svg';

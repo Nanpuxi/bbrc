@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { useApiStore } from "../com/apiStore";
 import { ref } from "vue";
-import { timestampMS } from "@/utils/timeUtils/timestamp";
+import { timestampMS } from "aarc-core/utils/timeUtils/timestamp";
 
 type MapName = 'userNameMap'|'userGroupNameMap'
 const staleMs = 5 * 60 * 1000

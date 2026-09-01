@@ -2,11 +2,11 @@
 import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { canRegister } from './models/utils';
-import Notice from '@/components/common/Notice.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 import Turnstile from '@/components/common/Turnstile.vue';
 
 const userName = ref<string>("");

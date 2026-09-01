@@ -2,13 +2,13 @@
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
 import { userTypeReadable } from './models/utils';
-import SideBar from '@/components/common/SideBar.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { storeToRefs } from 'pinia';
 import { useSavesRoutesJump } from '../saves/routes/routesJump';
 import { useUserListLocalConfigStore } from '@/app/localConfig/userListLocalConfig';
 import { AuthGrantOn, AuthGrantTypeOfSave, AuthGrantTypeOfUserFile, UserDto, UserType } from '@/app/com/apiGenerated';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { WithIntroShow } from '@/utils/type/WithIntroShow';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { useRouter } from 'vue-router';

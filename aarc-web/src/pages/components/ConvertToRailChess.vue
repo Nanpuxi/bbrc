@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { SaveDto } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
-import SideBar from '@/components/common/SideBar.vue';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { ref } from 'vue';
 
 const props = defineProps<{

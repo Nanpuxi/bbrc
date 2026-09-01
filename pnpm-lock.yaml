@@ -8,7 +8,69 @@ importers:
 
   .: {}
 
-  aarc-core: {}
+  aarc-core:
+    dependencies:
+      '@aurouscia/au-color-picker':
+        specifier: ^1.1.0
+        version: 1.1.0(typescript@6.0.3)
+      '@aurouscia/au-undo-redo':
+        specifier: ^1.0.1
+        version: 1.0.1
+      '@aurouscia/keyboard-shortcut':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@aurouscia/svgcanvas':
+        specifier: ^2.6.1
+        version: 2.6.1
+      bowser:
+        specifier: ^2.14.1
+        version: 2.14.1
+      color:
+        specifier: ^5.0.3
+        version: 5.0.3
+      color-convert:
+        specifier: ^3.1.3
+        version: 3.1.3
+      copy-to-clipboard:
+        specifier: ^3.3.3
+        version: 3.3.3
+      omggif:
+        specifier: ^1.0.10
+        version: 1.0.10
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@6.0.3)(vue@3.5.32(typescript@6.0.3))
+      pinia-plugin-persistedstate:
+        specifier: ^4.7.1
+        version: 4.7.1(pinia@3.0.4(typescript@6.0.3)(vue@3.5.32(typescript@6.0.3)))
+      rfdc:
+        specifier: ^1.4.1
+        version: 1.4.1
+      svgo:
+        specifier: ^4.0.1
+        version: 4.0.1
+      upng-js:
+        specifier: ^2.1.0
+        version: 2.1.0
+      vue:
+        specifier: ^3.5.32
+        version: 3.5.32(typescript@6.0.3)
+    devDependencies:
+      '@types/color':
+        specifier: ^4.2.1
+        version: 4.2.1
+      '@types/color-convert':
+        specifier: ^2.0.4
+        version: 2.0.4
+      '@types/omggif':
+        specifier: ^1.0.5
+        version: 1.0.5
+      '@types/upng-js':
+        specifier: ^2.1.5
+        version: 2.1.5
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@types/node@25.6.0)(vite@7.3.1(@types/node@25.6.0)(sass@1.99.0)(tsx@4.22.4))
 
   aarc-web:
     dependencies:
@@ -36,6 +98,9 @@ importers:
       '@microsoft/signalr':
         specifier: ^10.0.0
         version: 10.0.11
+      aarc-core:
+        specifier: workspace:*
+        version: link:../aarc-core
       axios:
         specifier: ^1.15.1
         version: 1.15.1
@@ -121,9 +186,6 @@ importers:
       vite-plugin-full-reload:
         specifier: ^1.2.0
         version: 1.2.0
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@types/node@25.6.0)(vite@7.3.1(@types/node@25.6.0)(sass@1.99.0)(tsx@4.22.4))
       vue-tsc:
         specifier: ^3.2.7
         version: 3.2.7(typescript@6.0.3)

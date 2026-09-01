@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 import { useApiStore } from '@/app/com/apiStore';
 import { UserFavoriteType, GroupWithStatus } from '@/app/com/apiGenerated';
 import gearIcon from '@/assets/ui/gear.svg';

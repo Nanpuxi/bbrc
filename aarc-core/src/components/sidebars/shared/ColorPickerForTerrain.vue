@@ -1,0 +1,45 @@
+<script setup lang="ts">
+import { Line } from 'aarc-core/models/save';
+import { useEnvStore } from 'aarc-core/models/stores/envStore';
+import { AuColorPickerPresetsNested } from '@aurouscia/au-color-picker';
+import { CSSProperties, ref, useTemplateRef, watch } from 'vue';
+import { useColorPresetNames } from '../sideList/shared/useColorPresetNames';
+
+const envStore = useEnvStore()
+const picker = useTemplateRef('picker')
+const props = defineProps<{
+    line:Line,
+    zIndex?:number,
+    entryStyles?:CSSProperties
+}>()
+
+const { getPresetNameByEnum, getPresetEnumByName, presets } = useColorPresetNames()
+
+const colorPreNameSelected = ref<string>()
+function initPreName(){
+    colorPreNameSelected.value = getPresetNameByEnum(props.line.colorPre)
+}
+initPreName() //组件创建时初始化一次（不能在beforeMount中调用，否则会触发重新渲染）
+watch(()=>props.line.id, initPreName) //线路更换时初始化一次
+
+watch(()=>colorPreNameSelected.value, (presetName:string|undefined)=>{
+    props.line.colorPre = getPresetEnumByName(presetName)
+})
+defineExpose({
+    close:()=>picker.value?.closePanel()
+})
+</script>
+
+<template>
+    <AuColorPickerPresetsNested
+        v-model="line.color"
+        v-model:model-value-selected-preset="colorPreNameSelected"
+        :presets="presets"
+        :show-package-name="true"
+        :entry-respond-delay="1"
+        ref="picker" :panel-base-z-index="zIndex"
+        :panel-click-stop-propagation="true"
+        :entry-styles="entryStyles"
+        @done="envStore.lineInfoChanged(line)"
+        ></AuColorPickerPresetsNested>
+</template>

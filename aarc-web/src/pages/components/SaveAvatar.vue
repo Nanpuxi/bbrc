@@ -9,7 +9,7 @@ import WarnRulePrompts from '@/pages/editors/components/WarnRulePrompts.vue';
 import UserFavoriteStar from './UserFavoriteStar.vue';
 import { useEditorsRoutesJump } from '../editors/routes/routesJump';
 import { useRouter } from 'vue-router';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { storeToRefs } from 'pinia';
 import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig';

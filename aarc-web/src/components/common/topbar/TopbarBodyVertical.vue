@@ -2,7 +2,7 @@
 import { useRouter } from 'vue-router';
 import { TopbarModel, TopbarModelItem } from '@/app/topbar/topbarModel';
 import { ref } from 'vue';
-import foldImg from '@/assets/ui/fold.svg';
+import foldImg from 'aarc-core/assets/ui/fold.svg';
 import { SwipeListener } from '@/utils/eventUtils/swipe'
 
 const router = useRouter();

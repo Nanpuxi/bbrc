@@ -3,12 +3,12 @@ import { ref, watch, onUnmounted, computed } from 'vue';
 import { resizeImage } from '@aurouscia/image-compress';
 import { dataSizeStr } from '@/utils/fileUtils/dataSizeStr';
 import { isSvg } from '@/utils/fileUtils/ext';
-import { debounce } from '@/utils/lang/debounce';
+import { debounce } from 'aarc-core/utils/lang/debounce';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { UserFileType } from '@/app/com/apiGenerated';
-import SideBar from '../SideBar.vue';
-import Notice from '../Notice.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 
 const props = defineProps<{
     onSuccess?: () => void;

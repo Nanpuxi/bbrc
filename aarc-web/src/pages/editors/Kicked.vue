@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import Notice from '@/components/common/Notice.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 </script>
 
 <template>

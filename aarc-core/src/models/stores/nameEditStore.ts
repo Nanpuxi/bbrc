@@ -1,0 +1,221 @@
+import { defineStore, storeToRefs } from "pinia";
+import { ref } from "vue";
+import { useSaveStore } from "./saveStore";
+import { useEnvStore } from "./envStore";
+import { useSnapStore } from "./snapStore";
+import { useStaClusterStore } from "./saveDerived/staClusterStore";
+import { Coord, SgnCoord } from "../coord";
+import { sgnCoord, isSameCoord } from "aarc-core/utils/sgn";
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
+import {useFormalizedLineStore} from "./saveDerived/formalizedLineStore.ts";
+import { ControlPoint } from "../save.ts";
+import { coordRound } from "aarc-core/utils/coordUtils/coordRound.ts";
+import { useNamePosMemoryStore } from "aarc-core/models/stores/utils/namePosMemoryStore";
+
+export const useNameEditStore = defineStore('nameEdit', ()=>{
+    const saveStore = useSaveStore()
+    const envStore = useEnvStore()
+    const snapStore = useSnapStore()
+    const formalizedLineStore = useFormalizedLineStore()
+    const staClusterStore = useStaClusterStore()
+    const namePosMemoryStore = useNamePosMemoryStore()
+    const { disposedStaNameOf } = storeToRefs(saveStore)
+    disposedStaNameOf.value = disposedStaNameHandler
+    const targetPtId = ref<number>()
+    const nameMain = ref<string>()
+    const nameSub = ref<string>()
+    const edited = ref(false)
+    const editing = ref(false)
+    const nameInputFocusHandler = ref<()=>void>(()=>{})
+    const nameEditorDiv = ref<HTMLDivElement>()
+    const openOptionsPanelCallback = ref<(pt:ControlPoint)=>void>(()=>{})
+    const { showPop } = useUniqueComponentsStore()
+
+    function init(nameEditorDivValue:HTMLDivElement, openOptionsPanelCallbackValue:(pt:ControlPoint)=>void)
+    {
+        nameEditorDiv.value = nameEditorDivValue
+        openOptionsPanelCallback.value = openOptionsPanelCallbackValue
+    }
+
+    function startEditing(ptId:number, openOptionsPanel?:boolean){
+        endEditing()
+        if(saveStore.isPtNoSta(ptId))
+            return
+        const pt = saveStore.getPtById(ptId)
+        if(pt){
+            targetPtId.value = ptId
+            nameMain.value = pt.name
+            nameSub.value = pt.nameS
+            editing.value = true
+        }
+        if(openOptionsPanel){
+            controlPointOptionsPanelOpen()
+        }
+    }
+    function controlPointOptionsPanelOpen(forPtId?:number){
+        // if(!editing.value)
+        //     return
+        const pt = saveStore.getPtById(forPtId || targetPtId.value || -1)
+        if(!pt)
+            return
+        openOptionsPanelCallback.value(pt)
+    }
+    
+    function applyName(){
+        const pt = saveStore.getPtById(targetPtId.value || -1)
+        if(pt){
+            if(!edited.value){
+                edited.value = nameMain.value !== pt.name || nameSub.value !== pt.nameS
+            }
+            pt.name = nameMain.value
+            pt.nameS = nameSub.value
+            if(saveStore.isNamedPt(pt) && !pt.nameP){
+                if(!namePosMemoryStore.apply(pt))
+                    pt.nameP = optimizedNamePos(pt.id)
+            }
+        }
+    }
+    function disposedStaNameHandler(ptId:number){
+        if(targetPtId.value == ptId){
+            targetPtId.value = -1
+            nameMain.value = undefined
+            nameSub.value = undefined
+            editing.value = false;
+            edited.value = false;
+        }
+    }
+
+    function endEditing(){
+        if(!editing.value){
+            return
+        }
+        applyName()
+        editing.value = false;
+        //edited不动，因为可能结束编辑后一段时间还要读取是否edited，需要外部读取后重置状态
+    }
+    function toggleEditing(ptId:number){
+        if(editing.value){
+            endEditing()
+        }else{
+            startEditing(ptId)
+        }
+    }
+    function getEditorDivEffectiveHeight(){
+        if(!editing.value)
+            return 0
+        return nameEditorDiv.value?.clientHeight || 0
+    }
+
+    //#region 自动站名位置（负责人 binshu2233）
+    function optimizeAllNamePos() {
+        const confirmApplyAllNamePos = confirm("你真的要重置所有单点车站的站名位置吗？此操作无法考虑全部情况，且不可撤销！")
+        if (!confirmApplyAllNamePos){
+            return
+        }
+        optimizeSomeNamePos(saveStore.save?.points||[])
+    }
+    function optimizeSomeNamePos(points:ControlPoint[]){
+        //暂时忽略车站团
+        let allSinglePos = points.filter(p => {
+            staClusterStore.isPtSingle(p.id)
+        }) || []
+        allSinglePos.forEach(x => {
+            x.nameP = optimizedNamePos(x.id)
+        })
+        showPop(`重置了${allSinglePos.length}个站名位置`, 'success')
+        envStore.rerender()
+    }
+    const recommendedNamePosDir0:SgnCoord[] = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+    const recommendedNamePosDir1:SgnCoord[] = [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]]
+    function getAdjacentPtsPos(ptId: number) {
+        const pt = saveStore.getPtById(ptId)
+        if (!pt) {
+            return []
+        }
+        const cluster = staClusterStore.getStaClusterById(ptId)
+        const adjacentPtsPos =
+            saveStore.getLinesByPt(ptId).map(x => {
+                return formalizedLineStore.findAdjacentFormalPts(x.pts.findIndex(p => p == ptId), x.id)
+            }).flat()
+                .concat(staClusterStore.getRectOfCluster(cluster))
+                .map(x => {
+                    return [Math.sign(x[0] - pt?.pos[0]), Math.sign(x[1] - pt?.pos[1])]
+                })
+        return adjacentPtsPos
+    }
+    function optimizedNamePos(ptId: number): Coord{
+        const res = optimizedNamePosUnrounded(ptId)
+        coordRound(res)
+        return res
+    }
+    //用 pt  dir决定用哪个组
+    function optimizedNamePosUnrounded(ptId: number): Coord {
+        const pt = saveStore.getPtById(ptId)
+        //与拖动站名时的吸附（snapStore.snapName）使用完全一致的目标位置
+        const snapPoss = snapStore.getStaNameSnapPoss(ptId)
+        const snapPosOfDir = (dir:SgnCoord) =>
+            snapPoss.find(p => isSameCoord(sgnCoord(p), dir))
+        //自动选择不遮挡线路的位置
+        if (pt) {
+            //得到相邻点和这个站的相对位置
+            const adjacentPtsPos = getAdjacentPtsPos(ptId)
+            const isDir1=!!adjacentPtsPos.find(np=>np[0]*np[1]!=0)
+            for (let i = 0; i < 8; i++) {
+                //有斜线就得用斜坐标点位
+                const thisPos = isDir1 ? recommendedNamePosDir1[i] : recommendedNamePosDir0[i];
+                if (!adjacentPtsPos.find(pos => pos[0] == thisPos[0] && pos[1] == thisPos[1])) {
+                    //没有重复，就用这个位置（方向不变，距离取吸附目标位）
+                    const snapPos = snapPosOfDir(thisPos)
+                    if (snapPos)
+                        return [...snapPos] as Coord
+                }
+            }
+            return [...(snapPosOfDir([0, 1]) || [0, 0])] as Coord
+        }
+        else {
+            return [...(snapPosOfDir([0, 1]) || [0, 0])] as Coord
+        }
+    }
+    //#endregion
+    
+    //#region 转移站名位置（负责人 binshu2233）
+    function transferNameInCluster(deletedPoint:ControlPoint){
+        //转移站名
+        if (!deletedPoint.name){
+            return
+        }
+        //有站名存在于被删掉的点
+        let cluster = staClusterStore.getStaClusterById(deletedPoint.id)
+        if (cluster.length<=1){
+            return
+        }
+        //是真正的车站团
+        let newCluster = cluster.filter(x=>x.id!=deletedPoint.id)
+        if (newCluster.every(x=>!x.name))
+        {
+            //被删除的站是唯一站名
+            newCluster[0].name = deletedPoint.name
+            newCluster[0].nameS = deletedPoint.nameS
+            return newCluster[0]
+            //.nameP = optimizedNamePos(newCluster[0].id)
+        }
+        return
+    }
+    //#endregion
+
+    function clearItems(){
+        targetPtId.value = undefined
+        nameMain.value = undefined
+        nameSub.value = undefined
+    }
+
+    return {
+        init,
+        targetPtId, nameMain, nameSub, editing, edited,
+        startEditing, endEditing, toggleEditing, applyName,
+        nameInputFocusHandler, getEditorDivEffectiveHeight,
+        controlPointOptionsPanelOpen,
+        optimizedNamePos, optimizeAllNamePos, clearItems ,
+        transferNameInCluster
+    }
+})

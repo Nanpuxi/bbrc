@@ -1,0 +1,186 @@
+import { convertLineSeppedToCommaSepped } from "aarc-core/utils/lang/fontStr";
+import { TextMetricsSelected } from "aarc-core/utils/type/TextMetricsSelected";
+import type { Context as SvgCanvasContext } from "@aurouscia/svgcanvas";
+
+export type Cvs2dContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | SvgCanvasContext
+
+export function isSvgCanvasContext(ctx: Cvs2dContext): ctx is SvgCanvasContext {
+    return typeof (ctx as SvgCanvasContext).getSerializedSvg === 'function'
+}
+
+function convertImageSourceForSvgCanvas(image: CanvasImageSource): HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | ImageBitmap {
+    if (image instanceof OffscreenCanvas) {
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const ctx2d = canvas.getContext('2d')!
+        ctx2d.drawImage(image, 0, 0)
+        return canvas
+    }
+    return image as HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | ImageBitmap
+}
+
+export class CvsBlock{
+    scale:number
+    x:number
+    y:number
+    ctx2d:Cvs2dContext
+    constructor(scale:number, x:number, y:number, ctx2d:Cvs2dContext){
+        this.scale = scale
+        this.x = x
+        this.y = y
+        this.ctx2d = ctx2d
+    }
+    mapX(x:number){ return x * this.scale - this.x }
+    mapY(y:number){ return y * this.scale - this.y }
+}
+
+/** 
+ * 画布上下文（模拟canvasAPI）  
+ * 看起来很奇怪是因为block曾经有多个
+ */
+export class CvsContext{
+    private b: CvsBlock
+    constructor(block:CvsBlock){
+        this.b = block
+    }
+
+    private callMethod(method:'beginPath'|'closePath'|'stroke'|'fill'){
+        this.b.ctx2d[method]()
+    }
+    private callMethodXY(method:'moveTo'|'lineTo', x:number, y:number){
+        let b = this.b
+        b.ctx2d[method](b.mapX(x), b.mapY(y))
+    }
+    private callMethodXYWH(method:'strokeRect'|'fillRect', x:number, y:number, width:number, height:number){
+        let b = this.b
+        b.ctx2d[method](b.mapX(x), b.mapY(y), width*b.scale, height*b.scale)
+    }
+    beginPath(){this.callMethod('beginPath')}
+    closePath(){this.callMethod('closePath')}
+    moveTo(x:number, y:number){this.callMethodXY('moveTo', x, y)}
+    lineTo(x:number, y:number){this.callMethodXY('lineTo', x, y)}
+    stroke(){this.callMethod('stroke')}
+    fill(){this.callMethod('fill')}
+    strokeRect(x:number, y:number, width:number, height:number)
+        {this.callMethodXYWH('strokeRect', x, y, width, height)}
+    fillRect(x:number, y:number, width:number, height:number)
+        {this.callMethodXYWH('fillRect', x, y, width, height)}
+    arc(x:number, y:number, radius:number, startAngle:number, endAngle:number, counterClockwise?:boolean){
+        let b = this.b
+        b.ctx2d.arc(b.mapX(x), b.mapY(y), radius*b.scale, startAngle, endAngle, counterClockwise)
+    }
+    strokeText(text:string, x:number, y:number){
+        let b = this.b
+        b.ctx2d.strokeText(text, b.mapX(x), b.mapY(y))
+    }
+    fillText(text:string, x:number, y:number){
+        let b = this.b
+        b.ctx2d.fillText(text, b.mapX(x), b.mapY(y))
+    }
+    measureText(text:string):TextMetricsSelected{
+        const m = this.b.ctx2d.measureText(text)
+        const scale = this.b.scale || 1
+        if(m){
+            return {
+                width: m.width / scale,
+                actualBoundingBoxAscent: m.actualBoundingBoxAscent / scale,
+                actualBoundingBoxDescent: m.actualBoundingBoxDescent / scale
+            }
+        }
+        else{
+            return {
+                width: 0,
+                actualBoundingBoxAscent:0,
+                actualBoundingBoxDescent:0
+            }
+        }
+    }
+    setLineDash(segments:Array<number>){
+        let b = this.b
+        b.ctx2d.setLineDash(segments.map(x=>x*b.scale))
+    }
+    drawImage(image:CanvasImageSource, dx:number, dy:number, dw:number, dh:number){
+        let b = this.b
+        dx = b.mapX(dx); dy = b.mapY(dy)
+        dw *= b.scale; dh *= b.scale
+        if(isSvgCanvasContext(b.ctx2d)){
+            b.ctx2d.drawImage(convertImageSourceForSvgCanvas(image), dx, dy, dw, dh)
+        }else{
+            b.ctx2d.drawImage(image, dx, dy, dw, dh)
+        }
+    }
+    createPattern(image:CanvasImageSource, repetition: string|null): CanvasPattern | null{
+        const ctx2d = this.b.ctx2d
+        if(isSvgCanvasContext(ctx2d)){
+            return ctx2d.createPattern(
+                convertImageSourceForSvgCanvas(image),
+                (repetition ?? 'repeat') as 'repeat' | 'repeat-x' | 'repeat-y' | 'no-repeat'
+            ) as CanvasPattern | null
+        }
+        return ctx2d.createPattern(image, repetition)
+    }
+    translate(x:number, y:number){
+        this.b.ctx2d.translate(x, y)
+    }
+    save(){
+        this.b.ctx2d.save()
+    }
+    restore(){
+        this.b.ctx2d.restore()
+    }
+    /** 以逻辑坐标 (x, y) 为中心旋转画布（配合 save/restore 使用） */
+    rotateAround(x:number, y:number, angle:number){
+        const b = this.b
+        const dx = b.mapX(x), dy = b.mapY(y)
+        b.ctx2d.translate(dx, dy)
+        b.ctx2d.rotate(angle)
+        b.ctx2d.translate(-dx, -dy)
+    }
+
+    getUnderlyingCanvas(){
+        return this.b.ctx2d.canvas
+    }
+    getCurrentScale(){
+        return this.b.scale
+    }
+    getCurrentOffset(): [number, number]{
+        return [this.b.x, this.b.y]
+    }
+    clear(){
+        const cvs = this.b.ctx2d.canvas
+        this.b.ctx2d.clearRect(0, 0, cvs.width, cvs.height)
+    }
+    fillTotal(){
+        const cvs = this.b.ctx2d.canvas
+        this.b.ctx2d.fillRect(0, 0, cvs.width, cvs.height)
+    }
+
+    set lineJoin(value:CanvasLineJoin){
+        this.b.ctx2d.lineJoin = value}
+    set lineCap(value:CanvasLineCap){
+        this.b.ctx2d.lineCap = value}
+    set lineWidth(value:number){
+        this.b.ctx2d.lineWidth = value*this.b.scale}
+    set strokeStyle(value:string | CanvasPattern){
+        this.b.ctx2d.strokeStyle = value as any}
+    set fillStyle(value:string | CanvasPattern){
+        this.b.ctx2d.fillStyle = value as any}
+    set globalAlpha(value:number){
+        this.b.ctx2d.globalAlpha = value}
+    get globalAlpha(){
+        return this.b.ctx2d.globalAlpha ?? 1
+    }
+    set textBaseline(value:CanvasTextBaseline){
+        this.b.ctx2d.textBaseline = value}
+    set textAlign(value:CanvasTextAlign){
+        this.b.ctx2d.textAlign = value}
+    set font(value:{fontSize:number, font?:string, weight?:string, style?:string}){
+        const size = value.fontSize
+        const weight = value.weight ?? 'normal'
+        const style = value.style ?? 'normal'
+        let stack = convertLineSeppedToCommaSepped(value.font)
+        const fontStack = stack ? `${stack}, ` : '';
+        this.b.ctx2d.font = `${style} ${weight} ${size * this.b.scale}px ${fontStack}sans-serif`;
+    }
+}

@@ -108,7 +108,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 0：准备（已完成）
 
-1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc-web/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。
+1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc-web/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。~~拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。~~ ✅ 扩展已完成（2026-09）：入口改为 `aarc-core/src` 的 Cvs/Menu + 全部测试文件，解析 `aarc-core/` 自引用；任何 core 文件 import 逃逸出 `aarc-core/src`（含 `@/` 别名、`aarc-web` 引用、越界相对路径）均以非零码退出。
 2. ✅ 已清理残留：删除 `vite.config.ts` 中无人使用的 `~` 别名。
 
 ### 阶段 1：workspace 化（不改代码归属，先改布局）（已完成）
@@ -123,23 +123,23 @@ AARC/                          # 仓库根（现有后端不动）
    - 注意：`vite.config.ts` 的 `outDir: "../AARC.WebApi/wwwroot"` **无需改动**——`aarc` → `aarc-web` 为同级改名，目录深度不变（本文档早先版本对此判断有误）
 5. ✅ 已验证：根目录 `pnpm install`（lockfile importers 迁移为 `aarc-web`）、`pnpm --filter aarc-web type-check`、`pnpm --filter aarc-web build`（产物正确输出到 `AARC.WebApi/wwwroot`）、`dotnet build`、完整 `docker build`。
 
-### 阶段 2：core 包骨架与文件迁移
+### 阶段 2：core 包骨架与文件迁移（已完成，2026-09）
 
-6. ✅ 已建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`，按第 8 步建议预置 `"exports": {"./*": "./src/*"}` 源码导出）、tsconfig（与 aarc-web 对齐，`@/*` 指向自身 src）、空的 `src/`；根 `pnpm-workspace.yaml` 的 `packages` 已加入 `'aarc-core'`，`pnpm install` 通过（lockfile 新增 `aarc-core` importer）。dependencies 留待第 12 步按实际 import 分配。
-7. 按 `temp.txt` 用 `git mv` 整体迁移 325 个闭包文件（保持相对目录结构，则**文件间的相对 import 全部不用改**）；同时迁移 §3.3 裁定的共享物（common 组件/guideInfo/browserInfo/tests/assets/ui 等；apiStore/apiGenerated 已退出闭包、留 web）——迁移后闭包会扩大，重新运行 `analyze-deps.mjs` 直至 core 闭包再次自洽。
-8. `@/` 别名处理：core 的 tsconfig 与 web 的 vite alias 分别把 `@` 指向各自 src；web 侧对 core 内容的 import 统一改为包名 `aarc-core`（在 core 的 package.json 用 `exports` 暴露 `./src/**` 或建立 barrel 文件）。**建议短期直接 exports 源码**（`"exports": {"./*": "./src/*"}`），由宿主 vite 编译，避免 core 独立构建产物带来的双重 vue 实例、env 注入失效等问题。
-9. web 侧 84 处反向 import 改为从 `aarc-core` 导入（编辑器 WebStorm/VSCode 的 move-symbol 或全局替换可批量处理）。
+6. ✅ 已建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`，按第 8 步建议预置 `"exports": {"./*": "./src/*"}` 源码导出）、tsconfig（与 aarc-web 对齐）、空的 `src/`；根 `pnpm-workspace.yaml` 的 `packages` 已加入 `'aarc-core'`，`pnpm install` 通过（lockfile 新增 `aarc-core` importer）。~~dependencies 留待第 12 步按实际 import 分配~~（已随迁移一并分配，见第 12 步）。
+7. ✅ 已用 `git mv` 整体迁移闭包文件（保持相对目录结构，文件间相对 import 全部未改）。最终迁移集 **371 个文件**：基础闭包 324 + 测试迁入带入的增量 47（39 个测试文件 + 8 个仅被测试/宿主引用的模型模块：`saveNormalize`、`defaultDataSources`、`upgrade/config|patterns|textTagIcons|textTags`、`valid/dataSources|idIncre`）。迁移前已对增量模块做耦合审查（无 vue-router/@/pages/api 层引用）。`apiStore`/`apiGenerated`、`data/dev/devSave.ts`、`gitInfoGen.ts`/`colorSetsGen.ts` 等按裁定留 web。
+8. ✅ `@/` 别名处理：实际做法与原设想不同——**core 内部 import 全部改写为 `aarc-core/` 自引用**（208 个文件），不再使用 `@/`。原因：vite alias 无法按 importer 位置区分同名 `@`，TS `paths` 也是 program 级生效，双包共存时 `@` 只能指向一处；包名自引用经 workspace symlink + `exports` 通配解析，在 vite/vitest/vue-tsc 下均验证可用。保险起见 web 的 vite.config 与 core 的 vitest.config 仍各加了 `aarc-core` 显式 alias，两边 tsconfig 也加了 `aarc-core/*` paths。例外：core 组件 `<style>` 中的 `@use '@/styles/...'`（仅 `CvsBlocks.vue:50-51`）仍经 web vite alias 指向 web 侧样式，留待第 10 步处理。
+9. ✅ web 侧反向 import 已全部改为包名导入：91 处 `@/` 别名形式 + 21 处相对路径形式（后者为首轮扫描漏网，由 type-check 暴露后补扫改写），复核扫描 0 残留。web 侧剩余 `@/` 仅指向 web 自有 src。
 
 ### 阶段 3：构建与样式拆分
 
 10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出。
-11. 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web；`vite.config.ts` 的 `fullReload` 监听列表（`vite.config.ts:17-19`，监听 `src/app|models|utils`）要改为包含 core 路径，否则 core 改动不触发整页刷新。
-12. 依赖拆分：两个 package.json 按实际 import 分配 dependencies（vue/pinia 为 core 的 dependencies，web 经 core 传递或自行声明；`@microsoft/signalr`、`axios` 随 api 层留 web）。`vue-router` 注意：闭包内仍有 3 处引用（§3.1"路由参数/守卫"行），改造完成前需暂作 core 的 dependency，或先完成该改造再令其留 web。注意 pinia、vue 必须保证单实例——core 用源码导出 + web 的 vite 统一打包可天然保证。
+11. 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web（未改动）；~~`vite.config.ts` 的 `fullReload` 监听列表要改为包含 core 路径~~ ✅ 已完成（2026-09）：监听列表已加入 `../aarc-core/src/**`。Dockerfile 前端阶段已补 `aarc-core` 的 package.json 与源码 COPY，✅ 完整 `docker build` 已重跑通过（2026-09，产物 chunk 哈希与本地构建一致）。
+12. 依赖拆分：✅ core 侧已完成（2026-09）——按迁移集实际 import 分配：vue/pinia/pinia-plugin-persistedstate、@aurouscia/*（au-color-picker/au-undo-redo/keyboard-shortcut/svgcanvas）、bowser/color/color-convert/copy-to-clipboard/omggif/rfdc/svgo/upng-js 及对应 @types；vitest 随测试迁至 core（含 vitest.config.ts 与 test 脚本，web 的 `test`/`test:run` 改为 `pnpm --filter aarc-core` 透传）。`vue-router`/`@microsoft/signalr`/`axios` 等留 web（闭包内 vue-router 引用已在 §3.1 改造中清零，原注意事项失效）。web 侧 dependencies 暂未瘦身（仍声明全部包，含 core 也用的那些），可后续清理。pinia、vue 单实例由源码导出 + web vite 统一打包保证。
 13. 环境变量：env 目录随 web（宿主），core 内 `import.meta.env` 用法阶段一保持不变（宿主 vite 构建时注入）。
 
 ### 阶段 4：验证与收尾
 
-14. `pnpm type-check`、`pnpm test:run`（vitest 配置随测试迁至 core，注意 `proxyUrl.ts:12` 等有 `typeof window === 'undefined'` 的测试守卫）、`pnpm build`，产物仍输出到 `AARC.WebApi/wwwroot`。
+14. `pnpm type-check`、`pnpm test:run`（vitest 配置随测试迁至 core，注意 `proxyUrl.ts:12` 等有 `typeof window === 'undefined'` 的测试守卫）、`pnpm build`，产物仍输出到 `AARC.WebApi/wwwroot`。（2026-09 迁移后已验证：`pnpm install`、analyze-deps（371 文件、无逃逸）、type-check、test:run（701 通过）、build 全部通过。）
 15. 手动回归清单：编辑器打开/保存/离开拦截、缩略图上传、svg 云上传、图标收藏夹（双向回调）、导出图片、Pop/Wait 弹窗、路由返回来源页、demo 模式。
 16. 更新两级 `AGENTS.md`（启动命令、type-check 命令的作用范围）与根 README。
 

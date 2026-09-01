@@ -2,15 +2,15 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
-import { guideInfo } from '@/app/guideInfo';
+import { guideInfo } from 'aarc-core/app/guideInfo';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { userTypeReadable, canRegister } from './models/utils';
 import { RouterLink } from 'vue-router';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { loginExpireHrsDefault, useAuthLocalConfigStore } from '@/app/localConfig/authLocalConfig';
-import { useBrowserInfoStore } from '@/app/globalStores/browserInfo';
+import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
 
 interface F3SsoAudienceIssuerOptions {
     id: string;

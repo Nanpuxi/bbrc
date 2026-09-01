@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useApiStore } from '@/app/com/apiStore'
 import { useSignalrStore } from '@/app/com/signalrStore'
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents'
-import { msToMinSec } from '@/utils/timeUtils/timeStr'
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
+import { msToMinSec } from 'aarc-core/utils/timeUtils/timeStr'
 import { computed, onUnmounted, ref, useTemplateRef } from 'vue'
-import SideBar from '@/components/common/SideBar.vue'
+import SideBar from 'aarc-core/components/common/SideBar.vue'
 import {
     KICK_IDLE_THRESHOLD_MS,
     KICK_INFO_REFRESH_MS,

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia"
 import { ref } from "vue"
-import { localConfigKeyPrefix } from "./common/keyPrefix"
+import { localConfigKeyPrefix } from "aarc-core/app/localConfig/common/keyPrefix"
 
 export const useCommonLocalConfigStore = defineStore('commonLocalConfig',()=>{
     const showFaqOnTopbar = ref(true)

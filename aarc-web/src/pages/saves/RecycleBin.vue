@@ -2,10 +2,10 @@
 import { onMounted, ref, useTemplateRef } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
 import { SaveDto } from '@/app/com/apiGenerated';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import defaultMini from '@/assets/defaultMini.svg';
-import SideBar from '@/components/common/SideBar.vue';
-import Notice from '@/components/common/Notice.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 
 const api = useApiStore()
 const { showPop } = useUniqueComponentsStore()

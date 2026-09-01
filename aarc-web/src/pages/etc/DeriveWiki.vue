@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { guideInfo } from '@/app/guideInfo';
-import { convertToProxyUrlIfNeeded } from '@/utils/urlUtils/proxyUrl';
+import { guideInfo } from 'aarc-core/app/guideInfo';
+import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl';
 
 const f3Url = 'http://wiki.jowei19.com'
 const f3LogoUrl = convertToProxyUrlIfNeeded('http://wiki.jowei19.com/fcloud.svg', 'icon')

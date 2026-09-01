@@ -1,0 +1,712 @@
+import { defineStore } from "pinia";
+import { computed, ref, watch } from "vue";
+import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta, Line, LineType, Save, saveLineCount, saveStaCount } from "../save";
+import { ensureValidCvsSize } from "../save/valid/cvsSize";
+import { Coord } from "../coord";
+import { isSameCoord } from "aarc-core/utils/sgn";
+import { useConfigStore } from "./configStore";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
+import { indicesInArray, pullAllByPred, removeAllByIndices, removeAllByPred } from "aarc-core/utils/lang/indicesInArray";
+import { coordAdd } from "aarc-core/utils/coordUtils/coordMath";
+import { getMayRingLinePtIds } from "aarc-core/utils/lineUtils/isRing";
+import { readNumKeyedRecord } from "aarc-core/utils/lang/readNumKeyedRecord";
+import { keepOrderSort } from "aarc-core/utils/lang/keepOrderSort";
+
+export const useSaveStore = defineStore('save', () => {
+    //不应直接在此删除/添加车站/线路，应通过envStore进行，避免数据不一致
+    const save = ref<Save>()
+    const configStore = useConfigStore()
+    const editorLocalConfig = useEditorLocalConfigStore()
+    const ptDict = computed<Record<number, ControlPoint|undefined>>(()=>{
+        const res:Record<number, ControlPoint|undefined> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            res[pt.id] = pt
+        }
+        return res
+    })
+    const ptBelongLineDict = computed<Record<number, Line[]|undefined>>(()=>{
+        const res:Record<number, Line[]|undefined> = {}
+        if(!save.value?.lines)
+            return res
+        for(const line of save.value.lines){
+            const linePts = getMayRingLinePtIds(line)
+            for(const ptId of linePts){
+                const belong = res[ptId]
+                if(belong)
+                    belong.push(line)
+                else
+                    res[ptId] = [line]
+            }
+        }
+        return res
+    })
+    /**
+     * 每个点对应的所有连接线路的 staSize（车站渲染尺寸）列表
+     * 数据来源优先级（单条线路）：
+     *   1. 地形线：固定取 min(width, 1)
+     *   2. 线路单独设置的 ptSize（若 > 0）
+     *   3. config.lineWidthMapped[width].staSize（线宽全局映射）
+     *   4. 线路自身的 width
+     *   5. 默认值 1
+     */
+    const ptSizes = computed<Record<number, number[]|undefined>>(()=>{
+        const res:Record<number, number[]> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            const belongLines = ptBelongLineDict.value[pt.id] || []
+            const sizes = belongLines
+                .filter(x=>x.type===LineType.common || x.type===LineType.terrain)
+                .map(x=>{
+                    if(x.type===LineType.terrain){
+                        return Math.min(x.width || 1, 1)
+                    }
+                    if(x.ptSize && x.ptSize>0){
+                        return x.ptSize
+                    }
+                    const configMapped = readNumKeyedRecord(
+                        configStore.config.lineWidthMapped, x.width||1)?.staSize
+                    return configMapped || x.width || 1
+                })
+            res[pt.id] = sizes
+        }
+        return res
+    })
+    const ptSize = computed<Record<number, number|undefined>>(()=>{
+        const res:Record<number, number> = {}
+        Object.entries(ptSizes.value).forEach(kv=>{
+            const [id, sizes] = kv
+            if(sizes && sizes.length>0)
+                res[Number(id)] = Math.max(...sizes)
+            else
+                res[Number(id)] = 1
+        })
+        return res
+    })
+    /**
+     * 每个点对应的所有连接普通线路的 staNameSize（站名渲染尺寸）列表
+     * 最终取最大值作为该点的 ptNameSize
+     * 数据来源优先级（单条线路）：
+     *   1. 线路单独设置的 ptNameSize（若 > 0）
+     *   2. config.lineWidthMapped[width].staNameSize（线宽全局映射）
+     *   3. 线路自身的 width
+     *   4. 默认值 1
+     */
+    const ptNameSize = computed<Record<number, number|undefined>>(()=>{
+        const res:Record<number, number> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            let maxSize = 1
+            const belongLines = ptBelongLineDict.value[pt.id] || []
+            const sizes = belongLines
+                .filter(x=>x.type===LineType.common)
+                .map(x=>{
+                    if(x.ptNameSize && x.ptNameSize>0){
+                        return x.ptNameSize
+                    }
+                    const configMapped = readNumKeyedRecord(
+                        configStore.config.lineWidthMapped, x.width||1)?.staNameSize
+                    return configMapped || x.width || 1
+                })
+            if(sizes.length>0)
+                maxSize = Math.max(...sizes)
+            res[pt.id] = maxSize
+        }
+        return res
+    })
+    /**
+     * 每个点对应的所有连接普通线路的 staNameSnapSize（站名吸附距离计算尺寸）列表
+     * 与 ptSizes 分离，允许站名吸附距离和车站渲染尺寸独立配置
+     * 注意：站名吸附距离取决于车站大小（ptSize），而非站名字体大小（ptNameSize）
+     * 数据来源优先级（单条线路）：
+     *   1. 线路单独设置的 ptNameSnapSize（若 > 0）
+     *   2. config.lineWidthMapped[width].staNameSnapSize（线宽全局映射的站名吸附专用值）
+     *   3. 线路单独设置的 ptSize（若 > 0）
+     *   4. config.lineWidthMapped[width].staSize（线宽全局映射的车站尺寸）
+     *   5. 线路自身的 width
+     *   6. 默认值 1
+     */
+    const ptNameSnapSizes = computed<Record<number, number[]|undefined>>(()=>{
+        const res:Record<number, number[]> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            const belongLines = ptBelongLineDict.value[pt.id] || []
+            const sizes = belongLines
+                .filter(x=>x.type===LineType.common)
+                .map(x=>{
+                    if(x.ptNameSnapSize && x.ptNameSnapSize>0){
+                        return x.ptNameSnapSize
+                    }
+                    const configMapped = readNumKeyedRecord(
+                        configStore.config.lineWidthMapped, x.width||1)
+                    if(configMapped?.staNameSnapSize !== undefined){
+                        return configMapped.staNameSnapSize
+                    }
+                    if(x.ptSize && x.ptSize>0){
+                        return x.ptSize
+                    }
+                    return configMapped?.staSize || x.width || 1
+                })
+            res[pt.id] = sizes
+        }
+        return res
+    })
+    /**
+     * 每个点对应的所有连接线路的 staSnapSize（吸附距离计算尺寸）列表
+     * 与 ptSizes 分离，允许吸附距离和车站渲染尺寸独立配置
+     * 数据来源优先级（单条线路）：
+     *   1. 地形线：固定取 min(width, 1)
+     *   2. 线路单独设置的 ptSnapSize（若不为 undefined）
+     *   3. config.lineWidthMapped[width].staSnapSize（线宽全局映射的吸附专用值）
+     *   4. 线路单独设置的 ptSize（若 > 0）
+     *   5. config.lineWidthMapped[width].staSize（线宽全局映射的车站尺寸）
+     *   6. 线路自身的 width
+     *   7. 默认值 1
+     */
+    const ptSnapSizes = computed<Record<number, number[]|undefined>>(()=>{
+        const res:Record<number, number[]> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            const belongLines = ptBelongLineDict.value[pt.id] || []
+            const sizes = belongLines
+                .filter(x=>x.type===LineType.common || x.type===LineType.terrain)
+                .map(x=>{
+                    if(x.type===LineType.terrain){
+                        return Math.min(x.width || 1, 1)
+                    }
+                    if(x.ptSnapSize && x.ptSnapSize>0){
+                        return x.ptSnapSize
+                    }
+                    const configMapped = readNumKeyedRecord(
+                        configStore.config.lineWidthMapped, x.width||1)
+                    if(configMapped?.staSnapSize !== undefined){
+                        return configMapped.staSnapSize
+                    }
+                    if(x.ptSize && x.ptSize>0){
+                        return x.ptSize
+                    }
+                    return configMapped?.staSize || x.width || 1
+                })
+            res[pt.id] = sizes
+        }
+        return res
+    })
+    const ptRelatedLinks = computed<Record<number, ControlPointLink[]|undefined>>(()=>{
+        const res:Record<number, ControlPointLink[]|undefined> = {}
+        if(!save.value?.pointLinks)
+            return res
+        for(const link of save.value.pointLinks){
+            for(const ptId of link.pts){
+                if(!res[ptId])
+                    res[ptId] = []
+                res[ptId].push(link)
+            } 
+        }
+        return res
+    })
+    const lineDict = computed<Record<number, Line|undefined>>(()=>{
+        const res:Record<number, Line|undefined> = {}
+        if(!save.value?.lines)
+            return res
+        for(const line of save.value.lines){
+            res[line.id] = line
+        }
+        return res
+    })
+    const linesSortedByZIndex = computed(()=>{
+        if(!save.value)
+            return [];
+        const copy = [...save.value.lines]
+        keepOrderSort(copy, (x,y)=>(x.zIndex??0)-(y.zIndex??0))
+        return copy
+    })
+    const lineChildren = computed<Record<number, Line[]|undefined>>(()=>{
+        const res:Record<number, Line[]> = {}
+        if(!save.value?.lines)
+            return res
+        for(const line of save.value.lines){
+            const p = line.parent
+            if(p){
+                if(!res[p])
+                    res[p] = []
+                res[p].push(line)
+            }
+        }
+        return res
+    })
+
+    function getNewId() {
+        if(!save.value)
+            throw Error("找不到存档")
+        return save.value.idIncre++
+    }
+    function getPtById(id:number){
+        return ptDict.value[id]
+    }
+    function getPtsByIds(ids:number[]){
+        const res:ControlPoint[] = [];
+        ids.forEach(id=>{
+            const pt = ptDict.value[id]
+            if(pt)
+                res.push(pt)
+        })
+        return res;
+    }
+    function getLineById(lineId:number){
+        return lineDict.value[lineId]
+    }
+    function getLinesByIds(lineIds:Set<number>){
+        return save.value?.lines.filter(l=>lineIds.has(l.id)) || []
+    }
+    function adjacentSegs(ptId:number):LineSeg[]{
+        const lines = save.value?.lines
+        if(!lines)
+            return [];
+        const res:{line:Line, pts:ControlPoint[]}[] = []
+        lines.forEach(line=>{
+            const idx = line.pts.indexOf(ptId)
+            if(idx===-1)
+                return;
+            const resHere:number[] = [];
+            for(let i=-1; i<=1; i++){
+                const idxi = idx + i
+                if(idxi >= line.pts.length)
+                    break;
+                if(idxi >= 0){
+                    resHere.push(line.pts[idxi])
+                }
+            }
+            res.push({line, pts: getPtsByIds(resHere)})
+        })
+        return res;
+    }
+    function getLinesByPt(ptId:number){
+        return ptBelongLineDict.value[ptId] || []
+    }
+    // 吸附阈值缩放比例：取点所属线路的最小宽度，仅在小于1时缩小阈值（大于1不放大）
+    function getSnapThrsRatio(ptId:number):number{
+        const lines = getLinesByPt(ptId)
+        if(lines.length===0)
+            return 1
+        const minWidth = Math.min(...lines.map(l=>l.width||1))
+        return Math.min(minWidth, 1)
+    }
+    function getLinesDecidedPtSize(ptId:number){
+        return ptSize.value[ptId] || 1
+    }
+    function getLinesDecidedPtSizes(ptId:number){
+        return ptSizes.value[ptId]
+    }
+    function getLinesDecidedPtNameSize(ptId:number){
+        return ptNameSize.value[ptId] || 1
+    }
+    function getLinesDecidedPtNameSnapSize(ptId:number){
+        const sizes = ptNameSnapSizes.value[ptId]
+        if(sizes && sizes.length>0)
+            return Math.max(...sizes)
+        return 1
+    }
+    function getLinesDecidedPtSnapSizes(ptId:number){
+        return ptSnapSizes.value[ptId]
+    }
+    function getLinesDecidedPtSnapSize(ptId:number){
+        const sizes = ptSnapSizes.value[ptId]
+        if(sizes && sizes.length>0)
+            return Math.max(...sizes)
+        return 1
+    }
+    function getLinesByType(lineType:LineType){
+        if(!save.value)
+            throw Error("找不到存档")
+        return save.value.lines.filter(x=>x.type==lineType)
+    }
+    function getLinesByParent(parentLineId:number){
+        return lineChildren.value[parentLineId]
+    }
+    function getNeighborByPt(ptId:number){
+        const lines = getLinesByPt(ptId)
+        const points = save.value?.points
+        if(!lines)
+            return []
+        if(!points)
+            return []
+        const resIds:number[] = []
+        lines.forEach(line=>{
+            const idxs = indicesInArray(line.pts, ptId)
+            idxs.forEach(idx=>{
+                if(idx==-1)
+                    return
+                if(idx>0)
+                    resIds.push(line.pts[idx-1])
+                if(idx<line.pts.length-1)
+                    resIds.push(line.pts[idx+1])
+            })
+        })
+        return getPtsByIds(resIds)
+    }
+    function getPtsInRange(center:Coord, offset:number, exceptId?:number){
+        if(!save.value)
+            return []
+        const left = center[0]-offset
+        const right = center[0]+offset
+        const top = center[1]-offset
+        const bottom = center[1]+offset
+        return save.value.points.filter(pt=>{
+            const px = pt.pos[0];
+            if(px<left || px>right)
+                return false;
+            const py = pt.pos[1];
+            if(py<top || py>bottom)
+                return false;
+            return pt.id != exceptId
+        })
+    }
+    function getTextTagById(textTagId:number){
+        return save.value?.textTags.find(x=>x.id === textTagId)
+    }
+    function getPointLinksByPt(ptId:number){
+        return ptRelatedLinks.value[ptId] || []
+    }
+    function insertNewPtToLine(lineId:number, afterIdx:number|'head'|'tail', pos:Coord, dir:ControlPointDir, sta:ControlPointSta){
+        if(!save.value)
+            return;
+        const line = save.value.lines.find(x=>x.id == lineId)
+        if(line){
+            const id = getNewId()
+            const newPt:ControlPoint = {
+                id,
+                pos,
+                dir,
+                sta
+            }
+            save.value.points.push(newPt)
+            if(afterIdx==='head')
+                afterIdx = -1
+            else if(afterIdx==='tail')
+                afterIdx = line.pts.length
+            // 插入位置两端任意一方是free点时，新点也是free点
+            const insertPos = Math.min(afterIdx+1, line.pts.length)
+            const beforePt = insertPos>0 ? getPtById(line.pts[insertPos-1]) : undefined
+            const afterPt = insertPos<line.pts.length ? getPtById(line.pts[insertPos]) : undefined
+            if(beforePt?.free || afterPt?.free)
+                newPt.free = true
+            line.pts.splice(insertPos, 0, id)
+            return id;
+        }
+    }
+    function insertPtToLine(ptId:number, lineId:number, afterIdx:number, pos:Coord, dir:ControlPointDir){
+        if(!save.value)
+            return;
+        const line = save.value.lines.find(x=>x.id == lineId)
+        const pt = save.value.points.find(x=>x.id == ptId)
+        if(line && pt){
+            pt.pos = pos
+            pt.dir = dir
+            if(isLineTypeWithoutSta(line.type)){
+                pt.sta = ControlPointSta.plain
+                pt.name = undefined
+                pt.nameS = undefined
+                pt.nameP = undefined
+                disposedStaNameOf.value(pt.id)
+            }
+            line.pts.splice(afterIdx+1, 0, ptId)
+        }
+    }
+    function createNewLine(newLine:Line){
+        if(!save.value)
+            throw Error('找不到存档')
+        save.value.lines.push(newLine)
+        ensureLinesOrdered()
+    }
+    function removePt(ptId:number){
+        if(!save.value)
+            return;
+        const relatedLines = getLinesByPt(ptId);
+        relatedLines.forEach(line=>{
+            line.pts = line.pts.filter(pt=>pt!==ptId)
+        })
+        removePointLinkByPt(ptId)
+        const idx = save.value.points.findIndex(x=>x.id == ptId)
+        if(idx >= 0){
+            save.value.points.splice(idx, 1)
+            deletedPoint.value(ptId)
+        }
+        return relatedLines
+    }
+    function removePtFromLine(ptId:number, lineId:number){
+        if(!save.value)
+            return;
+        const line = save.value.lines.find(x=>x.id == lineId)
+        if(line)
+            line.pts = line.pts.filter(pt=>pt!==ptId)
+    }
+    function removeNoLinePoints(){
+        const noLinePoints:number[] = [];
+        for(const pt of save.value?.points || []){
+            if(isNamedPt(pt))
+                continue
+            const belongLines = ptBelongLineDict.value[pt.id]
+            if(!belongLines || belongLines.length == 0)
+                noLinePoints.push(pt.id)
+        }
+        noLinePoints.forEach(removePt)
+    }
+    function removePointLinkByPt(ptId:number){
+        if(!save.value)
+            return;
+        const relatedLinks = ptRelatedLinks.value[ptId] || []
+        const needRemove = new Set<ControlPointLink>()
+        relatedLinks.forEach(link=>{
+            let newPts = link.pts.filter(pt=>pt!==ptId)
+            if(newPts.length==2){
+                let newPts1:[number, number] = [newPts[0], newPts[1]]
+                link.pts = newPts1
+            }else{
+                needRemove.add(link)
+            }
+        })
+        if(save.value.pointLinks)
+            removeAllByPred(save.value.pointLinks, x=>needRemove.has(x))
+    }
+    function removeDanglingPointLinks(){
+        if(!save.value || !save.value.pointLinks)
+            return;
+        save.value.pointLinks = save.value.pointLinks.filter(link=>{
+            const pts = getPtsByIds(link.pts)
+            return pts.length>1
+        })
+    }
+    function ensureLinesOrdered(ids?:number[]){
+        if(!save.value)
+            throw Error('找不到存档')
+        keepOrderSort(save.value.lines, (a, b)=>{
+            if(!!a.parent !== !!b.parent){
+                //先把主线和支线分两块放
+                //如果“是主线/支线”属性不一致则返回1/-1
+                return (!!a.parent ? 1:0) - (!!b.parent ? 1:0)
+            }
+            if(ids){
+                //如果指定了ids，那么按照ids的顺序排序
+                const aIdx = ids.indexOf(a.id)
+                const bIdx = ids.indexOf(b.id)
+                if(aIdx>=0 && bIdx>=0)
+                    return aIdx - bIdx
+            }
+            if(a.type !== b.type)
+                return lineTypeOrderNum(a) - lineTypeOrderNum(b)
+            if(a.group !== b.group){
+                const agIdx = save.value?.lineGroups?.findIndex(g => g.id === a.group) ?? -1
+                const bgIdx = save.value?.lineGroups?.findIndex(g => g.id === b.group) ?? -1
+                return agIdx - bgIdx
+            }
+            return 0
+        })
+        //将支线按顺序放回其所属的主线底部
+        const queue = [...save.value.lines]
+        while(queue.length>0){
+            const line = queue.shift()
+            if(!line || line?.parent)
+                continue
+            const children = pullAllByPred(save.value.lines, x=>x.parent===line.id)
+            if(children.length>0){
+                const idx = save.value.lines.indexOf(line)
+                save.value.lines.splice(idx+1, 0, ...children)
+            }
+        }
+    }
+    function arrangeLinesOfType(ids:number[], _lineType:LineType){
+        ensureLinesOrdered(ids)
+    }
+    function tryMergePt(ptId:number){
+        const thisPt = getPtById(ptId)
+        if(!thisPt || !save.value){
+            return;
+        }
+        const thatPt = save.value?.points.find(p => p.id!=thisPt.id && isSameCoord(thisPt.pos, p.pos))
+        if(!thatPt){
+            return
+        }
+        const thisLines = getLinesByPt(thisPt.id)
+        const thatLines = getLinesByPt(thatPt.id)
+        const thisLinesContainsNoneCommon = thisLines.some(x=>x.type!==LineType.common)
+        const thatLinesContainsNoneCommon = thatLines.some(x=>x.type!==LineType.common)
+        if(!editorLocalConfig.allowMergePtAndTerrain && thisLinesContainsNoneCommon !== thatLinesContainsNoneCommon)
+            return
+        //本体保留名称更长的那个
+        let keepThis  = (thisPt.name?.trim().length || 0) >= (thatPt?.name?.trim().length || 0)
+        //方向保留线路更多的那个
+        let keepThisDir = thisLines.length >= thatLines.length
+        const finalDir = keepThisDir ? thisPt.dir : thatPt.dir
+
+        let keepPt = keepThis ? thisPt : thatPt
+        let delPt = keepThis ? thatPt : thisPt
+        keepPt.dir = finalDir
+        if(!keepPt.name?.trim()){
+            //如果保留的那个没有名称，那么使用另一个的名称
+            keepPt.name = delPt.name
+            keepPt.nameS = delPt.nameS
+            keepPt.nameP = delPt.nameP
+        }
+        let delFromLines = keepThis ? thatLines : thisLines
+        delFromLines.forEach(line=>{
+            const keepPtInLineIdx = line.pts.indexOf(keepPt.id)
+            const needDelIdxs:number[] = []
+            for(let i=0; i<line.pts.length; i++){
+                if(line.pts[i] === delPt.id){
+                    if(keepPtInLineIdx >= 0 && Math.abs(keepPtInLineIdx - i) === 1)
+                        needDelIdxs.push(i)
+                    line.pts[i] = keepPt.id
+                }
+            }
+            removeAllByIndices(line.pts, needDelIdxs)
+        })
+        const delIdx = save.value.points.findIndex(x=>x.id == delPt.id)
+        if(delIdx >= 0){
+            save.value.points.splice(delIdx, 1)
+            deletedPoint.value(delPt.id)
+        }
+        //把被删除的点的link转移到保留的点上
+        const links = save.value.pointLinks?.filter(x=>x.pts.includes(delPt.id)) || []
+        links.forEach(link=>{
+            const idx = link.pts.indexOf(delPt.id)
+            if(idx >= 0)
+                link.pts[idx] = keepPt.id  
+        })
+        // 经过上述转移后，可能造成link的两个点变成了同一个，需要删除
+        if(save.value.pointLinks)
+            removeAllByPred(save.value.pointLinks, ({pts})=> pts[0] == pts[1])
+        return {
+            mutatedLines:delFromLines,
+            mergedWithPt:thatPt,
+            keptPt:keepPt,
+            deldPt:delPt
+        }
+    }
+    function isNamedPt(pt:ControlPoint){
+        return !!pt.name?.trim()
+    }
+    function removeTextTag(id:number){
+        const idx = save.value?.textTags.findIndex(x=>x.id===id)
+        if(idx !== undefined && idx !== -1){
+            save.value?.textTags.splice(idx, 1)
+        }
+    }
+    function moveEverything(offset:Coord){
+        if(!save.value?.points || !save.value?.textTags)
+            throw Error('存档异常')
+        for(const pt of save.value.points){
+            pt.pos = coordAdd(pt.pos, offset)
+        }
+        for(const tag of save.value.textTags){
+            tag.pos = coordAdd(tag.pos, offset)
+        }
+    }
+    function setCvsSize(newSize:Coord){
+        if(!save.value?.cvsSize)
+            throw Error('存档异常')
+        save.value.cvsSize = newSize
+        ensureValidCvsSize(save.value)
+    }
+
+    const lineTypesRenderOrder = [
+        LineType.terrain,
+        LineType.common
+    ]
+    function lineTypeOrderNum(line: Line){
+        return lineTypesRenderOrder.indexOf(line.type)
+    }
+    const lineTypesWithoutSta = [
+        LineType.terrain
+    ]
+    function isLineTypeWithoutSta(lineType:LineType|LineType[]){
+        if(typeof lineType === 'number')
+            return lineTypesWithoutSta.includes(lineType)
+        return lineType.some(t=>lineTypesWithoutSta.includes(t))
+    }
+    function isPtNoSta(ptId:number){
+        for(const line of save.value?.lines||[]){
+            if(line.pts.includes(ptId)){
+                if(isLineTypeWithoutSta(line.type)){
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    // 只属于伪线(isFake)的点（搜索、重名判断等场景统一将其排除）
+    function isPtOnlyOnFakeLines(ptId:number){
+        const lines = getLinesByPt(ptId)
+        return lines.length > 0 && lines.every(l => l.isFake)
+    }
+    function getStaCount(){
+        if(save.value)
+            return saveStaCount(save.value)
+        return 0
+    }
+    function getLineCount(){
+        if(save.value)
+            return saveLineCount(save.value)
+        return 0
+    }
+    const cvsWidth = computed<number>(()=>save.value?.cvsSize[0] || 1)
+    const cvsHeight = computed<number>(()=>save.value?.cvsSize[1] || 1)
+    const disposedStaNameOf = ref<(ptId:number)=>void>(()=>{})
+    const deletedPoint = ref<(ptId:number)=>void>(()=>{})
+    const deletedTextTag = ref<(ptId:number)=>void>(()=>{})
+    /** 线路点序列发生变化时触发（如删除点、插入点），参数为受影响的线路ID列表 */
+    const linePtsChanged = ref<(lineIds:number[])=>void>(()=>{})
+
+    // 监听线路点序列变化，触发 slice 清理回调
+    let prevLinePtsSnapshots: Map<number, number[]> = new Map()
+    watch(()=>save.value?.lines, (lines)=>{
+        if(!lines){
+            prevLinePtsSnapshots = new Map()
+            return
+        }
+        const changedLineIds: number[] = []
+        for(const line of lines){
+            const prev = prevLinePtsSnapshots.get(line.id)
+            const curr = line.pts
+            if(prev === undefined){
+                // 新增线路，记录快照
+                prevLinePtsSnapshots.set(line.id, [...curr])
+            } else if(prev.length !== curr.length || prev.some((pt, i)=>pt !== curr[i])){
+                // pts 发生变化
+                changedLineIds.push(line.id)
+                prevLinePtsSnapshots.set(line.id, [...curr])
+            }
+        }
+        // 清理已不存在的线路快照
+        const existingIds = new Set(lines.map(l=>l.id))
+        for(const id of prevLinePtsSnapshots.keys()){
+            if(!existingIds.has(id)){
+                prevLinePtsSnapshots.delete(id)
+            }
+        }
+        if(changedLineIds.length > 0){
+            linePtsChanged.value(changedLineIds)
+        }
+    }, { deep: true })
+    
+    return { 
+        save, getNewId, cvsWidth, cvsHeight, disposedStaNameOf, deletedPoint, deletedTextTag, linePtsChanged,
+        getPtById, getPtsByIds, getLineById, getLinesByIds, linesSortedByZIndex,
+        getLinesDecidedPtSize, getLinesDecidedPtSizes, getLinesDecidedPtNameSize, getLinesDecidedPtNameSnapSize, getLinesDecidedPtSnapSizes, getLinesDecidedPtSnapSize,
+        getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getSnapThrsRatio, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
+        insertNewPtToLine, insertPtToLine, createNewLine, arrangeLinesOfType, ensureLinesOrdered,
+        removePt, removePtFromLine, removeNoLinePoints, removePointLinkByPt, removeDanglingPointLinks, tryMergePt, isNamedPt,
+        removeTextTag, moveEverything, setCvsSize,
+        isLineTypeWithoutSta, isPtNoSta, isPtOnlyOnFakeLines,
+        getLineCount, getStaCount
+    }
+})
+
+export interface LineSeg{
+    line:Line,
+    pts:ControlPoint[]
+}

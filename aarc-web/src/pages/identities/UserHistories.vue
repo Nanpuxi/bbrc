@@ -4,7 +4,7 @@ import { useApiStore } from '@/app/com/apiStore';
 import { useNameMapStore } from '@/app/globalStores/nameMap';
 import { computed, onMounted, ref, watch } from 'vue';
 import { userTypeReadable } from './models/utils';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import UserSelect from '../components/UserSelect.vue';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 

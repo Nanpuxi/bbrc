@@ -2,7 +2,7 @@
 import { SaveDto } from '@/app/com/apiGenerated';
 import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig';
 import iconWarn from '@/assets/ui/warn.svg';
-import Prompt from '@/components/common/Prompt.vue'
+import Prompt from 'aarc-core/components/common/Prompt.vue'
 import { ref, watch } from 'vue';
 
 const props = defineProps<{

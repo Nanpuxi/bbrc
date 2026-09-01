@@ -1,5 +1,5 @@
 import { appVersionCheck as check } from "@aurouscia/vite-app-version/check";
-import { useUniqueComponentsStore } from "./globalStores/uniqueComponents";
+import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 
 export async function appVersionCheck(){
     const { showPop } = useUniqueComponentsStore()

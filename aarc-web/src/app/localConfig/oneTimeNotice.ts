@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { localConfigKeyPrefix } from "./common/keyPrefix";
+import { localConfigKeyPrefix } from "aarc-core/app/localConfig/common/keyPrefix";
 
 export const useOneTimeNoticeStore = defineStore('oneTimeNotice', () => {
     const dontUseWeirdBrowserShown = ref(false)

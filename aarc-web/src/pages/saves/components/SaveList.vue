@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, nextTick, useTemplateRef, computed, watch } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
-import SideBar from '@/components/common/SideBar.vue';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import fileDownload from 'js-file-download';
 import Loading from '@/components/common/Loading.vue';
-import { Save, saveLineCount, saveStaCount } from '@/models/save';
+import { Save, saveLineCount, saveStaCount } from 'aarc-core/models/save';
 import defaultMini from '@/assets/defaultMini.svg'
 import { SaveDto, SaveFolderDto } from '@/app/com/apiGenerated';
 import { WithIntroShow } from '@/utils/type/WithIntroShow';

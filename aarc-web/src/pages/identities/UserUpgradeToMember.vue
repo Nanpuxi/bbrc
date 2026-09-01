@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
-import { guideInfo } from '@/app/guideInfo';
+import { guideInfo } from 'aarc-core/app/guideInfo';
 import { useRouter, useRoute, RouterLink } from 'vue-router';
 import { computed } from 'vue';
 import { forkAarcName } from '@/pages/etc/routes/routesNames';

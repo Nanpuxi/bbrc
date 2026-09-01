@@ -4,7 +4,7 @@ import { useApiStore } from '@/app/com/apiStore';
 import { fileSizeDisplay } from '@/utils/dataUtils/fileSizeDisplay';
 import { onMounted, ref } from 'vue';
 import fileDownload from 'js-file-download';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 
 const props = defineProps<{
     saveId: number

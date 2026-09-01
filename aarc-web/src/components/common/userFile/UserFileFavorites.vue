@@ -2,9 +2,9 @@
 import { ref } from 'vue';
 import { UserFileDto, UserFavoriteType } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
-import SideBar from '@/components/common/SideBar.vue';
-import { useUserFileFavoriteStore } from '@/models/stores/utils/userFileFavoriteStore';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
+import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
 import { storeToRefs } from 'pinia';
 
 const api = useApiStore()

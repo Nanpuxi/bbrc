@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents'
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 import copy from 'copy-to-clipboard'
 
 import avatar from '@/assets/defaultAvatar.svg'

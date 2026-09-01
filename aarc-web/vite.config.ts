@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       vue(),
       appVersionMark(),
       fullReload([
-        "src/app/**", "src/models/**", "src/utils/**"
+        "../aarc-core/src/**", "src/app/**", "src/models/**", "src/utils/**"
       ]),
       signalrCommentFixerPlugin()
     ],
@@ -73,7 +73,8 @@ export default defineConfig(({ mode }) => {
     },
     resolve:{
       alias:{
-        '@': resolve(__dirname, './src')
+        '@': resolve(__dirname, './src'),
+        'aarc-core': resolve(__dirname, '../aarc-core/src')
       }
     },
     envDir: envDir

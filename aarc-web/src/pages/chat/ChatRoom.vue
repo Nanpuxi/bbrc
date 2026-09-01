@@ -3,14 +3,14 @@ import { useSignalrStore, ChatMessage } from '@/app/com/signalrStore'
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas'
 import { useUserInfoStore } from '@/app/globalStores/userInfo'
 import { useApiStore } from '@/app/com/apiStore'
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents'
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 import { UserType } from '@/app/com/apiGenerated'
-import { guideInfo } from '@/app/guideInfo'
+import { guideInfo } from 'aarc-core/app/guideInfo'
 import { useChatMsgsReadStore } from '@/app/globalStores/chatMsgsReadStore'
-import SideBar from '@/components/common/SideBar.vue'
+import SideBar from 'aarc-core/components/common/SideBar.vue'
 import KickingSidebar from './KickingSidebar.vue'
 import messageIcon from '@/assets/ui/message.svg'
-import { disableContextMenu, enableContextMenu } from '@/utils/eventUtils/contextMenu'
+import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtils/contextMenu'
 import {
     KICK_PROMPT_WAIT_MS,
     SAVE_REMINDER_DELAY_MS,
@@ -19,8 +19,8 @@ import {
 } from './consts'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { HubConnectionState } from '@microsoft/signalr'
-import Notice from '@/components/common/Notice.vue'
-import Prompt from '@/components/common/Prompt.vue'
+import Notice from 'aarc-core/components/common/Notice.vue'
+import Prompt from 'aarc-core/components/common/Prompt.vue'
 
 const props = defineProps<{
     saveId: number

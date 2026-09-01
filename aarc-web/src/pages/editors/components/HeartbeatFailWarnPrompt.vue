@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Prompt from '@/components/common/Prompt.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 withDefaults(defineProps<{
     stolen?: boolean // true：心跳已被他人接管；false：心跳多次失败（网络问题）

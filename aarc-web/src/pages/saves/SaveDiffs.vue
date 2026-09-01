@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { SaveDiffDto } from '@/app/com/apiGenerated';
 import { useApiStore } from '@/app/com/apiStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { computed, onMounted, ref } from 'vue';
 import { decompressFromBase64 } from 'lz-string'
 import { useRoute } from 'vue-router';

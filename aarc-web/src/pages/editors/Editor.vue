@@ -1,25 +1,25 @@
 <script setup lang="ts">
-import Cvs from '@/components/Cvs.vue';
-import Menu from '@/components/Menu.vue';
+import Cvs from 'aarc-core/components/Cvs.vue';
+import Menu from 'aarc-core/components/Menu.vue';
 import UnsavedLeavingWarning from '@/components/common/UnsavedLeavingWarning.vue';
 import DontUseWeirdBrowser from './components/DontUseWeirdBrowser.vue';
-import { useSaveStore } from '@/models/stores/saveStore';
-import { useEnvStore } from '@/models/stores/envStore';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import { useEnvStore } from 'aarc-core/models/stores/envStore';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { storeToRefs } from 'pinia';
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { devSave } from '@/data/dev/devSave';
 import { useApiStore } from '@/app/com/apiStore';
-import { normalizeSave } from '@/models/save/saveNormalize';
-import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from '@/utils/eventUtils/preventLeavingUnsaved';
-import { useMainCvsDispatcher } from '@/models/cvs/dispatchers/mainCvsDispatcher';
-import { useResetterStore } from '@/models/stores/utils/resetterStore';
+import { normalizeSave } from 'aarc-core/models/save/saveNormalize';
+import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
+import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
+import { useResetterStore } from 'aarc-core/models/stores/utils/resetterStore';
 import rfdc from 'rfdc';
-import { useConfigStore } from '@/models/stores/configStore';
+import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { ShortcutListener } from '@aurouscia/keyboard-shortcut'
-import { useMiniatureCvsDispatcher } from '@/models/cvs/dispatchers/miniatureCvsDispatcher';
+import { useMiniatureCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/miniatureCvsDispatcher';
 import { useCachePreventer } from '@/utils/timeUtils/cachePreventer';
 import { DocumentHiddenLongWatcher } from '@/utils/eventUtils/documentHiddenLong';
 import HiddenLongWarnPrompt from './components/HiddenLongWarnPrompt.vue';
@@ -29,11 +29,11 @@ import WarnRulePrompts from './components/WarnRulePrompts.vue';
 import ChatRoom from '@/pages/chat/ChatRoom.vue';
 import UserFileFavorites from '@/components/common/userFile/UserFileFavorites.vue';
 import { useTemplateRef } from 'vue';
-import { useIconStore } from '@/models/stores/iconStore';
-import { autoUpdateDataSources } from '@/models/save/dataSourceOps';
+import { useIconStore } from 'aarc-core/models/stores/iconStore';
+import { autoUpdateDataSources } from 'aarc-core/models/save/dataSourceOps';
 import { compressObjectToGzip } from '@/utils/dataUtils/compressObjectToGzip';
 import { useLoadedSave } from '@/models/stores/utils/loadedSave';
-import { setCurrentSaveIdRaw } from '@/models/save/currentSaveId';
+import { setCurrentSaveIdRaw } from 'aarc-core/models/save/currentSaveId';
 import { HttpUserInfo, SaveDto, SavePreflightStatus } from '@/app/com/apiGenerated';
 import { useSavingDisabledWarningStore } from './components/savingDisabledWarningStore';
 import SavingDisabledWarning from './components/SavingDisabledWarning.vue';
@@ -42,11 +42,11 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useSignalrStore } from '@/app/com/signalrStore';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
-import { coordRound } from '@/utils/coordUtils/coordRound';
+import { coordRound } from 'aarc-core/utils/coordUtils/coordRound';
 import { throttle } from '@/utils/lang/throttle';
-import { useUndoStore } from '@/models/stores/utils/undoStore';
-import { isFocusingInput } from '@/utils/domUtils/focusingInput';
-import { renderAndUploadCloudSvg } from '@/models/save/cloudSvgOps';
+import { useUndoStore } from 'aarc-core/models/stores/utils/undoStore';
+import { isFocusingInput } from 'aarc-core/utils/domUtils/focusingInput';
+import { renderAndUploadCloudSvg } from 'aarc-core/models/save/cloudSvgOps';
 import { kickedName } from './routes/routesNames.ts';
 
 const heartbeatIntervalSecs = 3 * 60 // 每3分钟心跳一次

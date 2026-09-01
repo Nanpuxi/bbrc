@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import { guideInfo } from '@/app/guideInfo';
-import { convertToProxyUrlIfNeeded } from '@/utils/urlUtils/proxyUrl';
+import { guideInfo } from 'aarc-core/app/guideInfo';
+import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl';
 
 const gitUrl = 'https://gitee.com/au114514/aarc'
 const exampleUrl = 'http://aarc.maritel.jowei19.com'

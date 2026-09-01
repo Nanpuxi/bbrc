@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { localConfigKeyPrefix } from "./common/keyPrefix";
+import { localConfigKeyPrefix } from "aarc-core/app/localConfig/common/keyPrefix";
 
 export type UserFileListOrderBy = 'time' | 'name'
 export const defaultOrderby: UserFileListOrderBy = 'time'

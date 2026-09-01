@@ -3,7 +3,7 @@ import { useApiStore } from '@/app/com/apiStore'
 import { SaveCommentType, type SaveCommentDto } from '@/app/com/apiGenerated'
 import { useUserInfoStore } from '@/app/globalStores/userInfo'
 import { computed, ref, watch } from 'vue'
-import Prompt from './Prompt.vue'
+import Prompt from 'aarc-core/components/common/Prompt.vue'
 
 const props = defineProps<{
     saveId: number

@@ -2,11 +2,11 @@
 import { onMounted, ref, computed, useTemplateRef, nextTick, watch } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
 import { SaveFolderDto, SaveFolderPathItem, SaveDto } from '@/app/com/apiGenerated';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useRouter, useRoute } from 'vue-router';
 import { saveFoldersName } from './routes/routesNames';
-import SideBar from '@/components/common/SideBar.vue';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
 import folderIcon from '@/assets/ui/folder.svg';
 import { useSavesRoutesJump } from './routes/routesJump';
 import { WithIntroShow } from '@/utils/type/WithIntroShow';

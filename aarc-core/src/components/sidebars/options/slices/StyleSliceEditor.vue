@@ -1,0 +1,69 @@
+<script setup lang="ts">
+import { LineStyle, StyleSlice } from 'aarc-core/models/save';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import { computed } from 'vue';
+
+const props = defineProps<{
+    slice: StyleSlice
+}>()
+
+const emit = defineEmits<{
+    (e: 'change'): void
+}>()
+
+const saveStore = useSaveStore()
+
+const selectableLineStyles = computed<LineStyle[]>(() => {
+    return saveStore.save?.lineStyles?.map(x => {
+        const copy = { ...x }
+        if (!copy.name) {
+            copy.name = '未命名样式'
+        }
+        return copy
+    }) || []
+})
+
+const selectedStyleId = computed({
+    get: () => props.slice.style,
+    set: (val: number) => {
+        if (!saveStore.save?.styleSlices) return
+        const slice = saveStore.save.styleSlices.find(s => s.id === props.slice.id)
+        if (slice) {
+            slice.style = val
+        }
+    }
+})
+</script>
+
+<template>
+<div class="editor">
+    <div class="editorTitle">编辑样式片段</div>
+    <select v-model.number="selectedStyleId" @change="emit('change')">
+        <option :value="0" :key="0">无样式</option>
+        <option :value="-1" :key="-1">同线路样式</option>
+        <option v-for="style in selectableLineStyles" :value="style.id" :key="style.id">
+            {{ style.name }}
+        </option>
+    </select>
+</div>
+</template>
+
+<style scoped lang="scss">
+.editor{
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    .editorTitle{
+        text-align: center;
+        font-size: 14px;
+        margin-bottom: 6px;
+    }
+    select{
+        width: 100%;
+        padding: 4px;
+    }
+}
+</style>

@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import Pop from './components/common/Pop.vue';
 import Wait from './components/common/Wait.vue';
-import { useUniqueComponentsStore } from './app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { storeToRefs } from 'pinia';
 import TopbarParent from './components/common/topbar/TopbarParent.vue';
 import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
-import { initCloudSvgUploader } from './models/save/cloudSvgOps';
-import { initPinyinConvertProvider } from './components/composables/usePinyinConvert';
-import { initSaveInfoProvider } from './components/sidebars/export/composables/useImageExport';
-import { initSiteLinks } from './app/siteLinks';
+import { initCloudSvgUploader } from 'aarc-core/models/save/cloudSvgOps';
+import { initPinyinConvertProvider } from 'aarc-core/components/composables/usePinyinConvert';
+import { initSaveInfoProvider } from 'aarc-core/components/sidebars/export/composables/useImageExport';
+import { initSiteLinks } from 'aarc-core/app/siteLinks';
 import { useRouter } from 'vue-router';
 import { aboutName } from './pages/identities/routes/routesNames';
 import { forkAarcName } from './pages/etc/routes/routesNames';

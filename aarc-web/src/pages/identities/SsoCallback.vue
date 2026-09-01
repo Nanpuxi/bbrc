@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useApiStore } from '@/app/com/apiStore';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
-import { useUniqueComponentsStore } from '@/app/globalStores/uniqueComponents';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 
 const route = useRoute()
 const router = useRouter()
