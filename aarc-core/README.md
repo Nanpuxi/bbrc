@@ -54,3 +54,6 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 ### 四、浏览器运行时
 
 - **localStorage**：persist 插件的持久化存储，以及 `app/localConfig/editorLocalConfig.ts` 的 legacy 配置迁移直接读写 localStorage。宿主须运行在具备 localStorage 的环境（浏览器 / tauri webview 均可）。
+- **core 会直接发网络请求**：`utils/urlUtils/checkUrl.ts:3`（`fetch` HEAD 探测 URL 可用性）、`models/save/dataSourceOps.ts:19`（`fetch` 拉取数据源）——core 并非零出站请求，宿主环境须允许这些请求发出（未来计划随注入模式 provider 化，见 `aarc-web/docs/decoupling.md` 第 19 步）。
+- **同源假设**：`utils/urlUtils/proxyUrl.ts:15`、`models/stores/iconStore.ts:40,174`、`components/sidebars/configs/CloudSvgConfig.vue:38` 用 `window.location.origin` 拼接 API/图标 URL，隐式要求后端与静态资源同源于页面；不同源时必须正确配置 `VITE_ApiUrlBase`。
+- **硬编码静态路径**：`models/save/upgrade/textTagIcons.ts:9-10` 的默认文本标签图标引用 `/icons/a/airport.svg`、`/icons/a/train.svg`，依赖宿主 `public/icons/` 目录提供。web：`aarc-web/public/icons/`。
