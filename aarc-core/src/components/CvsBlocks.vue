@@ -47,9 +47,6 @@ const blocks = computed<{id:string, styles:CSSProperties, w:number, h:number, ke
 </template>
 
 <style scoped lang="scss">
-@use '@/styles/globalValues';
-@use '@/styles/globalMixins';
-
 canvas {
     width: 100%;
     height: 100%;
@@ -58,17 +55,17 @@ canvas {
     transition-timing-function: linear;
 }
 .mainCvs{
-    @include globalMixins.trans-quick-in(0.9);//出现地越快越好
+    transition-timing-function: cubic-bezier(0, 0.9, 0, 0.9);//出现地越快越好
     &.insnif{
-        @include globalMixins.trans-slow-in(0.9);//消失地越慢越好
+        transition-timing-function: cubic-bezier(0.9, 0, 0.9, 0);//消失地越慢越好
         opacity: 0.4;
     }
 }
 .activeCvs{
     transition: 0s;//瞬间出现
     &.invisible{
-        transition: globalValues.$default-transition-time;
-        @include globalMixins.trans-slow-in(0.5);//慢速消失
+        transition: 0.15s;
+        transition-timing-function: cubic-bezier(0.5, 0, 0.5, 0);//慢速消失
         opacity: 0;
     }
 }

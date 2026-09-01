@@ -4,6 +4,8 @@
 
 分析基于 `aarc-web/analyze-deps.mjs` 生成的依赖闭包 `temp.txt`，以及对闭包外文件的反向依赖扫描（2026-02 时点）。
 
+注意：此处修改方案后，必须检查是否需要同步修改 `aarc-core/README.md`
+
 ---
 
 ## 1. 现状量化
@@ -42,6 +44,7 @@ AARC/                          # 仓库根（现有后端不动）
 ├── pnpm-workspace.yaml        # packages: ['aarc-web', 'aarc-core']（未来 + 'aarc-tauri'）
 ├── aarc-core/                 # 编辑器核心：Cvs/Menu + models + 渲染 + 交互
 │   ├── package.json           # name: "aarc-core"
+│   ├── README.md              # core 需要宿主提供的功能清单及 web 对照实现（见 §3.2）
 │   └── src/...
 ├── aarc-web/                  # 现 aarc/ 目录的其余部分：pages、router、API、站点功能
 │   ├── package.json           # name: "aarc-web", dependencies: { "aarc-core": "workspace:*" }
@@ -70,6 +73,8 @@ AARC/                          # 仓库根（现有后端不动）
 | 路由参数/守卫 | ~~闭包内 3 个文件 import `vue-router`~~（2026-02 重扫）：`CloudSvgConfig.vue`、`useImageExport.ts` 用 `useRoute` 取 saveId 路由参数；`preventLeavingUnsaved.ts` 用 `router.beforeEach` 注册"阻止未保存离开"守卫；`FaqAsConfig.vue` 模板用全局组件 `RouterLink` | ✅ 已全部改造（2026-09）：saveId 提取——新增 `models/save/currentSaveId.ts`（`setCurrentSaveIdRaw`/`getCurrentSaveIdRaw`/`getCurrentSaveIdNum`），宿主 `Editor.vue` 用 `watch(props.saveId, immediate)` 设置；路由守卫上移——`preventLeavingUnsaved.ts` 新增 `initRouteGuardRegistrar()` 注入入口，`Editor.vue` 以 `router.beforeEach` 实现注册，`window.onbeforeunload` 部分留 core；站点链接注入——`FaqAsConfig.vue` 的两处 `RouterLink` 改为 `<a :href>`，新增 `app/siteLinks.ts`（`initSiteLinks`/`getSiteLinks`），宿主 `App.vue` 用 `router.resolve({name}).href` 注册"关于页/私服案例"链接（不注入则链接隐藏，tauri 可不注入）。**至此 core 闭包对 vue-router 与 `@/pages` 的依赖（含运行时全局组件）彻底清零** |
 
 ### 3.2 回调注入式隐性接口清单
+
+> 📄 core 对宿主的全部依赖（含本清单的注入接口、pinia/persist 装配、构建期环境变量、全局样式等）已汇总在 **`aarc-core/README.md`** 的"需要宿主提供的功能"一节，并以 aarc-web 当前实现为对照；新增/变更注入接口时应同步更新该 README。
 
 拆包前这些接口必须梳理成 core 的显式 API，否则会退化成"web 深层 import core 内部文件"：
 
@@ -127,12 +132,12 @@ AARC/                          # 仓库根（现有后端不动）
 
 6. ✅ 已建 `aarc-core/`：package.json（`name: "aarc-core"`、`type: module`，按第 8 步建议预置 `"exports": {"./*": "./src/*"}` 源码导出）、tsconfig（与 aarc-web 对齐）、空的 `src/`；根 `pnpm-workspace.yaml` 的 `packages` 已加入 `'aarc-core'`，`pnpm install` 通过（lockfile 新增 `aarc-core` importer）。~~dependencies 留待第 12 步按实际 import 分配~~（已随迁移一并分配，见第 12 步）。
 7. ✅ 已用 `git mv` 整体迁移闭包文件（保持相对目录结构，文件间相对 import 全部未改）。最终迁移集 **371 个文件**：基础闭包 324 + 测试迁入带入的增量 47（39 个测试文件 + 8 个仅被测试/宿主引用的模型模块：`saveNormalize`、`defaultDataSources`、`upgrade/config|patterns|textTagIcons|textTags`、`valid/dataSources|idIncre`）。迁移前已对增量模块做耦合审查（无 vue-router/@/pages/api 层引用）。`apiStore`/`apiGenerated`、`data/dev/devSave.ts`、`gitInfoGen.ts`/`colorSetsGen.ts` 等按裁定留 web。
-8. ✅ `@/` 别名处理：实际做法与原设想不同——**core 内部 import 全部改写为 `aarc-core/` 自引用**（208 个文件），不再使用 `@/`。原因：vite alias 无法按 importer 位置区分同名 `@`，TS `paths` 也是 program 级生效，双包共存时 `@` 只能指向一处；包名自引用经 workspace symlink + `exports` 通配解析，在 vite/vitest/vue-tsc 下均验证可用。保险起见 web 的 vite.config 与 core 的 vitest.config 仍各加了 `aarc-core` 显式 alias，两边 tsconfig 也加了 `aarc-core/*` paths。例外：core 组件 `<style>` 中的 `@use '@/styles/...'`（仅 `CvsBlocks.vue:50-51`）仍经 web vite alias 指向 web 侧样式，留待第 10 步处理。
+8. ✅ `@/` 别名处理：实际做法与原设想不同——**core 内部 import 全部改写为 `aarc-core/` 自引用**（208 个文件），不再使用 `@/`。原因：vite alias 无法按 importer 位置区分同名 `@`，TS `paths` 也是 program 级生效，双包共存时 `@` 只能指向一处；包名自引用经 workspace symlink + `exports` 通配解析，在 vite/vitest/vue-tsc 下均验证可用。保险起见 web 的 vite.config 与 core 的 vitest.config 仍各加了 `aarc-core` 显式 alias，两边 tsconfig 也加了 `aarc-core/*` paths。~~例外：core 组件 `<style>` 中的 `@use '@/styles/...'`（仅 `CvsBlocks.vue:50-51`）仍经 web vite alias 指向 web 侧样式，留待第 10 步处理。~~ ✅ 已解决（2026-09）：`CvsBlocks.vue` 对 `_globalMixins.scss`/`_globalValues.scss` 的两处引用已内联为字面量（内容仅数行、引用点唯一），`_globalMixins.scss` 随之删除，core 的 `<style>` 不再依赖 web 侧任何 scss。
 9. ✅ web 侧反向 import 已全部改为包名导入：91 处 `@/` 别名形式 + 21 处相对路径形式（后者为首轮扫描漏网，由 type-check 暴露后补扫改写），复核扫描 0 残留。web 侧剩余 `@/` 仅指向 web 自有 src。
 
 ### 阶段 3：构建与样式拆分
 
-10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出。
+10. 样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半——它 `@use` 了 3 个位于 core 组件目录的 scss（`styles.scss:5-7`），且 core 组件模板依赖其中的全局类名（`.sqrBtn`/`.withShadow`/`.statusDisplay` 等）。core 自带一份基础样式并由 barrel 导出；~~`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出~~（2026-09 更新：`_globalMixins.scss` 实际仅 core 的 `CvsBlocks.vue` 使用，已内联进该组件并删除文件；`_globalValues.scss` 仅 web 自用，留 web，两包不再共用 scss partial）。
 11. 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web（未改动）；~~`vite.config.ts` 的 `fullReload` 监听列表要改为包含 core 路径~~ ✅ 已完成（2026-09）：监听列表已加入 `../aarc-core/src/**`。Dockerfile 前端阶段已补 `aarc-core` 的 package.json 与源码 COPY，✅ 完整 `docker build` 已重跑通过（2026-09，产物 chunk 哈希与本地构建一致）。
 12. 依赖拆分：✅ core 侧已完成（2026-09）——按迁移集实际 import 分配：vue/pinia/pinia-plugin-persistedstate、@aurouscia/*（au-color-picker/au-undo-redo/keyboard-shortcut/svgcanvas）、bowser/color/color-convert/copy-to-clipboard/omggif/rfdc/svgo/upng-js 及对应 @types；vitest 随测试迁至 core（含 vitest.config.ts 与 test 脚本，web 的 `test`/`test:run` 改为 `pnpm --filter aarc-core` 透传）。`vue-router`/`@microsoft/signalr`/`axios` 等留 web（闭包内 vue-router 引用已在 §3.1 改造中清零，原注意事项失效）。web 侧 dependencies 暂未瘦身（仍声明全部包，含 core 也用的那些），可后续清理。pinia、vue 单实例由源码导出 + web vite 统一打包保证。
 13. 环境变量：env 目录随 web（宿主），core 内 `import.meta.env` 用法阶段一保持不变（宿主 vite 构建时注入）。
