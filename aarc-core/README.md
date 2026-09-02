@@ -24,8 +24,8 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 功能 | core 侧约定 | web 实现 |
 |---|---|---|
 | Pinia 实例 + persist 插件 | core 的 store 依赖全局 pinia，其中 5 个 store 使用 `persist` 选项，要求 pinia 注册了 `pinia-plugin-persistedstate`；vue/pinia 必须单实例（源码导出 + 宿主统一打包保证） | `src/main.ts:11` `createPinia().use(piniaPluginPersistedstate)` |
-| 编辑器宿主组件 | 挂载 `Cvs.vue` 与 `Menu.vue`；接线 `Menu` 的两个事件：`@save-data(mustBackup)`（保存存档）与 `@leave`（离开编辑器）；负责存档加载/保存/权限判定，只读场景通过 `mainCvsDispatcher.visitorMode` 告知 core | `src/pages/editors/Editor.vue`（模板 469-470 行） |
-| 当前存档 id | `setCurrentSaveIdRaw(id)`，宿主从路由参数同步，core 不读 route | `Editor.vue:57` `watch(() => props.saveId, ..., { immediate: true })` |
+| 编辑器宿主组件 | 挂载 `Cvs.vue` 与 `Menu.vue`；接线 `Menu` 的两个事件：`@save-data(mustBackup)`（保存存档）与 `@leave`（离开编辑器）；负责权限判定、心跳、压缩上传等宿主业务。存档数据进出 core 的时序走会话 API（`app/editorSession.ts`），宿主只传数据与选项、不直接操作 core store 的装配顺序：`loadSaveIntoEditor(raw, opts)`（normalize → 重建派生态 → 数据源自动更新 → 图标加载 → undo 基线；visitorMode 与图标栏隐藏经 opts 传入）、`prepareSavePayload()`（保存前：配置写回 + 站名坐标截断）、`disposeEditor()`（卸载清理） | `src/pages/editors/Editor.vue`（模板 440-441 行） |
+| 当前存档 id | `setCurrentSaveIdRaw(id)`，宿主从路由参数同步，core 不读 route | `Editor.vue:52` `watch(() => props.saveId, ..., { immediate: true })` |
 
 ### 二、回调注入接口（`init*` 注册）
 
@@ -39,7 +39,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`） | `App.vue:23-40` 聚合注册（saveInfo 字段），`api.save.loadInfo` |
 | 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:23-40` 聚合注册（siteLinks 字段），`router.resolve({ name }).href` |
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
-| 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳 + undo 入栈"；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:321` 注册，`:451` 离开编辑器时传 `undefined` 注销 |
+| 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
 
 ### 三、构建期环境（宿主 vite）

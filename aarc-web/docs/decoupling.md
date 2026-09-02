@@ -85,7 +85,7 @@ AARC/                          # 仓库根（现有后端不动）
 - `setCurrentSaveIdRaw`（当前存档 id，Editor.vue 用 `watch(props.saveId)` 设置，见 §3.1"路由参数/守卫"行）✅ 新增
 - `initRouteGuardRegistrar`（"阻止未保存离开"的路由守卫注册，Editor.vue 以 `router.beforeEach` 实现，见 §3.1"路由参数/守卫"行）✅ 新增
 - `initSiteLinks`（站点内链接，App.vue 用 `router.resolve({name}).href` 注册，见 §3.1"路由参数/守卫"行）✅ 新增
-- ~~`mainCvsDispatcher.afterMainCvsRendered`~~ ✅ 已改为 `initAfterMainCvsRendered(cb?)` 注册函数（2026-09，见第 20 步；`mainCvsDispatcher.ts:69`，Editor.vue 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
+- ~~`mainCvsDispatcher.afterMainCvsRendered`~~ ✅ 已改为 `initAfterMainCvsRendered(cb?)` 注册函数（2026-09，见第 20 步；`mainCvsDispatcher.ts:69`，Editor.vue 用它做"阻止未保存离开 + 心跳"；undo 入栈已收进 core 的 `notifyMainCvsRendered`，见第 17 步工作包 C2）
 - `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**；其中 `openFavoritesSidebar` ✅ 已改为 `initOpenFavoritesSidebar(cb)` 注册函数，见第 20 步）
 - `envStore.rerender / rescaled / getActivePtOpsAvoidance / lineFocus`（dispatchers 与 store 互相给函数 ref 赋值接线）
 
@@ -159,7 +159,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 5（未来）：接口化与 tauri
 
-17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。**同期建议收敛 `Editor.vue` 的装配面**（2026-09 调查）：目前宿主直接操作 core 的 `mainCvsDispatcher`/`miniatureCvsDispatcher`/`resetterStore`/`undoStore`/`iconStore`/`saveStore` 且需知晓内部调用时序（如 `Editor.vue:169-173` 依次 `saveStore.save = normalizeSave(...)`——直接写 store 字段、`resetDerivedStores()`、`ensureAllLoaded()`）；宜由 core 提供"编辑器会话"入口（如 `loadSaveIntoEditor()` / `disposeEditor()`）把时序收进 core 内部，宿主只传数据与回调。另可在 web 侧为 `apiGenerated.ts` ↔ core `apiShapes.ts` 的字段投影加编译期断言（`satisfies`/类型互赋测试），防止后端 DTO 改了 core 未用字段时零告警。📄 **实施细化（2026-09 调查编写）：见 [`docs/decoupling-step17.md`](./decoupling-step17.md)**——三个工作包（投影断言 / CoreHostServices 聚合 / 编辑器会话入口），含现状逐点盘点与 7 个可独立提交的子步骤。
+17. ✅ 已完成（2026-09）在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。**同期建议收敛 `Editor.vue` 的装配面**（2026-09 调查）：目前宿主直接操作 core 的 `mainCvsDispatcher`/`miniatureCvsDispatcher`/`resetterStore`/`undoStore`/`iconStore`/`saveStore` 且需知晓内部调用时序（如 `Editor.vue:169-173` 依次 `saveStore.save = normalizeSave(...)`——直接写 store 字段、`resetDerivedStores()`、`ensureAllLoaded()`）；宜由 core 提供"编辑器会话"入口（如 `loadSaveIntoEditor()` / `disposeEditor()`）把时序收进 core 内部，宿主只传数据与回调。另可在 web 侧为 `apiGenerated.ts` ↔ core `apiShapes.ts` 的字段投影加编译期断言（`satisfies`/类型互赋测试），防止后端 DTO 改了 core 未用字段时零告警。📄 **实施细化（2026-09 调查编写）：见 [`docs/decoupling-step17.md`](./decoupling-step17.md)**——三个工作包（投影断言 / CoreHostServices 聚合 / 编辑器会话入口），含现状逐点盘点与 7 个可独立提交的子步骤。**落地结果**：7 个子步骤全部完成——web 侧新增 `app/com/apiShapesAssert.ts` 编译期断言；core 新增 `app/hostServices.ts`（`initCoreHostServices` 聚合入口）与 `app/editorSession.ts`（`loadSaveIntoEditor`/`prepareSavePayload`/`disposeEditor` 会话 API），undo 入栈收进 `notifyMainCvsRendered`；`Editor.vue` 不再直写 core store 的装配时序（剩余 core 触点：`preventLeavingUnsavedStore` 弹窗接线、`undoStore.undo/redo` 与 `envStore.delActivePt/delActiveTextTag` 快捷键等原子 action）。
 18. 新增 `aarc-tauri` 包：复用 `aarc-core`，实现 fs 版 HostServices，替换 persist 存储与上传逻辑。注意 core 内还有十余处 `window.confirm/alert`（`Lines.vue:64`、`stashStore.ts:22,35`、`ControlPointOptions.vue:96,108,115` 等）与 `contextMenu.ts:4` 对 `document.oncontextmenu` 的全局改写——浏览器宿主下可接受，tauri 阶段若要替换原生对话框/右键行为，需统一抽象为宿主 UI 服务。
 
 ---
