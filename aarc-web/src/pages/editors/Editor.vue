@@ -11,10 +11,9 @@ import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from '
 import { useRouter } from 'vue-router';
 import { devSave } from '@/data/dev/devSave';
 import { useApiStore } from '@/app/com/apiStore';
-import { normalizeSave } from 'aarc-core/models/save/saveNormalize';
 import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
-import { useResetterStore } from 'aarc-core/models/stores/utils/resetterStore';
+import { loadSaveIntoEditor, DataSourceUpdateEvents } from 'aarc-core/app/editorSession';
 import rfdc from 'rfdc';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
@@ -29,8 +28,6 @@ import WarnRulePrompts from './components/WarnRulePrompts.vue';
 import ChatRoom from '@/pages/chat/ChatRoom.vue';
 import UserFileFavorites from '@/components/common/userFile/UserFileFavorites.vue';
 import { useTemplateRef } from 'vue';
-import { useIconStore } from 'aarc-core/models/stores/iconStore';
-import { autoUpdateDataSources } from 'aarc-core/models/save/dataSourceOps';
 import { compressObjectToGzip } from '@/utils/dataUtils/compressObjectToGzip';
 import { useLoadedSave } from '@/models/stores/utils/loadedSave';
 import { setCurrentSaveIdRaw } from 'aarc-core/models/save/currentSaveId';
@@ -67,8 +64,6 @@ const { topbarShow } = storeToRefs(uniq)
 const saveStore = useSaveStore()
 const envStore = useEnvStore()
 const configStore = useConfigStore()
-const resetterStore = useResetterStore()
-const iconStore = useIconStore()
 const undoStore = useUndoStore()
 const api = useApiStore()
 const userInfoStore = useUserInfoStore()
@@ -155,7 +150,6 @@ async function load() {
         await checkLoginLeftTime(userInfo)
         
         const notOwner = !userInfo.id || userInfo.id !== ownerUserInfo.value?.userId
-        mainCvsDispatcher.visitorMode = viewOnly.value || notOwner
         let resp
         try{
             const loadForEdit = !viewOnly.value
@@ -166,11 +160,11 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
-            saveStore.save = normalizeSave(obj)
-            resetterStore.resetDerivedStores()
-            saveStore.ensureLinesOrdered()
-            await runAutoUpdateDataSources()
-            await iconStore.ensureAllLoaded()
+            await loadSaveIntoEditor(obj, {
+                visitorMode: viewOnly.value || notOwner,
+                blockIconAccess: viewOnly.value && notOwner, //浏览模式且不是所有者：隐藏图标栏目
+                onDataSourceEvent: dataSourceEventLoggers
+            })
             loadComplete.value = true
         }catch{
             showPop('存档损坏，请联系管理员', 'failed')
@@ -178,9 +172,6 @@ async function load() {
         }
         if(viewOnly.value){
             preventLeavingDisabled.value = true //浏览模式，不阻止未保存退出
-            if(notOwner){
-                useIconStore().accessBlocked = true //浏览模式且不是所有者：隐藏图标栏目
-            }
         }
         else{
             startHeartbeat()
@@ -195,36 +186,26 @@ async function load() {
         chatRoom.value?.initChatConnection()
     }
     else if(isDemo.value){
-        saveStore.save = normalizeSave(deepClone(devSave))
-        resetterStore.resetDerivedStores()
-        saveStore.ensureLinesOrdered()
-        await runAutoUpdateDataSources()
-        await iconStore.ensureAllLoaded()
-        mainCvsDispatcher.visitorMode = false
+        await loadSaveIntoEditor(deepClone(devSave), {
+            visitorMode: false,
+            onDataSourceEvent: dataSourceEventLoggers
+        })
         loadComplete.value = true
         savingDisabledWarningStore.setWarning('此处为体验环境，不能保存\n如需创作，请注册账户并新建存档', true)
         preventLeavingDisabled.value = true //demo环境，不阻止未保存退出
     }
-    if(saveStore.save){
-        undoStore.clear()
-        undoStore.push(saveStore.save)
-    }
 }
 
-async function runAutoUpdateDataSources() {
-    if(!saveStore.save) return
-    console.log('[Editor] 开始自动更新数据源, count:', saveStore.save.dataSources?.length)
-    await autoUpdateDataSources(saveStore.save, saveStore.getNewId, {
-        onLoad: (ds) => {
-            console.log('[Editor] 自动更新加载:', ds.name, 'type:', ds.type)
-        },
-        onDone: (ds, report) => {
-            console.log('[Editor] 自动更新完成:', ds.name, 'report:', report)
-        },
-        onError: (ds, errmsg)=>{
-            console.warn(`[数据源自动更新]"${ds.name}"失败: ${errmsg}`)
-        }
-    })
+const dataSourceEventLoggers: DataSourceUpdateEvents = {
+    onLoad: (ds) => {
+        console.log('[Editor] 自动更新加载:', ds.name, 'type:', ds.type)
+    },
+    onDone: (ds, report) => {
+        console.log('[Editor] 自动更新完成:', ds.name, 'report:', report)
+    },
+    onError: (ds, errmsg)=>{
+        console.warn(`[数据源自动更新]"${ds.name}"失败: ${errmsg}`)
+    }
 }
 
 const deepClone = rfdc()
