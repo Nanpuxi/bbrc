@@ -57,3 +57,8 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
         undoStore.push(saveStore.save)
     }
 }
+
+/** 卸载编辑器会话：注销“主画布渲染完成”回调等 core 侧清理 */
+export function disposeEditor(): void {
+    useMainCvsDispatcher().initAfterMainCvsRendered(undefined)
+}

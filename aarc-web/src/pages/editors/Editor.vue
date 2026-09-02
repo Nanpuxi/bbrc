@@ -13,7 +13,7 @@ import { devSave } from '@/data/dev/devSave';
 import { useApiStore } from '@/app/com/apiStore';
 import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
-import { loadSaveIntoEditor, DataSourceUpdateEvents } from 'aarc-core/app/editorSession';
+import { loadSaveIntoEditor, disposeEditor, DataSourceUpdateEvents } from 'aarc-core/app/editorSession';
 import rfdc from 'rfdc';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
@@ -299,14 +299,13 @@ async function checkLoginLeftTime(userInfo:HttpUserInfo){
 
 function setLeavingPreventing(){
     //将“主画布重新渲染”当成“存档信息变化”，当主画布重新渲染时，阻止用户离开/刷新页面/关闭页面
-    mainCvsDispatcher.initAfterMainCvsRendered(() =>{ 
+    //（undo 入栈已由 core 在 notifyMainCvsRendered 内处理）
+    mainCvsDispatcher.initAfterMainCvsRendered(() =>{
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
         preventLeaving()
         heartbeatOnEdit?.()
-        if(saveStore.save)
-            undoStore.push(saveStore.save)
     })
 }
 
@@ -429,7 +428,7 @@ onBeforeUnmount(()=>{
            .then(()=>{console.log('心跳释放成功')})
            .catch((e)=>{console.error('心跳释放失败', e)})
     }
-    mainCvsDispatcher.initAfterMainCvsRendered(undefined)
+    disposeEditor()
     topbarShow.value = true
     saveShortcutListener.dispose()
     deleteShortcutListener.dispose()

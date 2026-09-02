@@ -24,6 +24,7 @@ import { useGridCvsWorker } from "../workers/gridCvsWorker";
 import { Context as SvgCanvasContext } from '@aurouscia/svgcanvas';
 import { optimizeSvg } from "aarc-core/utils/svgUtils/optimizeSvg";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
+import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 
 
 export interface MainCvsRenderingOptions{
@@ -72,6 +73,11 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
         afterMainCvsRenderedWarned = false
     }
     function notifyMainCvsRendered(){
+        // 先把当前状态压入 undo 栈，再调宿主回调（decoupling-step17 工作包 C2；
+        // 原在宿主回调内最后执行，回调内各项互相独立，顺序无关）
+        const save = saveStore.save
+        if(save)
+            useUndoStore().push(save)
         if(afterMainCvsRendered.value){
             afterMainCvsRendered.value()
         }else if(!afterMainCvsRenderedWarned){
