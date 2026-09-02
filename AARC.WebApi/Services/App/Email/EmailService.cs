@@ -88,7 +88,7 @@ namespace AARC.WebApi.Services.App.Email
 
             using var client = new SmtpClient();
             await client.ConnectAsync(account.Server, account.Port,
-                account.EnableSsl ? MailKit.Security.SecureSocketOptions.StartTls : MailKit.Security.SecureSocketOptions.Auto);
+                MailKit.Security.SecureSocketOptions.Auto);
             await client.AuthenticateAsync(account.Account, account.Password);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);
