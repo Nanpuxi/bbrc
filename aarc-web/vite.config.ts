@@ -60,6 +60,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: (id) => {
+            if (id.includes('/aarc-core/'))
+              return 'core'
             if (id.includes('@aurouscia'))
               return 'au'
             if (id.includes('svgo'))
