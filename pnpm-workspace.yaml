@@ -1,6 +1,7 @@
 packages:
   - 'aarc-web'
   - 'aarc-core'
+  - 'aarc-tauri'
 
 allowBuilds:
   "@parcel/watcher": true

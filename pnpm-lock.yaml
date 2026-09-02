@@ -84,6 +84,46 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(typescript@6.0.3)
 
+  aarc-tauri:
+    dependencies:
+      '@aurouscia/au-color-picker':
+        specifier: ^1.1.0
+        version: 1.1.0(typescript@6.0.3)
+      aarc-core:
+        specifier: workspace:*
+        version: link:../aarc-core
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@6.0.3)(vue@3.5.32(typescript@6.0.3))
+      pinia-plugin-persistedstate:
+        specifier: ^4.7.1
+        version: 4.7.1(pinia@3.0.4(typescript@6.0.3)(vue@3.5.32(typescript@6.0.3)))
+      vue:
+        specifier: ^3.5.32
+        version: 3.5.32(typescript@6.0.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.6(vite@7.3.1(@types/node@25.6.0)(sass@1.99.0)(tsx@4.22.4))(vue@3.5.32(typescript@6.0.3))
+      sass:
+        specifier: ^1.99.0
+        version: 1.99.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^7.3.1
+        version: 7.3.1(@types/node@25.6.0)(sass@1.99.0)(tsx@4.22.4)
+      vite-plugin-full-reload:
+        specifier: ^1.2.0
+        version: 1.2.0
+      vue-tsc:
+        specifier: ^3.2.7
+        version: 3.2.7(typescript@6.0.3)
+
   aarc-web:
     dependencies:
       '@anilkumarthakur/vue3-json-viewer':

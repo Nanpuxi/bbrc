@@ -1,0 +1,36 @@
+{
+  "name": "aarc-tauri",
+  "private": "true",
+  "version": "0.0.0",
+  "type": "module",
+  "author": {
+    "name": "Au"
+  },
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev-host": "vite --host",
+    "build": "vite build",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "aarc-core": "workspace:*",
+    "@aurouscia/au-color-picker": "^1.1.0",
+    "pinia": "^3.0.4",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "sass": "^1.99.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.1",
+    "vite-plugin-full-reload": "^1.2.0",
+    "vue-tsc": "^3.2.7"
+  }
+}
