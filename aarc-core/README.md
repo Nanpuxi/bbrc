@@ -42,13 +42,9 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
 
-### 三、构建期环境（宿主 vite）
+### 三、运行配置与构建期环境（宿主）
 
-- **环境变量**：core 内 5 个文件使用 `import.meta.env`，由宿主 vite 在 dev/构建时注入（源码导出方案下天然有效）：
-  - `VITE_ApiUrlBase` — `utils/urlUtils/proxyUrl.ts:20`、`components/sidebars/configs/CloudSvgConfig.vue:37`
-  - `VITE_GuideResetPassword` / `VITE_GuideFindHelp` / `VITE_GuideExtra` — `app/guideInfo.ts:2-4`
-  - `VITE_LogMainCvsRendering` — `models/cvs/dispatchers/mainCvsDispatcher.ts:69`
-  - `VITE_AdsTextLess` / `VITE_AdsTextMore` — `models/cvs/workers/adsCvsWorker.ts:8-9`
+- **运行配置**：core 不读 `import.meta.env`，所需配置由宿主在启动早期调用 `configureCore(config: CoreConfig)`（`app/coreConfig.ts`）注入，core 内经 `getCoreConfig()` 读取：`apiUrlBase`（代理转换/云端SVG分享链接）、`guideResetPassword`/`guideFindHelp`/`guideExtra`（指引文案）、`logMainCvsRendering`（渲染耗时日志）、`adsTextLess`/`adsTextMore`（导出图片水印文案）。未注入的项按 undefined/false 处理。web：`src/main.ts` 顶层以 `import.meta.env.VITE_*` 注入
 - **全局样式**：core 自带 `src/styles/global.scss`（base 元素样式 + `.sqrBtn` / `.withShadow` / `.statusDisplay` 等全局 class + `configSection` / `options` / `arrangableList` / `bangPanel` 四份 partial），**宿主必须全局引入一次**，否则 core 组件会静默变形。web：`src/styles/styles.scss` 顶部 `@use 'aarc-core/styles/global.scss'`（经包 `exports` 通配解析，由宿主 vite 编译）
 - **第三方组件全局 CSS**：core 组件使用 `@aurouscia/au-color-picker` 但不引入其样式表，由宿主加载。web：`main.ts:6` `import '@aurouscia/au-color-picker/style.css'`
 - **静态资源打包**：core 内以模块形式 import `aarc-core/assets/ui/*.svg`，需宿主打包器支持静态资源 import（vite 默认支持）。

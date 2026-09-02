@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { convertToProxyUrlIfNeeded, restoreUrlFromProxyIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl'
+import { configureCore } from 'aarc-core/app/coreConfig'
 
 describe('convertToProxyUrlIfNeeded', () => {
     beforeEach(() => {
         vi.stubGlobal('window', undefined)
-        vi.stubEnv('VITE_ApiUrlBase', 'http://localhost:5250')
+        configureCore({ apiUrlBase: 'http://localhost:5250' })
     })
 
     afterEach(() => {
         vi.unstubAllGlobals()
-        vi.unstubAllEnvs()
+        configureCore({})
     })
 
     it('相对路径应原样返回', () => {

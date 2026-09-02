@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia';
 import { renderAndUploadCloudSvg } from 'aarc-core/models/save/cloudSvgOps';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { getCurrentSaveIdNum } from 'aarc-core/models/save/currentSaveId';
+import { getCoreConfig } from 'aarc-core/app/coreConfig';
 import copy from 'copy-to-clipboard'
 
 const saveStore = useSaveStore()
@@ -34,7 +35,7 @@ function copyShareLink() {
         showPop('无法获取当前存档ID', 'failed')
         return
     }
-    const baseUrl = import.meta.env.VITE_ApiUrlBase as string | undefined
+    const baseUrl = getCoreConfig().apiUrlBase
     const shareUrl = `${(baseUrl || window.location.origin).replace(/\/$/, '')}/save-svg/${saveId}.svg`
     copy(shareUrl)
     showPop('已复制到剪切板', 'success')

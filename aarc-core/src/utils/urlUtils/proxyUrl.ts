@@ -1,3 +1,5 @@
+import { getCoreConfig } from "aarc-core/app/coreConfig"
+
 /**
  * 按需进行代理url转换（如果同源则不转换）  
  * 参考：AARC.WebApi/Controllers/System/ProxyController.cs
@@ -17,7 +19,7 @@ export function convertToProxyUrlIfNeeded(url: string, type:'icon'|'json') {
         return url
     }
     const encoded = encodeURIComponent(url)
-    const baseUrl = import.meta.env.VITE_ApiUrlBase
+    const baseUrl = getCoreConfig().apiUrlBase
     return `${baseUrl}/proxy/${type}/${encoded}`
 }
 

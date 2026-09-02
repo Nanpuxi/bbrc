@@ -25,6 +25,7 @@ import { Context as SvgCanvasContext } from '@aurouscia/svgcanvas';
 import { optimizeSvg } from "aarc-core/utils/svgUtils/optimizeSvg";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
+import { getCoreConfig } from "aarc-core/app/coreConfig";
 
 
 export interface MainCvsRenderingOptions{
@@ -86,7 +87,7 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
         }
     }
     const isRendering = ref(false)
-    const logRendering = import.meta.env.VITE_LogMainCvsRendering === 'true'
+    const logRendering = getCoreConfig().logMainCvsRendering === true
     const { tic, toc } = useTimeSpanClock(logRendering)
     const visitorMode = ref(false)
     function renderMainCvs(options:MainCvsRenderingOptions){
