@@ -31,7 +31,7 @@ namespace AARC.WebApi.Services.App.Email
             bool isHtml = false)
         {
             if (_config.SmtpAccounts.Count == 0)
-                throw new InvalidOperationException("没有配置任何 SMTP 账号");
+                throw new RqEx("没有配置任何 SMTP 账号，请联系管理员");
 
             var startIndex = Interlocked.Increment(ref _currentAccountIndex) % _config.SmtpAccounts.Count;
             var exceptions = new List<Exception>();
