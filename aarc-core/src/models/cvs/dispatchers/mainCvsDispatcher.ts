@@ -65,6 +65,20 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
     const { renderGrid } = useGridCvsWorker()
     const saveStore = useSaveStore()
     const afterMainCvsRendered = shallowRef<()=>void>()
+    let afterMainCvsRenderedWarned = false
+    /** 由宿主注入“主画布渲染完成”回调（web 在 Editor.vue 注册、离开时传 undefined 注销） */
+    function initAfterMainCvsRendered(cb?: ()=>void){
+        afterMainCvsRendered.value = cb
+        afterMainCvsRenderedWarned = false
+    }
+    function notifyMainCvsRendered(){
+        if(afterMainCvsRendered.value){
+            afterMainCvsRendered.value()
+        }else if(!afterMainCvsRenderedWarned){
+            console.warn('afterMainCvsRendered 未注入，宿主需调用 initAfterMainCvsRendered 注册')
+            afterMainCvsRenderedWarned = true
+        }
+    }
     const isRendering = ref(false)
     const logRendering = import.meta.env.VITE_LogMainCvsRendering === 'true'
     const { tic, toc } = useTimeSpanClock(logRendering)
@@ -131,8 +145,8 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
             const tEnd = logRendering ? timestampMS():0
             console.log(`[${tEnd - tStart}ms] <主画布渲染>----------`)
         }
-        if(!suppressRenderedCallback && afterMainCvsRendered.value)
-            afterMainCvsRendered.value()
+        if(!suppressRenderedCallback)
+            notifyMainCvsRendered()
     }
     async function renderMainCvsToSvgBlob(options?: Pick<MainCvsRenderingOptions, 'withAds' | 'withBgRefImage' | 'withGridLayer' | 'withGridLevel'>):Promise<Blob>{
         const cvsWidth = saveStore.cvsWidth
@@ -184,5 +198,5 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
             updateSnapGridIntv: false
         })
     }
-    return { renderMainCvs, renderMainCvsToSvgBlob, afterMainCvsRendered, canvasIdPrefix, visitorMode }
+    return { renderMainCvs, renderMainCvsToSvgBlob, initAfterMainCvsRendered, canvasIdPrefix, visitorMode }
 })

@@ -11,7 +11,7 @@ import { storeToRefs } from 'pinia';
 
 const saveStore = useSaveStore()
 const iconStore = useIconStore()
-const { openFavoritesSidebar } = storeToRefs(useUserFileFavoriteStore())
+const userFileFavoriteStore = useUserFileFavoriteStore()
 const mainCvs = useMainCvsDispatcher()
 const rr = ()=>mainCvs.renderMainCvs({})
 const { ensureAllLoaded, ensurePrefixSelectedValid, enforcePrefixSelectedTo } = iconStore
@@ -66,7 +66,7 @@ onMounted(async()=>{
         抱歉，本栏目仅限编辑者或所有者查看
     </div>
     <div v-else-if="ok" class="ttIconConfig">
-        <button class="add-from-favorites" @click="openFavoritesSidebar()">添加资源</button>
+        <button class="add-from-favorites" @click="userFileFavoriteStore.openFavoritesSidebar()">添加资源</button>
         <div class="ttIconPrefixSelect">
             图标组
             <select v-model="prefixSelected">

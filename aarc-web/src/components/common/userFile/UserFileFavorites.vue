@@ -9,7 +9,8 @@ import { storeToRefs } from 'pinia';
 
 const api = useApiStore()
 const { showPop } = useUniqueComponentsStore()
-const { openFavoritesSidebar, onFavoriteFileSelected } = storeToRefs(useUserFileFavoriteStore())
+const userFileFavoriteStore = useUserFileFavoriteStore()
+const { onFavoriteFileSelected } = storeToRefs(userFileFavoriteStore)
 const sidebar = ref<InstanceType<typeof SideBar>>()
 const search = ref('')
 const files = ref<UserFileDto[]>()
@@ -33,7 +34,7 @@ function open() {
     }
 }
 
-openFavoritesSidebar.value = open
+userFileFavoriteStore.initOpenFavoritesSidebar(open)
 
 function onSearchInput() {
     if (!search.value.trim()) {

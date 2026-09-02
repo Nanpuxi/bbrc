@@ -37,8 +37,8 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`） | `App.vue:39`，`api.save.loadInfo` |
 | 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:40-43`，`router.resolve({ name }).href` |
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
-| 主画布渲染完成回调 | `mainCvsDispatcher.afterMainCvsRendered`（`models/cvs/dispatchers/mainCvsDispatcher.ts:67`），宿主用它做"阻止离开 + 心跳 + undo 入栈" | `Editor.vue:321` 赋值，`:451` 离开编辑器时置回 `undefined` |
-| 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主给 `openFavoritesSidebar` 赋值"打开侧栏"实现；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
+| 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳 + undo 入栈"；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:321` 注册，`:451` 离开编辑器时传 `undefined` 注销 |
+| 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
 
 ### 三、构建期环境（宿主 vite）
 

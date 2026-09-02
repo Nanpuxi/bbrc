@@ -318,7 +318,7 @@ async function checkLoginLeftTime(userInfo:HttpUserInfo){
 
 function setLeavingPreventing(){
     //将“主画布重新渲染”当成“存档信息变化”，当主画布重新渲染时，阻止用户离开/刷新页面/关闭页面
-    mainCvsDispatcher.afterMainCvsRendered = () =>{ 
+    mainCvsDispatcher.initAfterMainCvsRendered(() =>{ 
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
@@ -326,7 +326,7 @@ function setLeavingPreventing(){
         heartbeatOnEdit?.()
         if(saveStore.save)
             undoStore.push(saveStore.save)
-    }
+    })
 }
 
 let heartbeatTimer = 0
@@ -448,7 +448,7 @@ onBeforeUnmount(()=>{
            .then(()=>{console.log('心跳释放成功')})
            .catch((e)=>{console.error('心跳释放失败', e)})
     }
-    mainCvsDispatcher.afterMainCvsRendered = undefined
+    mainCvsDispatcher.initAfterMainCvsRendered(undefined)
     topbarShow.value = true
     saveShortcutListener.dispose()
     deleteShortcutListener.dispose()

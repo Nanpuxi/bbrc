@@ -85,8 +85,8 @@ AARC/                          # 仓库根（现有后端不动）
 - `setCurrentSaveIdRaw`（当前存档 id，Editor.vue 用 `watch(props.saveId)` 设置，见 §3.1"路由参数/守卫"行）✅ 新增
 - `initRouteGuardRegistrar`（"阻止未保存离开"的路由守卫注册，Editor.vue 以 `router.beforeEach` 实现，见 §3.1"路由参数/守卫"行）✅ 新增
 - `initSiteLinks`（站点内链接，App.vue 用 `router.resolve({name}).href` 注册，见 §3.1"路由参数/守卫"行）✅ 新增
-- `mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67,134`，Editor.vue:316-324 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
-- `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**）
+- ~~`mainCvsDispatcher.afterMainCvsRendered`~~ ✅ 已改为 `initAfterMainCvsRendered(cb?)` 注册函数（2026-09，见第 20 步；`mainCvsDispatcher.ts:69`，Editor.vue 用它做"阻止未保存离开 + 心跳 + undo 入栈"）
+- `userFileFavoriteStore.openFavoritesSidebar / onFavoriteFileSelected`（core 的 `iconStore.ts:168` 设回调，web 的 `UserFileFavorites.vue:36,45` 实现 UI——**双向回调**；其中 `openFavoritesSidebar` ✅ 已改为 `initOpenFavoritesSidebar(cb)` 注册函数，见第 20 步）
 - `envStore.rerender / rescaled / getActivePtOpsAvoidance / lineFocus`（dispatchers 与 store 互相给函数 ref 赋值接线）
 
 ### 3.3 需下移/裁决归属的模块
@@ -153,7 +153,7 @@ AARC/                          # 仓库根（现有后端不动）
 本阶段源于一次 core↔web 耦合复查（结论：单向依赖约束执行良好，无 core→web 逃逸；以下为遗留的隐式契约类问题）。执行顺序按"先文档、再接线、后清理"排列；第 10 步（样式）与第 17 步（装配收口）不在本阶段，随各自阶段排期。
 
 19. ✅ 已完成（2026-09）~~**补登 core 的隐式环境依赖到 `aarc-core/README.md`**（纯文档）~~：core 并非零出站请求——`utils/urlUtils/checkUrl.ts:3`、`models/save/dataSourceOps.ts:19` 直接 `fetch()`；`proxyUrl.ts:15`、`iconStore.ts:40,174`、`CloudSvgConfig.vue:38` 用 `window.location.origin` 拼 URL（隐式要求静态资源与页面同源，或正确配置 `VITE_ApiUrlBase`）；`models/save/upgrade/textTagIcons.ts:9-10` 硬编码 `/icons/a/*.svg` 默认图标路径（依赖宿主 `public/icons/`）。以上三条已补入 README"四、浏览器运行时"一节。tauri 阶段这些 fetch 应随 §3.1 模式 provider 化。
-20. **裸 ref 接线改为 `init*` 注册函数**（与既有注入接口风格统一，未注册被调用时 `console.warn`）：`mainCvsDispatcher.afterMainCvsRendered`（`mainCvsDispatcher.ts:67`，宿主在 `Editor.vue:321` 赋值、`:451` 置回）与 `userFileFavoriteStore.openFavoritesSidebar`（`userFileFavoriteStore.ts:6`，宿主在 `UserFileFavorites.vue:36` 赋值）目前默认 noop、漏接时静默失败。改完同步更新 `aarc-core/README.md`。
+20. ✅ 已完成（2026-09）~~**裸 ref 接线改为 `init*` 注册函数**~~：`mainCvsDispatcher` 新增 `initAfterMainCvsRendered(cb?)`（`mainCvsDispatcher.ts:69`，内部 ref 不再外露，渲染完成后经 `notifyMainCvsRendered` 调用；宿主 `Editor.vue:321` 注册、`:451` 传 `undefined` 注销）；`userFileFavoriteStore` 新增 `initOpenFavoritesSidebar(cb)`（宿主 `UserFileFavorites.vue:36` 注册；`openFavoritesSidebar` 变为 store action，`TextTagIconConfig.vue:69` 改为直接调 action）。两处未注册被调用时均 `console.warn`——但渲染回调每次渲染都会触发，为避免刷屏，两处都按"每次注册周期仅警告一次"节流（重新注册后重置）。`aarc-core/README.md` 对应两行已同步。
 21. ✅ 已完成（2026-09）~~**web 侧 dependencies 瘦身**（承接第 12 步）~~：已从 `aarc-web/package.json` 删除 web 侧零 import 的 8 个包——`omggif`、`upng-js`、`svgo`、`color`、`color-convert`、`bowser`、`@aurouscia/svgcanvas`、`@aurouscia/au-undo-redo`，连带删除 devDependencies 中对应的 `@types/color`、`@types/color-convert`、`@types/omggif`、`@types/upng-js`（core 侧均已自带）。`vite.config.ts:65-66` manualChunks 的 `'svgo'` 分包配置保留不动（分的是 core 的依赖，构建产物中 svgo chunk 仍正常生成）。验证：`pnpm install` + `pnpm build-here` 通过。
 22. **删除冗余解析通道**：`aarc-core` 的解析目前三处并存——workspace `exports` 通配、`vite.config.ts:77` 显式 alias、两边 tsconfig `paths`。workspace `exports` 在 vite 下已验证可用，可删 vite alias 减少一处同步维护；tsconfig `paths` 对编辑器跳转仍有用，保留。验证：build + dev 各跑一遍。
 
@@ -167,7 +167,7 @@ AARC/                          # 仓库根（现有后端不动）
 ## 5. 主要阻碍清单（按风险排序）
 
 1. **共享物归属裁定（§1.2 的 84 个文件）**：最大工作量来源。处理不当会退化成双向依赖或 core 臃肿。（最大的两个热点 apiStore/apiGenerated 已退出闭包，剩余为通用组件与数据模型。）
-2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。（2026-09 调查：`afterMainCvsRendered`、`openFavoritesSidebar` 两处仍是裸 ref 赋值、漏接时静默 noop，整改见第 20 步。）
+2. **回调注入式隐性接口（§3.2）**：编译期不可见的接线方式，搬迁后极易漏接，表现为运行时空函数/不弹窗。迁移后必须逐个核对。（~~2026-09 调查：`afterMainCvsRendered`、`openFavoritesSidebar` 两处仍是裸 ref 赋值、漏接时静默 noop~~ ✅ 已整改，见第 20 步：两处均改为 `init*` 注册函数，未注册被调用时 `console.warn`。）
 3. ~~**apiStore/apiGenerated 在闭包内且被 web 重度引用**~~ ✅ 已解决（2026-02）：三处 HTTP 调用注入化 + core 自有 `models/types/apiShapes.ts` 承载所需 DTO 投影/枚举，api 层整体退出闭包、归属 web（见 §3.4）。
 4. ~~**`enteredCanvasFrom` 耦合 vue-router 与 pages 目录**~~ ✅ 已解决（见 §3.1"路由跳转"行）：Menu 改用 `leave` 事件，该 store 整体留 web，core 不再涉及。
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
