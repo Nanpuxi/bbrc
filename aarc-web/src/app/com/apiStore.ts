@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 import { ref } from "vue";
 import * as api from "./apiGenerated";
+import "./apiShapesAssert";
 import { getTypeName as tn } from "@/utils/lang/getTypeName";
 import { AllFuncsReturnTypeOptional } from "@/utils/type/AllFuncsReturnTypeOptional";
 

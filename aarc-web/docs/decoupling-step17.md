@@ -85,23 +85,21 @@ core 的 `models/types/apiShapes.ts` 是 web 侧 `apiGenerated.ts`（NSwag 生�
 
 ## 2. 目标形态设计
 
-### 2.1 工作包 A：DTO 投影断言
+### 2.1 工作包 A：DTO 投影断言 ✅ 已完成（2026-09，步骤 1）
 
-web 侧新增 `src/app/com/apiShapesAssert.ts`（纯类型文件，无运行时代码）：
+web 侧新增 `src/app/com/apiShapesAssert.ts`（纯类型文件，无运行时代码）。⚠️ 实际实现与原设想的 `const` 赋值式不同——web 的 tsconfig 开了 `noUnusedLocals`，未使用的 const 会报错，故改用**导出的类型别名 + 泛型约束**：
 
 ```ts
-import type { SaveDto as GenSaveDto, UserFileDto as GenUserFileDto, PinyinConvertRequest as GenPinyinReq } from './apiGenerated'
-import type { SaveDto as CoreSaveDto, UserFileDto as CoreUserFileDto, PinyinConvertRequest as CorePinyinReq } from 'aarc-core/models/types/apiShapes'
+type AssertAssignableTo<Target, Source extends Target> = Source
 
-// 生成类型必须可赋给 core 投影（生成 ⊇ 投影）
-const _save: CoreSaveDto = null as unknown as GenSaveDto
-const _userFile: CoreUserFileDto = null as unknown as GenUserFileDto
-// core 构造的请求必须可赋给生成类型（投影 ⊆ 生成）
-const _pinyin: GenPinyinReq = null as unknown as CorePinyinReq
+export type SaveDtoAssert = AssertAssignableTo<CoreSaveDto, GenSaveDto>              // 生成 ⊇ core 投影
+export type UserFileDtoAssert = AssertAssignableTo<CoreUserFileDto, GenUserFileDto>
+export type PinyinConvertRequestAssert = AssertAssignableTo<GenPinyinConvertRequest, CorePinyinConvertRequest>  // core 投影 ⊆ 生成
 ```
 
-- 不被任何模块 import 也可被 vue-tsc 检查到（include 整个 src）；为保险可由 `apiStore.ts` 顶部 `import './apiShapesAssert'` 显式引入（类型文件编译后无产出）。
-- 数值 enum 的双向兼容（`PinyinCaseType` 等）靠 TS number 互赋规则，无需断言；若未来改成 string enum 会在上述赋值处报错，符合预期。
+- 不被任何模块 import 也可被 vue-tsc 检查到（include 整个 src）；实际已按设想由 `apiStore.ts:6` `import "./apiShapesAssert"` 显式引入。
+- 数值 enum 的双向兼容（`PinyinCaseType` 等）靠 TS number 互赋规则，无需断言；若未来改成 string enum 会在上述约束处报错，符合预期。
+- 已做负向验证：故意声明错误形状（`name?: number`）可在 type-check 报 TS2344、错误定位在断言处。注意反方向"窄投影赋给宽生成类型"不构成有效断言——两侧字段全可选时互相天然可赋。
 
 ### 2.2 工作包 B：CoreHostServices 聚合入口
 
@@ -158,7 +156,7 @@ export function disposeEditor(): void
 
 每步独立提交，完成后跑：`pnpm --filter aarc-core type-check && pnpm --filter aarc-web type-check && pnpm --filter aarc-core test:run && pnpm --filter aarc-web build-here`。
 
-1. **A：投影断言**。新增 `aarc-web/src/app/com/apiShapesAssert.ts`，`apiStore.ts` 引入。纯类型，零行为变化。
+1. ✅ 已完成（2026-09）**A：投影断言**。新增 `aarc-web/src/app/com/apiShapesAssert.ts`，`apiStore.ts` 引入。纯类型，零行为变化。（实现采用导出类型别名而非 const 赋值，原因与负向验证结论见 §2.1。）
 2. **B1：聚合入口**。core 新增 `app/hostServices.ts`（聚合调用既有 `init*`）；`aarc-core/README.md` "回调注入接口"一节顶部补一行指向聚合入口。
 3. **B2：web 切换**。`App.vue` 改为一次 `initCoreHostServices`；手动回归：弹窗/等待、svg 云上传、导出图片（saveInfo）、拼音转换、关于页/私服案例链接。
 4. **C1：`loadSaveIntoEditor`**。core 新增 `app/editorSession.ts`；`Editor.vue` 两条加载路径改为传 raw + opts；undo 初始化并入。手动回归：编辑器打开（数字存档 + demo）、浏览模式（visitorMode/图标栏目隐藏）、 undo 从初始状态可用。
