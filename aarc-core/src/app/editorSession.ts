@@ -1,11 +1,13 @@
-import { DataSource } from "aarc-core/models/save";
+import { DataSource, Save } from "aarc-core/models/save";
 import { normalizeSave } from "aarc-core/models/save/saveNormalize";
 import { autoUpdateDataSources, DataSourceMergeReport } from "aarc-core/models/save/dataSourceOps";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
+import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { useIconStore } from "aarc-core/models/stores/iconStore";
 import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
+import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 
 /**
  * 编辑器会话入口（decoupling-step17.md 工作包 C）。
@@ -61,4 +63,20 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
 /** 卸载编辑器会话：注销“主画布渲染完成”回调等 core 侧清理 */
 export function disposeEditor(): void {
     useMainCvsDispatcher().initAfterMainCvsRendered(undefined)
+}
+
+/**
+ * 保存前的 core 侧处理：配置写回存档 + 站名坐标截断，返回可序列化的 Save。
+ * 压缩/序列化与上传仍由宿主负责。
+ */
+export function prepareSavePayload(): Save | undefined {
+    const configStore = useConfigStore()
+    const saveStore = useSaveStore()
+    configStore.writeConfigToSave()
+    // “自动站名位置”添加时未截断小数点，这里亡羊补牢一下，保存前截断所有站名位置
+    saveStore.save?.points.forEach(pt => {
+        if (pt.nameP)
+            coordRound(pt.nameP)
+    })
+    return saveStore.save
 }

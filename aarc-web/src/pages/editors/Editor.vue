@@ -13,9 +13,8 @@ import { devSave } from '@/data/dev/devSave';
 import { useApiStore } from '@/app/com/apiStore';
 import { usePreventLeavingUnsavedStore, initRouteGuardRegistrar } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
-import { loadSaveIntoEditor, disposeEditor, DataSourceUpdateEvents } from 'aarc-core/app/editorSession';
+import { loadSaveIntoEditor, disposeEditor, prepareSavePayload, DataSourceUpdateEvents } from 'aarc-core/app/editorSession';
 import rfdc from 'rfdc';
-import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { ShortcutListener } from '@aurouscia/keyboard-shortcut'
 import { useMiniatureCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/miniatureCvsDispatcher';
@@ -39,7 +38,6 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useSignalrStore } from '@/app/com/signalrStore';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
-import { coordRound } from 'aarc-core/utils/coordUtils/coordRound';
 import { throttle } from '@/utils/lang/throttle';
 import { useUndoStore } from 'aarc-core/models/stores/utils/undoStore';
 import { isFocusingInput } from 'aarc-core/utils/domUtils/focusingInput';
@@ -63,7 +61,6 @@ const { showPop } = uniq
 const { topbarShow } = storeToRefs(uniq)
 const saveStore = useSaveStore()
 const envStore = useEnvStore()
-const configStore = useConfigStore()
 const undoStore = useUndoStore()
 const api = useApiStore()
 const userInfoStore = useUserInfoStore()
@@ -219,10 +216,10 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
         return false
     }
     lastSavedTime = Date.now()
-    configStore.writeConfigToSave()
+    const savePayload = prepareSavePayload() // core 侧：配置写回 + 站名坐标截断
     if(isNaN(saveIdNum.value)){
         if(import.meta.env.DEV){
-            const saveCopy = deepClone(saveStore.save)
+            const saveCopy = deepClone(savePayload)
             console.log(saveCopy)
         }
         showPop('此处不能保存', 'failed')
@@ -231,16 +228,10 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
     const staCount = saveStore.getStaCount()
     const lineCount = saveStore.getLineCount()
 
-    // “自动站名位置”添加时未截断小数点，这里亡羊补牢一下，保存前截断所有站名位置
-    saveStore.save?.points.forEach(pt=>{
-        if(pt.nameP)
-            coordRound(pt.nameP)
-    })
-
     let resp:boolean|undefined = false
     let blob:Blob|'notSupported';
     try{  
-        blob = await compressObjectToGzip(saveStore.save??{})
+        blob = await compressObjectToGzip(savePayload??{})
     }
     catch(err){
         blob = 'notSupported'
@@ -251,7 +242,7 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
     }
     else{
         //若blob不是Blob（浏览器不支持压缩或出了问题）则直接明文保存
-        const data = JSON.stringify(saveStore.save??{})
+        const data = JSON.stringify(savePayload??{})
         resp = await api.save.updateData(saveIdNum.value, false, data, staCount, lineCount, mustBackup)
     }
     if(resp){
