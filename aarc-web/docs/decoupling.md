@@ -159,7 +159,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 5（未来）：接口化与 tauri
 
-17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。**同期建议收敛 `Editor.vue` 的装配面**（2026-09 调查）：目前宿主直接操作 core 的 `mainCvsDispatcher`/`miniatureCvsDispatcher`/`resetterStore`/`undoStore`/`iconStore`/`saveStore` 且需知晓内部调用时序（如 `Editor.vue:169-173` 依次 `saveStore.save = normalizeSave(...)`——直接写 store 字段、`resetDerivedStores()`、`ensureAllLoaded()`）；宜由 core 提供"编辑器会话"入口（如 `loadSaveIntoEditor()` / `disposeEditor()`）把时序收进 core 内部，宿主只传数据与回调。另可在 web 侧为 `apiGenerated.ts` ↔ core `apiShapes.ts` 的字段投影加编译期断言（`satisfies`/类型互赋测试），防止后端 DTO 改了 core 未用字段时零告警。
+17. 在三个已注入 provider（§3.4）的基础上收口：core 定义 `CoreHostServices` 接口（文件读写、弹窗、导航、配置），web 提供 HTTP 实现。**同期建议收敛 `Editor.vue` 的装配面**（2026-09 调查）：目前宿主直接操作 core 的 `mainCvsDispatcher`/`miniatureCvsDispatcher`/`resetterStore`/`undoStore`/`iconStore`/`saveStore` 且需知晓内部调用时序（如 `Editor.vue:169-173` 依次 `saveStore.save = normalizeSave(...)`——直接写 store 字段、`resetDerivedStores()`、`ensureAllLoaded()`）；宜由 core 提供"编辑器会话"入口（如 `loadSaveIntoEditor()` / `disposeEditor()`）把时序收进 core 内部，宿主只传数据与回调。另可在 web 侧为 `apiGenerated.ts` ↔ core `apiShapes.ts` 的字段投影加编译期断言（`satisfies`/类型互赋测试），防止后端 DTO 改了 core 未用字段时零告警。📄 **实施细化（2026-09 调查编写）：见 [`docs/decoupling-step17.md`](./decoupling-step17.md)**——三个工作包（投影断言 / CoreHostServices 聚合 / 编辑器会话入口），含现状逐点盘点与 7 个可独立提交的子步骤。
 18. 新增 `aarc-tauri` 包：复用 `aarc-core`，实现 fs 版 HostServices，替换 persist 存储与上传逻辑。注意 core 内还有十余处 `window.confirm/alert`（`Lines.vue:64`、`stashStore.ts:22,35`、`ControlPointOptions.vue:96,108,115` 等）与 `contextMenu.ts:4` 对 `document.oncontextmenu` 的全局改写——浏览器宿主下可接受，tauri 阶段若要替换原生对话框/右键行为，需统一抽象为宿主 UI 服务。
 
 ---
