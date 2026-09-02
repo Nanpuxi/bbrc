@@ -29,13 +29,15 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 
 ### 二、回调注入接口（`init*` 注册）
 
+> 聚合入口：`initCoreHostServices(services: CoreHostServices)`（`app/hostServices.ts`）一次性注册下表中"应用启动期"的服务（弹窗/等待、云上传、拼音转换、存档信息、站点链接、路由守卫），内部依次调用各 `init*`；新增宿主时实现 `CoreHostServices` 即得到完整装配 checklist。下表各低层入口保留，可单独调用。
+
 | 功能 | core 入口 | web 实现 |
 |---|---|---|
-| 全局弹窗 / 等待遮罩 | `uniqueComponents.initCallbacks({ popCallback, waitCallback })`（`app/globalStores/uniqueComponents.ts:11`） | `App.vue:26-33`，用 web 自有的 `Pop.vue` / `Wait.vue` 实现 UI |
-| 存档缩略 SVG 云上传 | `initCloudSvgUploader(uploader)`（`models/save/cloudSvgOps.ts:8`）；未注入时调用仅报错不崩溃 | `App.vue:34-37`，`api.saveSvg.upload` |
-| 拼音转换 | `initPinyinConvertProvider(provider)`（`components/composables/usePinyinConvert.ts:11`） | `App.vue:38`，`api.saveUtils.pinyinConvert` |
-| 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`） | `App.vue:39`，`api.save.loadInfo` |
-| 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:40-43`，`router.resolve({ name }).href` |
+| 全局弹窗 / 等待遮罩 | `uniqueComponents.initCallbacks({ popCallback, waitCallback })`（`app/globalStores/uniqueComponents.ts:11`） | `App.vue:23-40` 聚合注册（pop/wait 字段），用 web 自有的 `Pop.vue` / `Wait.vue` 实现 UI |
+| 存档缩略 SVG 云上传 | `initCloudSvgUploader(uploader)`（`models/save/cloudSvgOps.ts:8`）；未注入时调用仅报错不崩溃 | `App.vue:23-40` 聚合注册（cloudSvgUploader 字段），`api.saveSvg.upload` |
+| 拼音转换 | `initPinyinConvertProvider(provider)`（`components/composables/usePinyinConvert.ts:11`） | `App.vue:23-40` 聚合注册（pinyinConvert 字段），`api.saveUtils.pinyinConvert` |
+| 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`） | `App.vue:23-40` 聚合注册（saveInfo 字段），`api.save.loadInfo` |
+| 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:23-40` 聚合注册（siteLinks 字段），`router.resolve({ name }).href` |
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳 + undo 入栈"；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:321` 注册，`:451` 离开编辑器时传 `undefined` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |

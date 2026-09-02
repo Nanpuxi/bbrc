@@ -157,8 +157,8 @@ export function disposeEditor(): void
 每步独立提交，完成后跑：`pnpm --filter aarc-core type-check && pnpm --filter aarc-web type-check && pnpm --filter aarc-core test:run && pnpm --filter aarc-web build-here`。
 
 1. ✅ 已完成（2026-09）**A：投影断言**。新增 `aarc-web/src/app/com/apiShapesAssert.ts`，`apiStore.ts` 引入。纯类型，零行为变化。（实现采用导出类型别名而非 const 赋值，原因与负向验证结论见 §2.1。）
-2. **B1：聚合入口**。core 新增 `app/hostServices.ts`（聚合调用既有 `init*`）；`aarc-core/README.md` "回调注入接口"一节顶部补一行指向聚合入口。
-3. **B2：web 切换**。`App.vue` 改为一次 `initCoreHostServices`；手动回归：弹窗/等待、svg 云上传、导出图片（saveInfo）、拼音转换、关于页/私服案例链接。
+2. ✅ 已完成（2026-09）**B1：聚合入口**。core 新增 `app/hostServices.ts`（聚合调用既有 `init*`）；`aarc-core/README.md` "回调注入接口"一节顶部补一行指向聚合入口。（实现与 §2.2 设计一致，`siteLinks`/`routeGuardRegistrar` 为可选注入。）
+3. ✅ 已完成（2026-09）**B2：web 切换**。`App.vue:23-40` 改为一次 `initCoreHostServices`（路由守卫仍留 `Editor.vue:60` 单独注册）；`aarc-core/README.md` 表格 web 实现列已同步。手动回归项（弹窗/等待、svg 云上传、导出图片、拼音转换、站点链接）待部署环境核对；已完成验证：两包 type-check、core 测试 701 通过、`build-here`、dev 服务器下 `App.vue` 与 `hostServices.ts` 正常转换加载。
 4. **C1：`loadSaveIntoEditor`**。core 新增 `app/editorSession.ts`；`Editor.vue` 两条加载路径改为传 raw + opts；undo 初始化并入。手动回归：编辑器打开（数字存档 + demo）、浏览模式（visitorMode/图标栏目隐藏）、 undo 从初始状态可用。
 5. **C2：undo push 内移 + `disposeEditor`**。`notifyMainCvsRendered` 内先 push undo；宿主回调删去 push；卸载改为 `disposeEditor()`。手动回归：编辑→阻止离开→保存→解除；undo/redo。
 6. **C3：`prepareSavePayload`**。`Editor.vue:241` 与 `:253-257` 收进 core。手动回归：保存（含压缩与明文两条路径）、自动站名位置保存后小数截断。

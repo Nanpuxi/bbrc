@@ -7,10 +7,7 @@ import TopbarParent from './components/common/topbar/TopbarParent.vue';
 import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
-import { initCloudSvgUploader } from 'aarc-core/models/save/cloudSvgOps';
-import { initPinyinConvertProvider } from 'aarc-core/components/composables/usePinyinConvert';
-import { initSaveInfoProvider } from 'aarc-core/components/sidebars/export/composables/useImageExport';
-import { initSiteLinks } from 'aarc-core/app/siteLinks';
+import { initCoreHostServices } from 'aarc-core/app/hostServices';
 import { useRouter } from 'vue-router';
 import { aboutName } from './pages/identities/routes/routesNames';
 import { forkAarcName } from './pages/etc/routes/routesNames';
@@ -23,23 +20,23 @@ const router = useRouter()
 const pop = useTemplateRef('pop')
 const wait = useTemplateRef('wait')
 onMounted(()=>{
-    uniq.initCallbacks({
-        popCallback: (msg, type)=>{
+    initCoreHostServices({
+        pop: (msg, type)=>{
             pop.value?.show(msg, type)
         },
-        waitCallback: (reason, value)=>{
+        wait: (reason, value)=>{
             wait.value?.setShowing(reason, value)
+        },
+        cloudSvgUploader: async (saveId, svgBlob)=>{
+            const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
+            return res === true
+        },
+        pinyinConvert: req => api.saveUtils.pinyinConvert(req),
+        saveInfo: saveId => api.save.loadInfo(saveId),
+        siteLinks: {
+            about: router.resolve({ name: aboutName }).href,
+            forkAarc: router.resolve({ name: forkAarcName }).href
         }
-    })
-    initCloudSvgUploader(async (saveId, svgBlob)=>{
-        const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
-        return res === true
-    })
-    initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))
-    initSaveInfoProvider(saveId => api.save.loadInfo(saveId))
-    initSiteLinks({
-        about: router.resolve({ name: aboutName }).href,
-        forkAarc: router.resolve({ name: forkAarcName }).href
     })
 })
 </script>
