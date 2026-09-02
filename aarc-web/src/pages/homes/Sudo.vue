@@ -44,6 +44,13 @@ async function setUserAsAdmin() {
     setUserAsAdminResMsg.value = undefined
     setUserAsAdminResMsg.value = await api.sudo.setUserAsAdmin(setUserAsAdminUserId.value, masterKey.value)
 }
+
+const unbindEmailAddr = ref<string>()
+const unbindEmailResMsg = ref<string>()
+async function unbindEmail() {
+    unbindEmailResMsg.value = undefined
+    unbindEmailResMsg.value = await api.sudo.unbindEmail(unbindEmailAddr.value, masterKey.value)
+}
 </script>
 
 <template>
@@ -72,6 +79,10 @@ async function setUserAsAdmin() {
         <button :class="mode=='setUserAsAdmin'?'confirm':'minor'"
             @click="mode='setUserAsAdmin';setUserAsAdminResMsg = undefined">
             设置用户为管理员
+        </button>
+        <button :class="mode=='unbindEmail'?'confirm':'minor'"
+            @click="mode='unbindEmail';unbindEmailResMsg = undefined">
+            解绑邮箱
         </button>
     </div>
     <div class="inputs"> 
@@ -107,6 +118,12 @@ async function setUserAsAdmin() {
             <input v-model="masterKey" placeholder="masterKey">
             <button v-if="!setUserAsAdminResMsg" @click="setUserAsAdmin" class="ok">执行</button>
             <div v-else>{{ setUserAsAdminResMsg }}</div>
+        </template>
+        <template v-if="mode=='unbindEmail'">
+            <input v-model="unbindEmailAddr" placeholder="邮箱">
+            <input v-model="masterKey" placeholder="masterKey">
+            <button v-if="!unbindEmailResMsg" @click="unbindEmail" class="ok">解绑</button>
+            <div v-else>{{ unbindEmailResMsg }}</div>
         </template>
     </div>
 </div>
