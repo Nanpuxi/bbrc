@@ -42,6 +42,11 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
 
+**弹窗 / 等待遮罩的行为约定**（任何宿主的 pop/wait 实现都必须遵循）：
+
+- **wait**：等待期间以蒙层阻止页面上的**一切**操作；当等待持续超过约 4 秒（与 `aarc-web` 的 `apiCancelableMs` 对齐）仍未结束时，必须出现**取消按钮**，允许用户放弃本次操作（取消的语义由宿主决定：web 为中止全部进行中 API 请求，无 API 层的宿主可直接强制结束等待）。
+- **pop**：必须支持**多条消息同时弹出**，相互不遮挡（如按序堆叠）；每条消息到达时限（web 为约 2 秒）后**自动消失**。
+
 ### 三、运行配置与构建期环境（宿主）
 
 - **运行配置**：core 不读 `import.meta.env`，所需配置由宿主在启动早期调用 `configureCore(config: CoreConfig)`（`app/coreConfig.ts`）注入，core 内经 `getCoreConfig()` 读取：`apiUrlBase`（代理转换/云端SVG分享链接）、`guideResetPassword`/`guideFindHelp`/`guideExtra`（指引文案）、`logMainCvsRendering`（渲染耗时日志）、`adsTextLess`/`adsTextMore`（导出图片水印文案）。未注入的项按 undefined/false 处理。web：`src/main.ts` 顶层以 `import.meta.env.VITE_*` 注入
