@@ -30,6 +30,7 @@ import { useTemplateRef } from 'vue';
 import { compressObjectToGzip } from '@/utils/dataUtils/compressObjectToGzip';
 import { useLoadedSave } from '@/models/stores/utils/loadedSave';
 import { setCurrentSaveIdRaw } from 'aarc-core/models/save/currentSaveId';
+import { decodeSaveId } from '@/utils/dataUtils/saveIdCodec';
 import { HttpUserInfo, SaveDto, SavePreflightStatus } from '@/app/com/apiGenerated';
 import { useSavingDisabledWarningStore } from './components/savingDisabledWarningStore';
 import SavingDisabledWarning from './components/SavingDisabledWarning.vue';
@@ -48,8 +49,13 @@ const heartbeatIntervalSecs = 3 * 60 // 每3分钟心跳一次
 const heartbeatOnEditMinIntervalMs = 60 * 1000 // 编辑活动触发的心跳，一分钟内最多一次
 
 const props = defineProps<{saveId:string}>()
-// 把当前存档 id 提供给 core（core 不直接读 route）
-watch(() => props.saveId, id => setCurrentSaveIdRaw(id), { immediate: true })
+// 路由参数可能是新版编码串或旧版纯数字，统一解码为数值id（demo 等非数值场景为 NaN）
+const saveIdNum = computed(()=>decodeSaveId(props.saveId) ?? NaN)
+// 把当前存档 id 提供给 core（core 不直接读 route）；能解码出数值id时传数字字符串，否则原样传（如 demo）
+watch(() => props.saveId, id => {
+    const num = decodeSaveId(id)
+    setCurrentSaveIdRaw(num === undefined ? id : String(num))
+}, { immediate: true })
 const router = useRouter()
 // 把路由守卫注册能力注入 core（core 不直接用 vue-router）
 initRouteGuardRegistrar(guard => router.beforeEach(guard))
@@ -67,7 +73,6 @@ const userInfoStore = useUserInfoStore()
 const signalrStore = useSignalrStore()
 const kickedFromCanvasStore = useKickedFromCanvasStore()
 const chatRoom = useTemplateRef('chatRoom')
-const saveIdNum = computed(()=>parseInt(props.saveId))
 const { loadedSave } = storeToRefs(useLoadedSave())
 const loadComplete = ref(false)
 const mainCvsDispatcher = useMainCvsDispatcher()
