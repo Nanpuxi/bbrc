@@ -30,10 +30,10 @@ const editingFile = ref<UserFileDto>()
 const editingName = ref('')
 const editingIntro = ref('')
 
-function copyImageLink(file: UserFileDto) {
+async function copyImageLink(file: UserFileDto) {
     const domain = window.location.origin;
     const imageUrl = `${domain}${file.urlOriginal}`;
-    const success = copy(imageUrl);
+    const success = await copy(imageUrl);
     if (success) {
         showPop('已复制链接', 'success');
     } else {
