@@ -51,6 +51,12 @@ async function unbindEmail() {
     unbindEmailResMsg.value = undefined
     unbindEmailResMsg.value = await api.sudo.unbindEmail(unbindEmailAddr.value, masterKey.value)
 }
+
+const maxSaveIdResMsg = ref<string>()
+async function getMaxSaveId() {
+    maxSaveIdResMsg.value = undefined
+    maxSaveIdResMsg.value = await api.sudo.getMaxSaveId(masterKey.value)
+}
 </script>
 
 <template>
@@ -83,6 +89,10 @@ async function unbindEmail() {
         <button :class="mode=='unbindEmail'?'confirm':'minor'"
             @click="mode='unbindEmail';unbindEmailResMsg = undefined">
             解绑邮箱
+        </button>
+        <button :class="mode=='getMaxSaveId'?'confirm':'minor'"
+            @click="mode='getMaxSaveId';maxSaveIdResMsg = undefined">
+            统计数据
         </button>
     </div>
     <div class="inputs"> 
@@ -124,6 +134,11 @@ async function unbindEmail() {
             <input v-model="masterKey" placeholder="masterKey">
             <button v-if="!unbindEmailResMsg" @click="unbindEmail" class="ok">解绑</button>
             <div v-else>{{ unbindEmailResMsg }}</div>
+        </template>
+        <template v-if="mode=='getMaxSaveId'">
+            <input v-model="masterKey" placeholder="masterKey">
+            <button v-if="!maxSaveIdResMsg" @click="getMaxSaveId" class="ok">查询</button>
+            <div v-else>{{ maxSaveIdResMsg }}</div>
         </template>
     </div>
 </div>
