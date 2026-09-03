@@ -5,6 +5,8 @@ import fullReload from 'vite-plugin-full-reload'
 import { signalrCommentFixerPlugin } from '@aurouscia/signalr-comment-fixer'
 import { resolve } from 'path'
 
+const __dirname = import.meta.dirname
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const envDir = 'env'
@@ -57,6 +59,7 @@ export default defineConfig(({ mode }) => {
     build:{
       emptyOutDir:true,
       outDir:"../AARC.WebApi/wwwroot",
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks: (id) => {
@@ -71,7 +74,7 @@ export default defineConfig(({ mode }) => {
           }
         }
       },
-      target: ['es2015', 'ios14'],
+      target: ['es2020', 'ios14'],
     },
     resolve:{
       alias:{
