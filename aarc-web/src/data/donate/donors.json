@@ -1,6 +1,36 @@
 {
-    "update_date": "2026/08/28 3:25",
+    "update_date": "2026/09/03 3:29",
     "donor_list": [
+        {
+            "name": "仲夏之天",
+            "amount": 11.45
+        },
+        {
+            "name": "应若初",
+            "amount": 0.10
+        },
+        {
+            "name": "UwLS的频道/CR450BF-5033",
+            "amount": 1.14
+        },
+        {
+            "name": "金安桥上望京西",
+            "amount": 11.11,
+            "remark": "初始高架样式，多人同时制作"
+        },
+        {
+            "name": "平山地铁",
+            "amount": 50.00
+        },
+        {
+            "name": "叶星鸿",
+            "amount": 6.00,
+            "remark": "选区复制粘贴"
+        },
+        {
+            "name": "朱可乐",
+            "amount": 0.70
+        },
         {
             "name": "兰媛渝熙",
             "amount": 3.55
