@@ -1,6 +1,6 @@
 # aarc-tauri
 
-AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1 步"纯浏览器 dev"与第 2 步"极简 Pop/Wait"已完成，尚未接入编辑器组件与 tauri）。
+AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1~3 步（纯浏览器 dev、极简 Pop/Wait、Editor 宿主组件）已完成，尚未接入 tauri）。
 
 目标：以最小装配跑通 `aarc-core` 编辑器（Cvs/Menu 及其闭包），验证"core + 非 web 宿主"的拆分成果，后续演进为具备本地文件读写能力的完整 `aarc-tauri`。
 
