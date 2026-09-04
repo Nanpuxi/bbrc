@@ -29,7 +29,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 
 ### 二、回调注入接口（`init*` 注册）
 
-> 聚合入口：`initCoreHostServices(services: CoreHostServices)`（`app/hostServices.ts`）一次性注册下表中"应用启动期"的服务（弹窗/等待、云上传、拼音转换、存档信息、站点链接、路由守卫），内部依次调用各 `init*`；新增宿主时实现 `CoreHostServices` 即得到完整装配 checklist。下表各低层入口保留，可单独调用。
+> 聚合入口：`initCoreHostServices(services: CoreHostServices)`（`app/hostServices.ts`）一次性注册下表中"应用启动期"的服务（弹窗/等待、云上传、拼音转换、存档信息、文件保存、站点链接、路由守卫），内部依次调用各 `init*`；新增宿主时实现 `CoreHostServices` 即得到完整装配 checklist。下表各低层入口保留，可单独调用。
 
 | 功能 | core 入口 | web 实现 |
 |---|---|---|
@@ -37,6 +37,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 存档缩略 SVG 云上传 | `initCloudSvgUploader(uploader)`（`models/save/cloudSvgOps.ts:8`）；未注入则"云端SVG"配置区整体隐藏 | `App.vue:23-40` 聚合注册（cloudSvgUploader 字段），`api.saveSvg.upload` |
 | 拼音转换 | `initPinyinConvertProvider(provider)`（`components/composables/usePinyinConvert.ts:11`）；未注入则站名/文本标签编辑器内的转换按钮及"站名拼音转换"配置区隐藏 | `App.vue:23-40` 聚合注册（pinyinConvert 字段），`api.saveUtils.pinyinConvert` |
 | 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`）；未注入则导出文件名退化为存档 id，不阻断导出 | `App.vue:23-40` 聚合注册（saveInfo 字段），`api.save.loadInfo` |
+| 文件保存（导出落盘） | `initFileSaver(saver)`（`components/sidebars/export/composables/useImageExport.ts`）；未注入则 `triggerDownload` 使用浏览器 `<a download>` 下载兜底（webview 下载不可靠的宿主如 tauri 应注入原生实现） | web 不注入，走 core 默认浏览器下载；tauri：`src/fileSaver.ts`（dialog `save` + fs `writeFile`） |
 | 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:23-40` 聚合注册（siteLinks 字段），`router.resolve({ name }).href` |
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |

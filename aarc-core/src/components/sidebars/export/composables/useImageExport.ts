@@ -21,6 +21,24 @@ export function hasSaveInfoProvider(): boolean {
     return !!saveInfoProvider
 }
 
+/**
+ * 文件保存实现，由宿主注入（tauri 用原生"另存为"对话框 + 写文件）。
+ * 返回 true 表示已保存；用户取消或失败返回 false。
+ * 未注入时 triggerDownload 退化为浏览器 <a download> 下载。
+ */
+export type FileSaver = (blob: Blob, fileName: string) => Promise<boolean>
+
+let fileSaver: FileSaver | undefined
+
+export function initFileSaver(s: FileSaver) {
+    fileSaver = s
+}
+
+/** 宿主是否已注入文件保存实现；未注入时使用浏览器下载兜底 */
+export function hasFileSaver(): boolean {
+    return !!fileSaver
+}
+
 export function useImageExport() {
     const { browserInfo, isIPhoneOrIPad, isWebkit } = storeToRefs(useBrowserInfoStore())
     const exportLocalConfig = useExportLocalConfigStore()
@@ -67,7 +85,18 @@ export function useImageExport() {
         return URL.createObjectURL(blob);
     }
 
-    function triggerDownload(url: string, fileName: string): void {
+    async function triggerDownload(url: string, fileName: string): Promise<void> {
+        if (fileSaver) {
+            //宿主注入了文件保存实现（如 tauri）：把 url 取回为 Blob 交给宿主落盘
+            try {
+                const blob = await (await fetch(url)).blob()
+                if (await fileSaver(blob, fileName))
+                    exported.value = true
+            } catch (e) {
+                console.error('文件保存失败', e)
+            }
+            return
+        }
         const link = getDownloadAnchor()
         if (link && 'href' in link) {
             exported.value = true
