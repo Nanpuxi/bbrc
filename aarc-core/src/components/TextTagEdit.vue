@@ -9,7 +9,7 @@ import foldImg from 'aarc-core/assets/ui/fold.svg'
 import settingsImg from 'aarc-core/assets/ui/settings.svg'
 import pinyinConvertImg from 'aarc-core/assets/ui/pinyinConvert.svg'
 import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtils/contextMenu';
-import { usePinyinConvert } from './composables/usePinyinConvert';
+import { usePinyinConvert, hasPinyinConvertProvider } from './composables/usePinyinConvert';
 
 const textTagEditStore = useTextTagEditStore()
 const envStore = useEnvStore()
@@ -26,6 +26,7 @@ const inputPlaceholder = computed<string|undefined>(()=>{
 })
 
 const { convertPinyin, pinyinOverriding } = usePinyinConvert(textMain, textSub, ()=>textTagEditStore.applyText())
+const pinyinConvertEnabled = hasPinyinConvertProvider()
 async function convertPinyinCall(){
     await convertPinyin()
 }
@@ -83,7 +84,7 @@ onUnmounted(()=>{
         <div @click="envStore.duplicateTextTag();textTagEditStore.endEditing()" class="duplicateBtn sqrBtn withShadow">
             <div class="dupA"></div><div class="dupB"></div>
         </div>
-        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
+        <div v-if="pinyinConvertEnabled" @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
             <img v-if="!pinyinOverriding" :src="pinyinConvertImg"/>
             <div v-else>再次<br/>点击</div>
         </div>

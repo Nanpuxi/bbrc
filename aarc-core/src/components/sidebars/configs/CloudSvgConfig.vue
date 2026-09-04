@@ -2,7 +2,7 @@
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import ConfigSection from './shared/ConfigSection.vue';
 import { storeToRefs } from 'pinia';
-import { renderAndUploadCloudSvg } from 'aarc-core/models/save/cloudSvgOps';
+import { renderAndUploadCloudSvg, hasCloudSvgUploader } from 'aarc-core/models/save/cloudSvgOps';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { getCurrentSaveIdNum } from 'aarc-core/models/save/currentSaveId';
 import { getCoreConfig } from 'aarc-core/app/coreConfig';
@@ -11,8 +11,9 @@ import copy from 'copy-to-clipboard'
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const { showPop } = useUniqueComponentsStore()
+const cloudSvgEnabled = hasCloudSvgUploader()
 
-if (save.value) {
+if (cloudSvgEnabled && save.value) {
     save.value.meta ??= {}
     save.value.meta.autoUpdateCloudSvg ??= {}
     save.value.meta.autoUpdateCloudSvg.enabled ??= false
@@ -43,7 +44,7 @@ function copyShareLink() {
 </script>
 
 <template>
-<ConfigSection :title="'云端SVG'">
+<ConfigSection :title="'云端SVG'" v-if="cloudSvgEnabled">
     <table class="fullWidth"><tbody>
         <tr>
             <td colspan="2">

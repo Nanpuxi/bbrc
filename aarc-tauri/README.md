@@ -60,9 +60,9 @@ pnpm --filter aarc-tauri gen:icons
 
 - `siteLinks`：不注入则"关于页/私服案例"链接隐藏（tauri 本就不需要）。
 - `routeGuardRegistrar`：tauri 无前端路由，可不注入；`window.onbeforeunload` 部分 core 自理。
-- `pinyinConvert` / `saveInfo`：不注入则站名拼音转换、导出图片读存档信息不可用。
-- `cloudSvgUploader`：minimal 阶段可注入 noop/本地保存占位；tauri 阶段换 fs 实现。
-- `initOpenFavoritesSidebar`：不注入则图标收藏夹入口仅 `console.warn`。
+- `pinyinConvert` / `saveInfo`：不注入则拼音转换按钮与"站名拼音转换"配置区隐藏；导出文件名退化为存档 id，不阻断导出。
+- `cloudSvgUploader`：不注入则"云端SVG"配置区整体隐藏；minimal 阶段也可注入 noop/本地保存占位，tauri 阶段换 fs 实现。
+- `initOpenFavoritesSidebar`：不注入则"添加资源"按钮隐藏（被调用时仅 `console.warn`）。
 
 ### 三、运行时环境约束（tauri webview 需处理）
 

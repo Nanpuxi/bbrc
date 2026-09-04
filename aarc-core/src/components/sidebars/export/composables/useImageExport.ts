@@ -16,6 +16,11 @@ export function initSaveInfoProvider(p: SaveInfoProvider) {
     saveInfoProvider = p
 }
 
+/** 宿主是否已注入存档信息提供者；未注入时导出文件名退化为存档id */
+export function hasSaveInfoProvider(): boolean {
+    return !!saveInfoProvider
+}
+
 export function useImageExport() {
     const { browserInfo, isIPhoneOrIPad, isWebkit } = storeToRefs(useBrowserInfoStore())
     const exportLocalConfig = useExportLocalConfigStore()
@@ -102,11 +107,12 @@ export function useImageExport() {
             saveName = saveId
         else {
             if(!saveInfoProvider){
-                console.error('存档信息提供者未注入')
-                return undefined
+                //宿主未注入存档信息提供者：退化为用存档id命名，不阻断导出
+                saveName = saveId
+            }else{
+                const info = await saveInfoProvider(saveIdNum)
+                saveName = info?.name ?? '??'
             }
-            const info = await saveInfoProvider(saveIdNum)
-            saveName = info?.name ?? '??'
         }
         let name = ''
         const style = fileNameStyle.value
