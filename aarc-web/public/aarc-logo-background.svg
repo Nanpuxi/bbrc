@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 由 aarc-logo-fullbleed.svg 拆分出的背景层：渐变底铺满整个正方形画布。 -->
+<!-- 用作 Android adaptive icon 的 background 层等场景的源图。 -->
+<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 255 255" style="enable-background:new 0 0 255 255;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:url(#SVGID_1_);}
+</style>
+<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="-0.6198" y1="161.8105" x2="254.505" y2="93.45">
+	<stop  offset="2.286208e-03" style="stop-color:#34A6BC"/>
+	<stop  offset="0.1147" style="stop-color:#309CBC"/>
+	<stop  offset="0.4419" style="stop-color:#2684BD"/>
+	<stop  offset="0.744" style="stop-color:#2075BD"/>
+	<stop  offset="0.9952" style="stop-color:#1E70BD"/>
+</linearGradient>
+<rect class="st0" width="255" height="255"/>
+</svg>
