@@ -23,6 +23,7 @@ import rfdc from "rfdc";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 import { usePointLinkStore } from "./pointLinkStore";
 import { useSelectionStore } from "./selectionStore";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 
 import { assignAllProps, removeNonexistentKeys } from "aarc-core/utils/lang/assignAllProps";
 import { removeConsecutiveSameItem } from "aarc-core/utils/lang/removeConsecutiveSameItem";
@@ -77,6 +78,7 @@ export const useEnvStore = defineStore('env', ()=>{
     const discardAreaStore = useDiscardAreaStore()
     const pointLinkStore = usePointLinkStore()
     const selectionStore = useSelectionStore()
+    const editorLocalConfigStore = useEditorLocalConfigStore()
 
     const optionsOpenerStore = useOptionsOpenerStore()
     const lineFocusorStore = useLineFocusorStore()
@@ -350,6 +352,13 @@ export const useEnvStore = defineStore('env', ()=>{
         setOpsPos(false)
         activePtNameSnapped.value = 'no'
         endEveryEditing()
+        //根据本地配置，真实点击空白处可退出多选模式（noDetect的“视为点击空白处”不触发）
+        if(!noDetect){
+            const blankClick = editorLocalConfigStore.blankClickBehavior
+            if(blankClick === 'exitAlways'
+                || (blankClick === 'exitWhenGrouped' && selectionStore.matchedSelectionGroup))
+                selectionStore.selected.clear()
+        }
     }
     let oneFingerForSureTimer = 0
     let oneFingerBrushed = false

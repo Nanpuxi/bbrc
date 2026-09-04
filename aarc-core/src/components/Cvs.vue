@@ -35,30 +35,10 @@ const pointLinkStore = usePointLinkStore()
 const selectionStore = useSelectionStore()
 const saveStore = useSaveStore()
 
-//当前多选的 id 集合（按点/文本标签分开）
-function selectedIdSets(){
-    const ptIds = new Set<number>()
-    const tagIds = new Set<number>()
-    for(const s of selectionStore.selected){
-        if('dir' in s)
-            ptIds.add(s.id)
-        else
-            tagIds.add(s.id)
-    }
-    return { ptIds, tagIds }
-}
 //当前多选的 id 集合与某个选区组完全一致时，返回该组
-const matchedSelectionGroup = computed(()=>{
-    if(selectionStore.selected.size === 0)
-        return undefined
-    const { ptIds, tagIds } = selectedIdSets()
-    return saveStore.save?.selectionGroups?.find(g=>
-        g.ptIds.length === ptIds.size && g.tagIds.length === tagIds.size
-        && g.ptIds.every(id=>ptIds.has(id))
-        && g.tagIds.every(id=>tagIds.has(id)))
-})
+const { matchedSelectionGroup } = storeToRefs(selectionStore)
 function saveSelectionAsGroup(){
-    const { ptIds, tagIds } = selectedIdSets()
+    const { ptIds, tagIds } = selectionStore.selectedIdSets()
     saveStore.createSelectionGroup([...ptIds], [...tagIds])
     selectionStore.clear()
     showPop('已创建选区组', 'success')
@@ -146,7 +126,7 @@ defineExpose({init})
         <button class="lite" @click="selectionStore.disableForTouchScreen">选择完成(单击任意处)</button>
     </div>
     <div v-else-if="selectionStore.selected.size>0" class="statusDisplay selectionWorkingStatus">
-        当前选中<b>{{ selectionStore.selected.size }}</b>个元素，可以拖拽<br/>
+        当前选中<b>{{ selectionStore.selected.size }}</b>个元素，移动即移全部<br/>
         <button v-if="selectionStore.showedControl" class="lite"
             @click="selectionStore.enableForTouchScreen('add')">加选</button>
         <button v-if="selectionStore.showedControl" class="lite"

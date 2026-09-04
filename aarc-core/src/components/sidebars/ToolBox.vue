@@ -10,7 +10,7 @@ import { useStashStore } from 'aarc-core/models/stores/utils/stashStore';
 import Prompt from '../common/Prompt.vue';
 import { searchMarkForEmptyName, useNameSearchStore } from 'aarc-core/models/stores/nameSearchStore';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
-import { useEditorLocalConfigStore } from 'aarc-core/app/localConfig/editorLocalConfig';
+import { useEditorLocalConfigStore, selectionSizeLimits } from 'aarc-core/app/localConfig/editorLocalConfig';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
 import StringReplace from './StringReplace.vue';
 import ConfigSection from './configs/shared/ConfigSection.vue';
@@ -28,7 +28,7 @@ const { creatingLinkType } = storeToRefs(pointLinkStore)
 const stashStore = useStashStore()
 const nameSearchStore = useNameSearchStore()
 const { showPop } = useUniqueComponentsStore()
-const { duplicateNameDistThrs } = storeToRefs(useEditorLocalConfigStore())
+const { duplicateNameDistThrs, selectionSize, blankClickBehavior } = storeToRefs(useEditorLocalConfigStore())
 const { visitorMode } = storeToRefs(useMainCvsDispatcher())
 const mustBackup = defineModel<boolean>()
 
@@ -117,6 +117,7 @@ defineExpose({
         <template #explain>
             <div class="smallNote">目前仅支持批量选中后移动</div>
             <div class="smallNote">“创建选取组”可永久保存这次多选，便于后续多次拖动</div>
+            <div class="smallNote">本页面下方可设置选区大小</div>
         </template>
     </ToolItem>
     <ToolItem>
@@ -142,6 +143,28 @@ defineExpose({
             </div>
         </template>
     </ToolItem>
+    <ConfigSection title="批量选择功能设置（新）">
+        <table style="width: 100%;"><tbody>
+            <tr>
+                <td>选区大小</td>
+                <td>
+                    <input v-model.number="selectionSize" type="range"
+                        :min="selectionSizeLimits.min" :max="selectionSizeLimits.max" :step="0.1"/>
+                    <div>{{ selectionSize }}</div>
+                </td>
+            </tr>
+            <tr>
+                <td>点击空白</td>
+                <td>
+                    <select v-model="blankClickBehavior">
+                        <option value="exitAlways">总是退出</option>
+                        <option value="exitWhenGrouped">选区组时退出</option>
+                        <option value="none">不退出</option>
+                    </select>
+                </td>
+            </tr>
+        </tbody></table>
+    </ConfigSection>
     <ConfigSection title="站名相关功能">
         <button @click="nameSearchStore.toggleShow(searchMarkForEmptyName);fd()">
             查找无名车站

@@ -9,6 +9,7 @@ import { useTextTagRectStore } from "./saveDerived/textTagRectStore";
 import { coordAdd, coordSub } from "aarc-core/utils/coordUtils/coordMath";
 import { isFocusingInput } from "aarc-core/utils/domUtils/focusingInput";
 import { useCvsFrameStore } from "./cvsFrameStore";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 
 type SelectionTarget = ControlPoint|TextTag
 export const useSelectionStore = defineStore('selection', ()=>{
@@ -25,7 +26,7 @@ export const useSelectionStore = defineStore('selection', ()=>{
     const { enumerateTextTagRects } = useTextTagRectStore()
     
     function getBrushRadius(){
-        return useCvsFrameStore().getViewRectBiggerSideLength() / 10
+        return useCvsFrameStore().getViewRectBiggerSideLength() / 10 * useEditorLocalConfigStore().selectionSize
     }
     function brush(coord?:Coord){
         selCursor.value = coord
@@ -70,6 +71,29 @@ export const useSelectionStore = defineStore('selection', ()=>{
             }
         }
     }
+
+    //当前多选的 id 集合（按点/文本标签分开）
+    function selectedIdSets(){
+        const ptIds = new Set<number>()
+        const tagIds = new Set<number>()
+        for(const s of selected.value){
+            if('dir' in s)
+                ptIds.add(s.id)
+            else
+                tagIds.add(s.id)
+        }
+        return { ptIds, tagIds }
+    }
+    //当前多选的 id 集合与某个选区组完全一致时，返回该组
+    const matchedSelectionGroup = computed<SelectionGroup|undefined>(()=>{
+        if(selected.value.size === 0)
+            return undefined
+        const { ptIds, tagIds } = selectedIdSets()
+        return save.value?.selectionGroups?.find(g=>
+            g.ptIds.length === ptIds.size && g.tagIds.length === tagIds.size
+            && g.ptIds.every(id=>ptIds.has(id))
+            && g.tagIds.every(id=>tagIds.has(id)))
+    })
 
     function enableForTouchScreen(setMode?:'add'|'sub'){
         mode.value = setMode ?? 'add'
@@ -152,6 +176,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
         brush,
         setBrushStatus,
         applyGroups,
+        selectedIdSets,
+        matchedSelectionGroup,
         clear,
         enableForTouchScreen,
         disableForTouchScreen,
