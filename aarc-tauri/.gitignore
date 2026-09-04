@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# 图标产物（整个目录由 pnpm gen:icons 生成，见 scripts/gen-icons.mjs）
+src-tauri/icons/

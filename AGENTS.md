@@ -48,7 +48,7 @@ pnpm --filter aarc-core type-check   # 改动 aarc-core 后
 前端位于 pnpm-workspace 中（根 `pnpm-workspace.yaml`），包含三个包：
 - `aarc-core`：编辑器核心（Cvs/Menu 及其依赖闭包、单元测试），以源码经 `exports` 通配导出，内部 import 一律用 `aarc-core/` 自引用，不依赖 web 侧任何东西
 - `aarc-web`：站点（pages、router、API 层等），依赖 `aarc-core`（`workspace:*`）
-- `aarc-tauri`：编辑器的最小 Tauri 宿主（实现中，浏览器 dev 下已可打开编辑器并本地保存，尚未接入 tauri），依赖 `aarc-core`（`workspace:*`），功能清单与实现步骤见其 README
+- `aarc-tauri`：编辑器的最小 Tauri 宿主（浏览器 dev 与 `pnpm --filter aarc-tauri tauri:dev` 均可运行编辑器并本地保存；尚未做 fs 化），依赖 `aarc-core`（`workspace:*`），功能清单与实现步骤见其 README
 
 在根目录或包目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter <包名> <script>` 指定包。`aarc-web` 的 `test`/`test:run` 已透传到 `aarc-core`（测试随核心迁移）。core 需要宿主（web/未来 tauri）提供的功能清单及 web 对照实现见 `aarc-core/README.md`。详见 `aarc-web/docs/decoupling.md`。
 
