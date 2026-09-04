@@ -63,6 +63,7 @@ pnpm --filter aarc-tauri gen:icons
 - `pinyinConvert` / `saveInfo`：不注入则拼音转换按钮与"站名拼音转换"配置区隐藏；导出文件名退化为存档 id，不阻断导出。
 - `cloudSvgUploader`：不注入则"云端SVG"配置区整体隐藏；minimal 阶段也可注入 noop/本地保存占位，tauri 阶段换 fs 实现。
 - `initOpenFavoritesSidebar`：不注入则"添加资源"按钮隐藏（被调用时仅 `console.warn`）。
+- `fileSaver`：core 默认用浏览器 `<a download>` 下载兜底，tauri webview 下不可靠，**本包已注入原生实现**：`src/fileSaver.ts`（plugin-dialog `save` 弹"另存为" + plugin-fs `writeFile` 写盘，对话框选中的路径自动进入 fs 运行时 scope，权限见 `src-tauri/capabilities/default.json`）；`main.ts` 经 `isTauri()` 判断仅在 tauri 环境注入，浏览器 dev 仍走默认下载。
 
 ### 三、运行时环境约束（tauri webview 需处理）
 
@@ -81,5 +82,5 @@ pnpm --filter aarc-tauri gen:icons
 3. **Editor 宿主组件**：挂载 Cvs/Menu，接 `@save-data`/`@leave`，经 `loadSaveIntoEditor` 从 localStorage（或内置空存档）加载，保存时 `prepareSavePayload` 写回 localStorage；`setCurrentSaveIdRaw` 设固定值；注册 `initAfterMainCvsRendered` 做离开拦截。
 4. **浏览器内回归**：打开编辑器、编辑、保存、刷新后恢复、离开拦截、弹窗/等待、导出图片（降级项确认不崩溃）。
 5. **接入 tauri**：`tauri init` 生成 `src-tauri`，配置 CSP/网络放行，注入 `apiUrlBase`；icons 静态资源随包打包。
-6. **fs 化**：保存与 svg 缩略上传改本地文件读写（`@tauri-apps/plugin-fs` 或自定义 command）；persist 存储评估是否换 fs 适配。
+6. **fs 化**：保存与 svg 缩略上传改本地文件读写（`@tauri-apps/plugin-fs` 或自定义 command）；persist 存储评估是否换 fs 适配。（已部分完成：导出落盘经 core 的 `fileSaver` 注入走 dialog+fs，见"二、可省略"末节）
 7. **收尾**：原生对话框/右键抽象（如需要）；确认 web 侧 `analyze-deps.mjs` 的 core 闭包检查仍通过（本包不改 core，理论上无影响）；更新根 `AGENTS.md` 与 decoupling.md 第 18 步状态。

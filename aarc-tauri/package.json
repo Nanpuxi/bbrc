@@ -24,6 +24,7 @@
   "dependencies": {
     "@aurouscia/au-color-picker": "^1.1.0",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-fs": "^2.5.2",
     "aarc-core": "workspace:*",
     "pinia": "^3.0.4",
