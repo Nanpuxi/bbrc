@@ -344,7 +344,7 @@ namespace AARC.WebApi.Repos.Identities
             email = email.ToLowerInvariant();
             if (Existing.Any(x => x.Id != userId && x.Email == email))
                 throw new RqEx("该邮箱已被占用");
-            var code = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            var code = VerificationCode.Generate(6);
             user.Email = $"{email}:{code}".GetMD5();
             base.Update(user, true);
             return code;
@@ -428,7 +428,7 @@ namespace AARC.WebApi.Repos.Identities
                 throw new RqEx("该账号未设置密码重置问题，无法自助重置，请联系管理员");
             if (!string.Equals(user.PasswordResetAnswer, answer?.Trim(), StringComparison.OrdinalIgnoreCase))
                 throw new RqEx("答案不正确");
-            var code = GeneratePasswordResetCode();
+            var code = VerificationCode.Generate(8);
             user.Password = $"{code}-{DateTimeOffset.Now.ToUnixTimeSeconds()}";
             base.Update(user, true);
             return code;
@@ -466,13 +466,6 @@ namespace AARC.WebApi.Repos.Identities
         }
 
         private const long passwordResetCodeValidSeconds = 2 * 3600;
-
-        private static string GeneratePasswordResetCode()
-        {
-            const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            return new string(Enumerable.Range(0, 8)
-                .Select(_ => chars[Random.Shared.Next(chars.Length)]).ToArray());
-        }
 
         /// <summary>
         /// 检查用户属性是否合法
