@@ -453,7 +453,7 @@ onBeforeUnmount(()=>{
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
     <DontUseWeirdBrowser></DontUseWeirdBrowser>
     <div v-if="loadComplete && !isNaN(saveIdNum)" class="chatRoomWrap">
-        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
+        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :saveIdDisplay="saveId" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
     </div>
     <UserFileFavorites ref="userFileFavorites" />
 </template>
