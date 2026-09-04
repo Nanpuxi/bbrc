@@ -11,6 +11,7 @@ import { RouterLink } from 'vue-router';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { loginExpireHrsDefault, useAuthLocalConfigStore } from '@/app/localConfig/authLocalConfig';
 import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
+import { passwordResetName } from './routes/routesNames';
 
 interface F3SsoAudienceIssuerOptions {
     id: string;
@@ -155,7 +156,14 @@ onMounted(async()=>{
             </select>
         </div>
         <div v-show="setExpire" style="color:red; text-align: center;">仅在自己的设备上选择较长时间</div>
-        <div class="guide" style="color:red" v-if="failedGuide">{{ failedGuide }}</div>
+        <template v-if="failedGuide">
+            <!-- <div class="guide" style="color:red">{{ failedGuide }}</div> -->
+            <div class="guide">
+                <RouterLink :to="{name: passwordResetName}" style="color:green;text-decoration: underline;font-weight: bold;">
+                    如果忘记密码，点此重置
+                </RouterLink>
+            </div>
+        </template>
         <div class="guide" style="font-size: 13px;" v-else>
             <div><b>本应用对浏览器标准性非常敏感</b></div>
             <div>如果遇到异常现象，请先</div>

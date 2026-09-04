@@ -13,7 +13,7 @@ const userName = ref<string>("");
 const password = ref<string>("");
 const passwordRepeat = ref<string>("");
 const turnstileToken = ref<string>();
-const { loginRouteJump } = useIdentitiesRoutesJump()
+const { loginRouteJump, passwordResetRoute } = useIdentitiesRoutesJump()
 
 const turnstileConfigured = !! import.meta.env.VITE_TurnstileSiteKey
 const turnstileHidden = ref<boolean>(false)
@@ -136,6 +136,11 @@ onMounted(async()=>{
                     <button @click="register" :class="{off: !buttonAllowClick}" style="margin: 0px auto">
                         注&nbsp;册
                     </button>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" class="smallNote">
+                    <router-link :to="passwordResetRoute()">忘记密码？</router-link>
                 </td>
             </tr>
         </tbody></table>

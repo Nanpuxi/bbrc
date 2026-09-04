@@ -67,6 +67,15 @@ namespace AARC.WebApi.Services.App.Email
             await SendEmailAsync(to, subject, body, isHtml: true);
         }
 
+        public async Task SendPasswordResetCodeAsync(
+            string to,
+            string code)
+        {
+            var subject = "密码重置验证码";
+            var body = $"您正在重置密码，验证码是：<b>{code}</b>。如果并非本人操作，请忽略本邮件。";
+            await SendEmailAsync(to, subject, body, isHtml: true);
+        }
+
         private static async Task SendWithAccountAsync(
             SmtpAccount account,
             string to,

@@ -19,7 +19,7 @@ import { userUpgradeToMemberName } from './routes/routesNames';
 const list = ref<WithIntroShow<UserDto>[]>()
 const api = useApiStore()
 const { someonesSavesRoute } = useSavesRoutesJump()
-const { loginRouteJump, userListRoute, userEmailBindRoute } = useIdentitiesRoutesJump()
+const { loginRouteJump, userListRoute, userEmailBindRoute, passwordResetQAEditRoute } = useIdentitiesRoutesJump()
 const configStore = useUserListLocalConfigStore()
 const { orderby, openingSelfEdit } = storeToRefs(configStore)
 const orderbySave = computed(() => orderby.value === 'save')
@@ -242,6 +242,14 @@ onMounted(async()=>{
                             <button class="lite confirm">绑定邮箱</button>
                         </RouterLink>
                     </template>
+                </td>
+            </tr>
+            <tr v-if="userInfo.id == editingUser.id">
+                <td>找回<br/>密码</td>
+                <td>
+                    <RouterLink :to="passwordResetQAEditRoute()">
+                        <button class="lite confirm">设置重置问答</button>
+                    </RouterLink>
                 </td>
             </tr>
             <tr v-if="userInfo.id == editingUser.id && userInfo.isTourist">
