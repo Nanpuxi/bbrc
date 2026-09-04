@@ -39,6 +39,12 @@ const saveStore = useSaveStore()
 const { matchedSelectionGroup } = storeToRefs(selectionStore)
 function saveSelectionAsGroup(){
     const { ptIds, tagIds } = selectionStore.selectedIdSets()
+    const overlapped = saveStore.save?.selectionGroups?.some(g=>
+        g.ptIds.some(id=>ptIds.has(id)) || g.tagIds.some(id=>tagIds.has(id)))
+    if(overlapped){
+        showPop('不能与已有组重叠', 'failed')
+        return
+    }
     saveStore.createSelectionGroup([...ptIds], [...tagIds])
     selectionStore.clear()
     showPop('已创建选区组', 'success')
