@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, watch, type Ref } from "vue";
 import { localConfigKeyPrefix } from "./common/keyPrefix";
+import { useBrowserInfoStore } from "aarc-core/app/globalStores/browserInfo";
 
 export const cvsRenderResolutionRatioLimits = { min: 0.5, max: 2 }
 export const selectionSizeLimits = { min: 0.3, max: 2 }
@@ -16,7 +17,8 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const ignoreStyleAndSpan = ref<boolean>(false)
     const staNameSnapDiagonal = ref<'inner'|'outer'|'both'>('both')
     const gridLabelSize = ref<number>(0)
-    const selectionSize = ref<number>(1)
+    //无持久化值时的默认值：手机端为1，其他端为0.8（persist 会在有值时覆盖）
+    const selectionSize = ref<number>(useBrowserInfoStore().isMobile ? 1 : 0.8)
     const blankClickBehavior = ref<BlankClickBehavior>('exitWhenGrouped')
     const cvsRenderResolutionRatio = ref<number>(2)
     watch(cvsRenderResolutionRatio as Ref<number | string>, (v)=>{
