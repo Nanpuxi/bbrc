@@ -2,12 +2,14 @@ import { Router } from "vue-router";
 import Login from "../Login.vue";
 import Register from "../Register.vue";
 import { addToRouter } from "@/app/router/addToRouter";
-import { aboutName, loginName, registerName, ssoCallbackName, userCreditName, userEmailBindName, userHistoriesName, userListName, userUpgradeToMemberName } from "./routesNames";
+import { aboutName, loginName, passwordResetName, passwordResetQAEditName, registerName, ssoCallbackName, userCreditName, userEmailBindName, userHistoriesName, userListName, userUpgradeToMemberName } from "./routesNames";
 import UserList from "../UserList.vue";
 import About from "../About.vue";
 import UserHistories from "../UserHistories.vue";
 import UserCredit from "../UserCredit.vue";
 import UserEmailBind from "../UserEmailBind.vue";
+import PasswordReset from "../PasswordReset.vue";
+import PasswordResetQAEdit from "../PasswordResetQAEdit.vue";
 import UserUpgradeToMember from "../UserUpgradeToMember.vue";
 import SsoCallback from "../SsoCallback.vue";
 
@@ -46,6 +48,16 @@ const routes = [
         path:"/UserEmailBind",
         component:UserEmailBind,
         name:userEmailBindName
+    },
+    {
+        path:"/PasswordReset",
+        component:PasswordReset,
+        name:passwordResetName
+    },
+    {
+        path:"/PasswordResetQAEdit",
+        component:PasswordResetQAEdit,
+        name:passwordResetQAEditName
     },
     {
         path:"/UserUpgradeToMember/:mode?",

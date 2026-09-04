@@ -1,5 +1,5 @@
 import { RouteLocationRaw, useRouter } from "vue-router"
-import { loginName, registerName, userEmailBindName, userListName } from "./routesNames"
+import { loginName, passwordResetName, passwordResetQAEditName, registerName, userEmailBindName, userListName } from "./routesNames"
 
 export const useIdentitiesRoutesJump = ()=>{
     const router = useRouter()
@@ -35,5 +35,15 @@ export const useIdentitiesRoutesJump = ()=>{
             }
         }
     }
-    return { loginRoute, loginRouteJump, registerRoute, userListRoute, userEmailBindRoute }
+    function passwordResetRoute():RouteLocationRaw{
+        return {
+            name:passwordResetName
+        }
+    }
+    function passwordResetQAEditRoute():RouteLocationRaw{
+        return {
+            name:passwordResetQAEditName
+        }
+    }
+    return { loginRoute, loginRouteJump, registerRoute, userListRoute, userEmailBindRoute, passwordResetRoute, passwordResetQAEditRoute }
 }

@@ -77,7 +77,7 @@ export function useImageExport() {
             if (isIPhoneOrIPad.value)
                 msg = `当前设备（iPhone/iPad）不支持webp格式`
             else if (isWebkit.value)
-                msg = `当前浏览器（${bi.browser.name}，${bi.engine.name}内核）不支持webp格式`
+                msg = `当前浏览器（${bi?.browser.name}，${bi?.engine.name}内核）不支持webp格式`
             throw new Error(msg)
         }
 

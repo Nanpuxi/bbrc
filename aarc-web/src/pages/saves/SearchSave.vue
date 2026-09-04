@@ -12,6 +12,7 @@ import { storeToRefs } from 'pinia';
 import SaveAvatar from '../components/SaveAvatar.vue';
 import CommentList from '@/components/common/CommentList.vue';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
+import { decodeSaveId } from '@/utils/dataUtils/saveIdCodec';
 
 const api = useApiStore()
 const { someonesSavesRoute, searchSaveRoute } = useSavesRoutesJump()
@@ -40,11 +41,19 @@ async function load() {
     {
         return
     }
-    if(search.value.length > 10){
+    // id搜索：需 id: 前缀（冒号中英文皆可），后接三种 id 形式之一（旧版纯数字、a开头5位编码、10位编码）
+    const idMatch = /^id[:：]\s*(.+)$/i.exec(search.value.trim())
+    let query = search.value
+    if (idMatch) {
+        const decodedId = decodeSaveId(idMatch[1].trim())
+        if (decodedId !== undefined)
+            query = `id:${decodedId}`
+    }
+    else if(search.value.length > 10){
         search.value = search.value.slice(0, 10)
     }
     searchRes.value = undefined
-    const res = await api.save.search(search.value, orderBy.value, pageIdx.value)
+    const res = await api.save.search(query, orderBy.value, pageIdx.value)
     if(res){
         searchRes.value = res
         searchedUsing.value = search.value
@@ -125,7 +134,7 @@ onMounted(()=>{
         <td colspan="4">点击输入框外任意处搜索</td>
     </tr>
     <tr v-else-if="!search && searchRes.length===0" class="searchStatus">
-        <td colspan="4">请输入搜索关键词，搜id时使用前缀“id:”</td>
+        <td colspan="4">请输入搜索关键词；按id搜索请加“id:”前缀，支持数字或编码id</td>
     </tr>
     <tr v-else-if="searchRes.length===0" class="searchStatus">
         <td colspan="4">无匹配结果</td>

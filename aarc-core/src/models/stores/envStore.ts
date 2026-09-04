@@ -23,6 +23,7 @@ import rfdc from "rfdc";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 import { usePointLinkStore } from "./pointLinkStore";
 import { useSelectionStore } from "./selectionStore";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 
 import { assignAllProps, removeNonexistentKeys } from "aarc-core/utils/lang/assignAllProps";
 import { removeConsecutiveSameItem } from "aarc-core/utils/lang/removeConsecutiveSameItem";
@@ -77,6 +78,7 @@ export const useEnvStore = defineStore('env', ()=>{
     const discardAreaStore = useDiscardAreaStore()
     const pointLinkStore = usePointLinkStore()
     const selectionStore = useSelectionStore()
+    const editorLocalConfigStore = useEditorLocalConfigStore()
 
     const optionsOpenerStore = useOptionsOpenerStore()
     const lineFocusorStore = useLineFocusorStore()
@@ -141,6 +143,15 @@ export const useEnvStore = defineStore('env', ()=>{
         pointLinkStore.abortCreatingPtLink()
 
         selectionStore.disableForTouchScreen()
+    }
+    //点中元素且未处于多选画笔状态时，展开其所属的选区组（多组取并集）
+    function applySelectionGroupsOf(itemId:number){
+        if(selectionStore.enabled)
+            return
+        const groups = saveStore.save?.selectionGroups?.filter(g=>
+            g.ptIds.includes(itemId) || g.tagIds.includes(itemId))
+        if(groups && groups.length>0)
+            selectionStore.applyGroups(groups)
     }
     function pureClickHandler(clientCord:Coord, clickType?:PureClickType, noDetect=false){
         const coord = translateFromClient(clientCord);
@@ -235,6 +246,7 @@ export const useEnvStore = defineStore('env', ()=>{
                 endEveryEditing({exceptName:true})
                 activePt.value = saveStore.getPtById(staName.id)
                 activePtType.value = 'name'
+                applySelectionGroupsOf(staName.id)
                 if(isRightBtnOnly){
                     nameEditStore.startEditing(staName.id, true)
                 }else{
@@ -265,6 +277,7 @@ export const useEnvStore = defineStore('env', ()=>{
             const textTagMatch = onTextTag(coord);
             if(textTagMatch){
                 activeTextTag.value = textTagMatch
+                applySelectionGroupsOf(textTagMatch.id)
                 setOpsPos(false)
                 endEveryEditing()
                 textTagEditStore.startEditing(textTagMatch.id, isRightBtnOnly)
@@ -279,6 +292,7 @@ export const useEnvStore = defineStore('env', ()=>{
                 endEveryEditing({exceptName:true})
                 activePt.value = pt
                 activePtType.value = 'body'
+                applySelectionGroupsOf(pt.id)
                 cursorPos.value = [...pt.pos]
                 if(isRightBtnOnly){
                     //右键点击控制点，切换其方向
@@ -338,6 +352,13 @@ export const useEnvStore = defineStore('env', ()=>{
         setOpsPos(false)
         activePtNameSnapped.value = 'no'
         endEveryEditing()
+        //根据本地配置，真实点击空白处可退出多选模式（noDetect的“视为点击空白处”不触发）
+        if(!noDetect){
+            const blankClick = editorLocalConfigStore.blankClickBehavior
+            if(blankClick === 'exitAlways'
+                || (blankClick === 'exitWhenGrouped' && selectionStore.matchedSelectionGroup))
+                selectionStore.selected.clear()
+        }
     }
     let oneFingerForSureTimer = 0
     let oneFingerBrushed = false

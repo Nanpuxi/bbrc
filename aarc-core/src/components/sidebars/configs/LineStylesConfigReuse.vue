@@ -50,14 +50,17 @@ function getLineStylesForExport(): LineStyle[] {
     return deepClone(toExport)
 }
 
-function exportToClipboard() {
+async function exportToClipboard() {
     const data = getLineStylesForExport()
     if (data.length === 0) {
         showPop('请先选择要导出的样式', 'warning')
         return
     }
-    copy(JSON.stringify(data))
-    showPop('已复制到剪切板', 'success')
+    const success = await copy(JSON.stringify(data))
+    if (success)
+        showPop('已复制到剪切板', 'success')
+    else
+        showPop('复制失败，请改用正规浏览器', 'failed')
 }
 
 function exportToFile() {

@@ -1,6 +1,6 @@
 import { defineStore, storeToRefs } from "pinia";
 import { computed, ref } from "vue";
-import { ControlPoint, TextTag } from "../save";
+import { ControlPoint, SelectionGroup, TextTag } from "../save";
 import { Coord } from "../coord";
 import { useSaveStore } from "./saveStore";
 import { coordDistSqLessThan } from "aarc-core/utils/coordUtils/coordDist";
@@ -9,6 +9,7 @@ import { useTextTagRectStore } from "./saveDerived/textTagRectStore";
 import { coordAdd, coordSub } from "aarc-core/utils/coordUtils/coordMath";
 import { isFocusingInput } from "aarc-core/utils/domUtils/focusingInput";
 import { useCvsFrameStore } from "./cvsFrameStore";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 
 type SelectionTarget = ControlPoint|TextTag
 export const useSelectionStore = defineStore('selection', ()=>{
@@ -25,7 +26,7 @@ export const useSelectionStore = defineStore('selection', ()=>{
     const { enumerateTextTagRects } = useTextTagRectStore()
     
     function getBrushRadius(){
-        return useCvsFrameStore().getViewRectBiggerSideLength() / 10
+        return useCvsFrameStore().getViewRectBiggerSideLength() / 10 * useEditorLocalConfigStore().selectionSize
     }
     function brush(coord?:Coord){
         selCursor.value = coord
@@ -54,6 +55,45 @@ export const useSelectionStore = defineStore('selection', ()=>{
     function setBrushStatus(status:'up'|'down'){
         brushStatus.value = status
     }
+
+    //把选区组里的id解析回对象引用灌入selected（多组取并集），已删除元素的死id直接跳过
+    function applyGroups(groups:SelectionGroup[]){
+        for(const g of groups){
+            for(const id of g.ptIds){
+                const pt = saveStore.getPtById(id)
+                if(pt)
+                    selected.value.add(pt)
+            }
+            for(const id of g.tagIds){
+                const tag = saveStore.getTextTagById(id)
+                if(tag)
+                    selected.value.add(tag)
+            }
+        }
+    }
+
+    //当前多选的 id 集合（按点/文本标签分开）
+    function selectedIdSets(){
+        const ptIds = new Set<number>()
+        const tagIds = new Set<number>()
+        for(const s of selected.value){
+            if('dir' in s)
+                ptIds.add(s.id)
+            else
+                tagIds.add(s.id)
+        }
+        return { ptIds, tagIds }
+    }
+    //当前多选的 id 集合与某个选区组完全一致时，返回该组
+    const matchedSelectionGroup = computed<SelectionGroup|undefined>(()=>{
+        if(selected.value.size === 0)
+            return undefined
+        const { ptIds, tagIds } = selectedIdSets()
+        return save.value?.selectionGroups?.find(g=>
+            g.ptIds.length === ptIds.size && g.tagIds.length === tagIds.size
+            && g.ptIds.every(id=>ptIds.has(id))
+            && g.tagIds.every(id=>tagIds.has(id)))
+    })
 
     function enableForTouchScreen(setMode?:'add'|'sub'){
         mode.value = setMode ?? 'add'
@@ -116,9 +156,12 @@ export const useSelectionStore = defineStore('selection', ()=>{
     }
     function clearIfEsc(e: KeyboardEvent){
         if(e.key == 'Escape'){
-            disableForTouchScreen()
-            selected.value.clear()
+            clear()
         }
+    }
+    function clear(){
+        disableForTouchScreen()
+        selected.value.clear()
     }
 
     return {
@@ -132,6 +175,10 @@ export const useSelectionStore = defineStore('selection', ()=>{
         getBrushRadius,
         brush,
         setBrushStatus,
+        applyGroups,
+        selectedIdSets,
+        matchedSelectionGroup,
+        clear,
         enableForTouchScreen,
         disableForTouchScreen,
         draggingDelta,

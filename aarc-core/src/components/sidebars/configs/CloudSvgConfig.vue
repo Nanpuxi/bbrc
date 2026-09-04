@@ -30,7 +30,7 @@ async function manualUpdate() {
         showPop('云端SVG已更新', 'success')
 }
 
-function copyShareLink() {
+async function copyShareLink() {
     const saveId = getCurrentSaveIdNum()
     if (saveId === undefined) {
         showPop('无法获取当前存档ID', 'failed')
@@ -38,8 +38,11 @@ function copyShareLink() {
     }
     const baseUrl = getCoreConfig().apiUrlBase
     const shareUrl = `${(baseUrl || window.location.origin).replace(/\/$/, '')}/save-svg/${saveId}.svg`
-    copy(shareUrl)
-    showPop('已复制到剪切板', 'success')
+    const success = await copy(shareUrl)
+    if (success)
+        showPop('已复制到剪切板', 'success')
+    else
+        showPop('复制失败，请改用正规浏览器', 'failed')
 }
 </script>
 

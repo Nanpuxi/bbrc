@@ -127,8 +127,8 @@ async function downloadLineListTxt() {
         triggerDownload(URL.createObjectURL(new Blob([txt], { type: 'text/plain' })), fileName)
     }
 }
-function copyText(txt: string) {
-    const success = copy(txt);
+async function copyText(txt: string) {
+    const success = await copy(txt);
     if (success) {
         showPop(`复制成功，共${txt.length}字`, 'success');
     } else {

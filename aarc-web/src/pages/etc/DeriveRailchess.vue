@@ -31,9 +31,12 @@ const playbacks = [
 ]
 
 const { showPop } = useUniqueComponentsStore()
-function copyQQGroup(){
-    copy(qqGroup)
-    showPop('已复制群号', 'success')
+async function copyQQGroup(){
+    const success = await copy(qqGroup)
+    if (success)
+        showPop('已复制群号', 'success')
+    else
+        showPop('复制失败，请改用正规浏览器', 'failed')
 }
 </script>
 

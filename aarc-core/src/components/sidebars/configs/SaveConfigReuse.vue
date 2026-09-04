@@ -11,9 +11,12 @@ const cs = useConfigStore()
 const envStore = useEnvStore()
 const { showPop } = useUniqueComponentsStore()
 
-function exportToClipboard() {
-    copy(JSON.stringify(cs.getConfigForExporting()))
-    showPop('已复制到剪切板', 'success')
+async function exportToClipboard() {
+    const success = await copy(JSON.stringify(cs.getConfigForExporting()))
+    if (success)
+        showPop('已复制到剪切板', 'success')
+    else
+        showPop('复制失败，请改用正规浏览器', 'failed')
 }
 function exportToFile(){
     const blob = new Blob([JSON.stringify(cs.getConfigForExporting())], {type: 'application/json'})

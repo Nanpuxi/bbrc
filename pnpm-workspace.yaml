@@ -6,3 +6,6 @@ packages:
 allowBuilds:
   "@parcel/watcher": true
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@aurouscia/vite-app-version@1.1.0'

@@ -31,7 +31,7 @@ namespace AARC.WebApi.Services.App.Email
             bool isHtml = false)
         {
             if (_config.SmtpAccounts.Count == 0)
-                throw new InvalidOperationException("没有配置任何 SMTP 账号");
+                throw new RqEx("没有配置任何 SMTP 账号，请联系管理员");
 
             var startIndex = Interlocked.Increment(ref _currentAccountIndex) % _config.SmtpAccounts.Count;
             var exceptions = new List<Exception>();
@@ -67,6 +67,15 @@ namespace AARC.WebApi.Services.App.Email
             await SendEmailAsync(to, subject, body, isHtml: true);
         }
 
+        public async Task SendPasswordResetCodeAsync(
+            string to,
+            string code)
+        {
+            var subject = "密码重置验证码";
+            var body = $"您正在重置密码，验证码是：<b>{code}</b>。如果并非本人操作，请忽略本邮件。";
+            await SendEmailAsync(to, subject, body, isHtml: true);
+        }
+
         private static async Task SendWithAccountAsync(
             SmtpAccount account,
             string to,
@@ -88,7 +97,7 @@ namespace AARC.WebApi.Services.App.Email
 
             using var client = new SmtpClient();
             await client.ConnectAsync(account.Server, account.Port,
-                account.EnableSsl ? MailKit.Security.SecureSocketOptions.StartTls : MailKit.Security.SecureSocketOptions.Auto);
+                MailKit.Security.SecureSocketOptions.Auto);
             await client.AuthenticateAsync(account.Account, account.Password);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);

@@ -18,6 +18,7 @@ import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtil
 import { usePointLinkStore } from 'aarc-core/models/stores/pointLinkStore';
 
 import { useSelectionStore } from 'aarc-core/models/stores/selectionStore';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 
 const envStore = useEnvStore();
 const { somethingActive } = storeToRefs(envStore)
@@ -27,11 +28,34 @@ const cvsFrameStore = useCvsFrameStore()
 const baseCvsDispatcher = useBaseCvsDispatcher()
 const mainCvsDispatcher = useMainCvsDispatcher()
 const activeCvsDispatcher = useActiveCvsDispatcher()
-const { showWait } = useUniqueComponentsStore()
+const { showWait, showPop } = useUniqueComponentsStore()
 const cvsBlocksControlStore = useCvsBlocksControlStore()
 const pointLinkStore = usePointLinkStore()
 
 const selectionStore = useSelectionStore()
+const saveStore = useSaveStore()
+
+//当前多选的 id 集合与某个选区组完全一致时，返回该组
+const { matchedSelectionGroup } = storeToRefs(selectionStore)
+function saveSelectionAsGroup(){
+    const { ptIds, tagIds } = selectionStore.selectedIdSets()
+    const overlapped = saveStore.save?.selectionGroups?.some(g=>
+        g.ptIds.some(id=>ptIds.has(id)) || g.tagIds.some(id=>tagIds.has(id)))
+    if(overlapped){
+        showPop('不能与已有组重叠', 'failed')
+        return
+    }
+    saveStore.createSelectionGroup([...ptIds], [...tagIds])
+    selectionStore.clear()
+    showPop('已创建选区组', 'success')
+}
+function dissolveSelectionGroup(){
+    if(matchedSelectionGroup.value){
+        saveStore.removeSelectionGroup(matchedSelectionGroup.value.id)
+        selectionStore.clear()
+        showPop('已解散选区组', 'success')
+    }
+}
 
 let activeCvsRenderTimer = 0
 const waitKey = 'cvsInit'
@@ -108,13 +132,17 @@ defineExpose({init})
         <button class="lite" @click="selectionStore.disableForTouchScreen">选择完成(单击任意处)</button>
     </div>
     <div v-else-if="selectionStore.selected.size>0" class="statusDisplay selectionWorkingStatus">
-        当前选中<b>{{ selectionStore.selected.size }}</b>个元素，可以拖拽<br/>
+        当前选中<b>{{ selectionStore.selected.size }}</b>个元素，移动即移全部<br/>
         <button v-if="selectionStore.showedControl" class="lite"
             @click="selectionStore.enableForTouchScreen('add')">加选</button>
         <button v-if="selectionStore.showedControl" class="lite"
             @click="selectionStore.enableForTouchScreen('sub')">减选</button>
         <button class="lite" @click="selectionStore.selected.clear()"
             >退出多选模式{{ selectionStore.showedControl ? '' : '(Esc)' }}</button>
+        <button v-if="selectionStore.selected.size>=2 && !matchedSelectionGroup" class="lite"
+            @click="saveSelectionAsGroup">存为选区组</button>
+        <button v-if="matchedSelectionGroup" class="lite"
+            @click="dissolveSelectionGroup">解散选区组</button>
     </div>
 </template>
 

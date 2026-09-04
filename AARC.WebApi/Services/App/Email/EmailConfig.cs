@@ -29,7 +29,6 @@ namespace AARC.WebApi.Services.App.Email
         public int Port { get; set; } = 587;
         public string Account { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
-        public bool EnableSsl { get; set; } = true;
         public string SenderName { get; set; } = string.Empty;
         public string SenderAddress { get; set; } = string.Empty;
     }

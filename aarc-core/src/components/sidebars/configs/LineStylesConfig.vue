@@ -150,15 +150,15 @@ onUnmounted(()=>{
         </div>
         <div v-if="showDetail[s.id]" class="detail">
             <div class="name">
-                <h3>风格名</h3><input v-model="s.name" placeholder="必填" @blur="checkStyleName(s)"/>
+                <h3>样式名</h3><input v-model="s.name" placeholder="必填" @blur="checkStyleName(s)"/>
             </div>
             <div class="noBase">
                 <label><input type="checkbox" v-model="s.noBase"/> 隐藏线路本体</label>
             </div>
             <div class="layersOps">
                 <button class="ok" @click="addLayer(s)">+层级</button>
-                <button v-if="sIdx>0" class="minor" @click="moveUpInArray(save?.lineStyles, sIdx)">上移风格</button>
-                <button class="cancel" @click="delStyle(s)">删除风格</button>
+                <button v-if="sIdx>0" class="minor" @click="moveUpInArray(save?.lineStyles, sIdx)">上移样式</button>
+                <button class="cancel" @click="delStyle(s)">删除样式</button>
             </div>
             <div class="layers">
                 <div v-for="layer,idx in s.layers" class="layer">

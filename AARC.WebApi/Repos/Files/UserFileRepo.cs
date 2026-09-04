@@ -25,7 +25,7 @@ namespace AARC.WebApi.Repos.Files
         ) : Repo<UserFile>(context)
     {
         private const int fileSizeLimitMB = 3;
-        private const int fileSizeLimitKBOfSvg = 800;
+        private const int fileSizeLimitKBOfSvg = 1024;
         private readonly static string[] extAllowed 
             = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".json"];
         public void Add(

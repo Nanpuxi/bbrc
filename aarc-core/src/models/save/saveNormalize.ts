@@ -10,6 +10,7 @@ import { ensureValidCvsSize } from "./valid/cvsSize"
 import { ensureValidIdIncre } from "./valid/idIncre"
 import { ensureValidSliceEndpoints, removeInvalidSlices } from "./valid/slices"
 import { ensureValidDataSources } from "./valid/dataSources"
+import { ensureValidSelectionGroups } from "./valid/selectionGroups"
 
 export function normalizeSave(obj:any){
     let freshNew = false
@@ -50,6 +51,7 @@ export function normalizeSave(obj:any){
     fillDefault('config', 'object', {})
     fillDefault('idIncre', 'number', 1)
     ensureValidDataSources(obj)
+    ensureValidSelectionGroups(obj)
     ensureValidIdIncre(obj)
     //确认了idIncre有值后，才能进行下面的“全新存档初始化”步骤（会使idIncre自增）
     const getNewId = ()=>obj.idIncre++

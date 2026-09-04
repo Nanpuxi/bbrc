@@ -153,6 +153,28 @@ namespace AARC.WebApi.Controllers.System
         }
 
         [HttpPost]
+        public string UnbindEmail([FromForm] string email, [FromForm] string masterKey)
+        {
+            masterKeyChecker.Check(masterKey);
+            var user = context.Users.Where(x => !x.Deleted).FirstOrDefault(x => x.Email == email);
+            if (user is null)
+                return "未找到绑定该邮箱的账号";
+            user.Email = null;
+            user.LastActive = DateTime.Now;
+            context.SaveChanges();
+            return "解绑成功";
+        }
+
+        [HttpPost]
+        public string GetMaxSaveId([FromForm] string masterKey)
+        {
+            masterKeyChecker.Check(masterKey);
+            var maxId = context.Saves
+                .Max(x => (int?)x.Id) ?? 0;
+            return $"当前最大存档 Id：{maxId}";
+        }
+
+        [HttpPost]
         public string SetUserAsAdmin([FromForm] int userId, [FromForm] string masterKey)
         {
             masterKeyChecker.Check(masterKey);

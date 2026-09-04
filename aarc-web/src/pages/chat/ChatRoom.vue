@@ -27,6 +27,8 @@ const props = defineProps<{
     enabled: boolean
     isOwner: boolean
     viewOnly: boolean
+    /** 仅用于界面展示的存档id（传入路径中的原始值，如编码id），不影响任何逻辑 */
+    saveIdDisplay?: string
 }>()
 const emit = defineEmits<{
     enable: []
@@ -64,6 +66,7 @@ let saveReminderTimer: number | null = null
 let saveReminderCountdownTimer: number | null = null
 
 const roomName = computed(() => props.saveId.toString())
+const roomNameDisplay = computed(() => props.saveIdDisplay ?? roomName.value)
 const messages = computed(() => signalrStore.getRoomMessages(roomName.value))
 const noticeMessage = computed<ChatMessage>(() => ({
     messageId: 'chat-notice',
@@ -327,7 +330,7 @@ onUnmounted(async () => {
     <SideBar ref="sidebar" @extend="onSidebarExtend" @fold="onSidebarFold" :shrink-way="'v-show'">
         <div v-if="effectiveEnabled" class="chatRoom">
             <div class="header">
-                <span>房间：{{ roomName }}</span>
+                <span>房间：{{ roomNameDisplay }}</span>
                 <button v-if="!(isOwner && !viewOnly)" class="minor" @click="openKickingSidebar">请出</button>
             </div>
             <div class="status">
@@ -370,7 +373,7 @@ onUnmounted(async () => {
             </div>
         </div>
         <div v-else class="chatDisabled">
-            <div class="header">房间：{{ roomName }}</div>
+            <div class="header">房间：{{ roomNameDisplay }}</div>
             <div class="disabledTip">当前存档未启用聊天功能</div>
             <div class="disabledTip">启用后方可发送消息和请出挂机者</div>
             <button v-if="isOwner" class="enableBtn" @click="tryEnable">启用</button>

@@ -16,6 +16,7 @@ import {
 } from "aarc-core/utils/snapUtils/snapCore";
 import { useFreePtDirectionStore } from "./saveDerived/freePtDirectionStore";
 import { computeFreeNameSnapCandidates } from "aarc-core/utils/snapUtils/snapNameFree";
+import { useSelectionStore } from "./selectionStore";
 
 export const useSnapStore = defineStore('snap',()=>{
     const cs = useConfigStore()
@@ -24,6 +25,7 @@ export const useSnapStore = defineStore('snap',()=>{
     const staClusterStore = useStaClusterStore()
     const editorLocalConfig = useEditorLocalConfigStore()
     const freePtDirectionStore = useFreePtDirectionStore()
+    const selectionStore = useSelectionStore()
     const { cvsWidth, cvsHeight } = storeToRefs(saveStore)
     const snapLines = ref<FreeRay[]>([])
     const snapGridIntv = ref<number>()
@@ -97,9 +99,14 @@ export const useSnapStore = defineStore('snap',()=>{
         return dirs.length > 0 ? dirs : undefined
     }
     function snapNeighborExtends(pt:ControlPoint):{snapRes?:Coord, freeWay?:Coord}{
+        let neighbors = saveStore.getNeighborByPt(pt.id)
+        //多选整体拖动时，同组邻点会一起移动，不应作为吸附基准
+        if(selectionStore.selected.size > 0 && selectionStore.selected.has(pt)){
+            neighbors = neighbors.filter(n=>!selectionStore.selected.has(n))
+        }
         const { snapRes, freeWay, snapLines: lines } = snapNeighborExtendsCore(
             pt,
-            saveStore.getNeighborByPt(pt.id),
+            neighbors,
             cs.config.snapOctaRayPtPtThrs * saveStore.getSnapThrsRatio(pt.id),
             snapNeighborExtendsOnlySameDir.value,
             cs.config.snapRayAngles,
@@ -114,12 +121,13 @@ export const useSnapStore = defineStore('snap',()=>{
         const snapDistLargest = ptSnapSizeLargest * cs.config.snapOctaClingPtPtDist
         const snapThrs = cs.config.snapOctaClingPtPtThrs * saveStore.getSnapThrsRatio(pt.id);
         const pts = saveStore.getPtsInRange(pt.pos, (snapDistLargest + snapThrs)*2, pt.id)
+        //多选整体拖动时，同在选区内的点会一起移动，不应作为吸附基准
+        const inMultiSelect = selectionStore.selected.size > 0 && selectionStore.selected.has(pt)
         //free=true的同线邻点（上一个/下一个点）不提供吸附点
         const freeNeighborIds = new Set(
             saveStore.getNeighborByPt(pt.id).filter(n=>n.free).map(n=>n.id))
-        const ptsFiltered = freeNeighborIds.size>0
-            ? pts.filter(p=>!freeNeighborIds.has(p.id))
-            : pts
+        const ptsFiltered = pts.filter(p=>
+            !freeNeighborIds.has(p.id) && !(inMultiSelect && selectionStore.selected.has(p)))
         const getPtDirectionInfos = (id: number) => freePtDirectionStore.getPtDirectionInfos(id)
         const { matched, targets } = snapInterPtCore(
             pt,

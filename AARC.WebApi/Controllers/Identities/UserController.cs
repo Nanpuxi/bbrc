@@ -6,6 +6,7 @@ using AARC.WebApi.Services.App.Email;
 using AARC.WebApi.Services.App.HttpAuthInfo;
 using AARC.WebApi.Services.App.Turnstile;
 using AARC.WebApi.Services.Identities;
+using AARC.WebApi.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -148,6 +149,49 @@ namespace AARC.WebApi.Controllers.Identities
         public string? MyMaskedEmail()
         {
             return userRepo.GetMyMaskedEmail();
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        [RateLimit(60, 10)]
+        public string GetPasswordResetQuestion([FromQuery] string email)
+        {
+            return userRepo.GetPasswordResetQuestion(email);
+        }
+
+        [HttpGet]
+        public string? MyPasswordResetQuestion()
+        {
+            return userRepo.GetMyPasswordResetQuestion();
+        }
+
+        [HttpPost]
+        public bool SetPasswordResetQA([FromForm] string? question, [FromForm] string? answer)
+        {
+            userRepo.SetPasswordResetQA(question, answer);
+            return true;
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [RateLimit(60, 3)]
+        public async Task<bool> RequestPasswordReset([FromForm] string email, [FromForm] string answer)
+        {
+            var code = userRepo.RequestPasswordReset(email, answer);
+            await emailService.SendPasswordResetCodeAsync(email, code);
+            return true;
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [RateLimit(60, 10)]
+        public bool ConfirmPasswordReset(
+            [FromForm] string email,
+            [FromForm] string code,
+            [FromForm] string newPassword)
+        {
+            userRepo.ConfirmPasswordReset(email, code, newPassword);
+            return true;
         }
 
         [HttpPost]

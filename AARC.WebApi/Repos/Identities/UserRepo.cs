@@ -344,7 +344,7 @@ namespace AARC.WebApi.Repos.Identities
             email = email.ToLowerInvariant();
             if (Existing.Any(x => x.Id != userId && x.Email == email))
                 throw new RqEx("该邮箱已被占用");
-            var code = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            var code = VerificationCode.Generate(6);
             user.Email = $"{email}:{code}".GetMD5();
             base.Update(user, true);
             return code;
@@ -362,6 +362,110 @@ namespace AARC.WebApi.Repos.Identities
             user.Email = email;
             base.Update(user, true);
         }
+
+        /// <summary>
+        /// 获取指定邮箱绑定账号的密码重置问题（问题本身不是秘密，答案才是）
+        /// </summary>
+        public string GetPasswordResetQuestion(string email)
+        {
+            email = email.ToLowerInvariant();
+            if (!email.Contains('@'))
+                throw new RqEx("邮箱格式不正确");
+            var user = Existing.FirstOrDefault(x => x.Email == email);
+            if (user is null)
+                throw new RqEx("没有找到绑定了该邮箱的账号");
+            if (string.IsNullOrWhiteSpace(user.PasswordResetQuestion)
+                || string.IsNullOrWhiteSpace(user.PasswordResetAnswer))
+                throw new RqEx("该账号未设置密码重置问题，无法自助重置，请联系管理员");
+            return user.PasswordResetQuestion;
+        }
+
+        /// <summary>
+        /// 获取当前登录用户自己的密码重置问题（不返回答案）
+        /// </summary>
+        public string? GetMyPasswordResetQuestion()
+        {
+            var id = httpUserIdProvider.UserIdLazy.Value;
+            var user = base.Get(id);
+            return user?.PasswordResetQuestion;
+        }
+
+        /// <summary>
+        /// 设置当前登录用户的密码重置问题和答案
+        /// </summary>
+        public void SetPasswordResetQA(string? question, string? answer)
+        {
+            question = question?.Trim() ?? "";
+            answer = answer?.Trim() ?? "";
+            if (question.Length < 1 || question.Length > User.passwordResetQuestionMaxLength)
+                throw new RqEx($"问题必须在1-{User.passwordResetQuestionMaxLength}个字符");
+            if (answer.Length < 1 || answer.Length > User.passwordResetAnswerMaxLength)
+                throw new RqEx($"答案必须在1-{User.passwordResetAnswerMaxLength}个字符");
+            var id = httpUserIdProvider.UserIdLazy.Value;
+            var user = base.Get(id);
+            if (user is null)
+                throw new RqEx("找不到指定用户");
+            user.PasswordResetQuestion = question;
+            user.PasswordResetAnswer = answer;
+            base.Update(user, true);
+        }
+
+        /// <summary>
+        /// 申请重置密码：校验密码重置问题的答案，通过后将密码字段设为“8位随机码-时间戳”的明文
+        /// （含连字符且不含@即视为“重置状态”），返回需要发给用户邮箱的8位随机码
+        /// </summary>
+        public string RequestPasswordReset(string email, string answer)
+        {
+            email = email.ToLowerInvariant();
+            if (!email.Contains('@'))
+                throw new RqEx("邮箱格式不正确");
+            // 已绑定的邮箱为明文存储（未绑定验证中的邮箱是MD5，不可能等于明文邮箱）
+            var user = Existing.FirstOrDefault(x => x.Email == email);
+            if (user is null)
+                throw new RqEx("没有找到绑定了该邮箱的账号");
+            if (string.IsNullOrWhiteSpace(user.PasswordResetQuestion)
+                || string.IsNullOrWhiteSpace(user.PasswordResetAnswer))
+                throw new RqEx("该账号未设置密码重置问题，无法自助重置，请联系管理员");
+            if (!string.Equals(user.PasswordResetAnswer, answer?.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new RqEx("答案不正确");
+            var code = VerificationCode.Generate(8);
+            user.Password = $"{code}-{DateTimeOffset.Now.ToUnixTimeSeconds()}";
+            base.Update(user, true);
+            return code;
+        }
+
+        /// <summary>
+        /// 确认重置密码：校验8位随机码（密码字段连字符前的部分）及其时效（2小时），
+        /// 通过后设置新密码（加密存储，脱离重置状态）
+        /// </summary>
+        public void ConfirmPasswordReset(string email, string code, string newPassword)
+        {
+            email = email.ToLowerInvariant();
+            if (!email.Contains('@'))
+                throw new RqEx("邮箱格式不正确");
+            var user = Existing.FirstOrDefault(x => x.Email == email);
+            if (user is null)
+                throw new RqEx("没有找到绑定了该邮箱的账号");
+            // 重置状态约定：含连字符且不含@（排除明文邮箱的情况；MD5密文两者都不含）
+            var sepIdx = user.Password.Contains('@') ? -1 : user.Password.IndexOf('-');
+            if (sepIdx < 0)
+                throw new RqEx("请先获取验证码");
+            // 连字符后为发码时的秒级时间戳，超过2小时视为过期
+            var sentAtText = user.Password[(sepIdx + 1)..];
+            if (!long.TryParse(sentAtText, out var sentAt)
+                || DateTimeOffset.Now.ToUnixTimeSeconds() - sentAt > passwordResetCodeValidSeconds)
+                throw new RqEx("验证码已过期，请重新发送");
+            var expected = user.Password[..sepIdx];
+            if (!string.Equals(expected, code, StringComparison.OrdinalIgnoreCase))
+                throw new RqEx("验证码不正确");
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6 || newPassword.Length > 20)
+                throw new RqEx("密码必须在6-20个字符");
+            user.Password = UserPwdEncryption.Encrypt(newPassword);
+            userHistoryService.RecordChangeNameOrPassword(user.Id, "通过邮箱自助重置密码");
+            base.Update(user, true);
+        }
+
+        private const long passwordResetCodeValidSeconds = 2 * 3600;
 
         /// <summary>
         /// 检查用户属性是否合法
