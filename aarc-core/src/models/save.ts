@@ -15,6 +15,7 @@ export interface Save{
     textTagIcons?: TextTagIcon[]
     patterns?: Pattern[]
     dataSources?: DataSource[]
+    selectionGroups?: SelectionGroup[]
     cvsSize: Coord
     config: ConfigInSave
     meta: SaveMetaData
@@ -250,6 +251,14 @@ export interface DataSource{
     type: 'lineStyles'|'textTagIcons'|'patterns'|'colorSets'
     autoUpdate?: boolean
     overwriteSameName?: boolean
+}
+
+/** 选区组：一次多选结果的持久化，只存 id，解析时分别走 getPtById / getTextTagById */
+export interface SelectionGroup{
+    id: number
+    name?: string
+    ptIds: number[]
+    tagIds: number[]
 }
 
 export interface SaveMetaData{

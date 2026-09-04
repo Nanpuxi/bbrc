@@ -142,6 +142,15 @@ export const useEnvStore = defineStore('env', ()=>{
 
         selectionStore.disableForTouchScreen()
     }
+    //点中元素且未处于多选画笔状态时，展开其所属的选区组（多组取并集）
+    function applySelectionGroupsOf(itemId:number){
+        if(selectionStore.enabled)
+            return
+        const groups = saveStore.save?.selectionGroups?.filter(g=>
+            g.ptIds.includes(itemId) || g.tagIds.includes(itemId))
+        if(groups && groups.length>0)
+            selectionStore.applyGroups(groups)
+    }
     function pureClickHandler(clientCord:Coord, clickType?:PureClickType, noDetect=false){
         const coord = translateFromClient(clientCord);
         if(!coord)
@@ -235,6 +244,7 @@ export const useEnvStore = defineStore('env', ()=>{
                 endEveryEditing({exceptName:true})
                 activePt.value = saveStore.getPtById(staName.id)
                 activePtType.value = 'name'
+                applySelectionGroupsOf(staName.id)
                 if(isRightBtnOnly){
                     nameEditStore.startEditing(staName.id, true)
                 }else{
@@ -265,6 +275,7 @@ export const useEnvStore = defineStore('env', ()=>{
             const textTagMatch = onTextTag(coord);
             if(textTagMatch){
                 activeTextTag.value = textTagMatch
+                applySelectionGroupsOf(textTagMatch.id)
                 setOpsPos(false)
                 endEveryEditing()
                 textTagEditStore.startEditing(textTagMatch.id, isRightBtnOnly)
@@ -279,6 +290,7 @@ export const useEnvStore = defineStore('env', ()=>{
                 endEveryEditing({exceptName:true})
                 activePt.value = pt
                 activePtType.value = 'body'
+                applySelectionGroupsOf(pt.id)
                 cursorPos.value = [...pt.pos]
                 if(isRightBtnOnly){
                     //右键点击控制点，切换其方向

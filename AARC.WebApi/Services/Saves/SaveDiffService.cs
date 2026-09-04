@@ -83,7 +83,8 @@ public class SaveDiffService(
                 new KeyedArrayConfig(["patterns"], true),
                 new KeyedArrayConfig(["styleSlices"], false),
                 new KeyedArrayConfig(["timeSlices"], false),
-                new KeyedArrayConfig(["dataSources"], false)
+                new KeyedArrayConfig(["dataSources"], false),
+                new KeyedArrayConfig(["selectionGroups"], false)
             ],
             LongArrayConfigs = [
                 new LongArrayConfig(["pointLinks"], PtLinkEqMark),

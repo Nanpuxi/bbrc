@@ -1,6 +1,6 @@
 import { defineStore, storeToRefs } from "pinia";
 import { computed, ref } from "vue";
-import { ControlPoint, TextTag } from "../save";
+import { ControlPoint, SelectionGroup, TextTag } from "../save";
 import { Coord } from "../coord";
 import { useSaveStore } from "./saveStore";
 import { coordDistSqLessThan } from "aarc-core/utils/coordUtils/coordDist";
@@ -53,6 +53,22 @@ export const useSelectionStore = defineStore('selection', ()=>{
     }
     function setBrushStatus(status:'up'|'down'){
         brushStatus.value = status
+    }
+
+    //把选区组里的id解析回对象引用灌入selected（多组取并集），已删除元素的死id直接跳过
+    function applyGroups(groups:SelectionGroup[]){
+        for(const g of groups){
+            for(const id of g.ptIds){
+                const pt = saveStore.getPtById(id)
+                if(pt)
+                    selected.value.add(pt)
+            }
+            for(const id of g.tagIds){
+                const tag = saveStore.getTextTagById(id)
+                if(tag)
+                    selected.value.add(tag)
+            }
+        }
     }
 
     function enableForTouchScreen(setMode?:'add'|'sub'){
@@ -116,9 +132,12 @@ export const useSelectionStore = defineStore('selection', ()=>{
     }
     function clearIfEsc(e: KeyboardEvent){
         if(e.key == 'Escape'){
-            disableForTouchScreen()
-            selected.value.clear()
+            clear()
         }
+    }
+    function clear(){
+        disableForTouchScreen()
+        selected.value.clear()
     }
 
     return {
@@ -132,6 +151,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
         getBrushRadius,
         brush,
         setBrushStatus,
+        applyGroups,
+        clear,
         enableForTouchScreen,
         disableForTouchScreen,
         draggingDelta,

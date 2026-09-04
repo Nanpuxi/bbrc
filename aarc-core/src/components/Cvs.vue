@@ -18,6 +18,7 @@ import { disableContextMenu, enableContextMenu } from 'aarc-core/utils/eventUtil
 import { usePointLinkStore } from 'aarc-core/models/stores/pointLinkStore';
 
 import { useSelectionStore } from 'aarc-core/models/stores/selectionStore';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 
 const envStore = useEnvStore();
 const { somethingActive } = storeToRefs(envStore)
@@ -27,11 +28,48 @@ const cvsFrameStore = useCvsFrameStore()
 const baseCvsDispatcher = useBaseCvsDispatcher()
 const mainCvsDispatcher = useMainCvsDispatcher()
 const activeCvsDispatcher = useActiveCvsDispatcher()
-const { showWait } = useUniqueComponentsStore()
+const { showWait, showPop } = useUniqueComponentsStore()
 const cvsBlocksControlStore = useCvsBlocksControlStore()
 const pointLinkStore = usePointLinkStore()
 
 const selectionStore = useSelectionStore()
+const saveStore = useSaveStore()
+
+//当前多选的 id 集合（按点/文本标签分开）
+function selectedIdSets(){
+    const ptIds = new Set<number>()
+    const tagIds = new Set<number>()
+    for(const s of selectionStore.selected){
+        if('dir' in s)
+            ptIds.add(s.id)
+        else
+            tagIds.add(s.id)
+    }
+    return { ptIds, tagIds }
+}
+//当前多选的 id 集合与某个选区组完全一致时，返回该组
+const matchedSelectionGroup = computed(()=>{
+    if(selectionStore.selected.size === 0)
+        return undefined
+    const { ptIds, tagIds } = selectedIdSets()
+    return saveStore.save?.selectionGroups?.find(g=>
+        g.ptIds.length === ptIds.size && g.tagIds.length === tagIds.size
+        && g.ptIds.every(id=>ptIds.has(id))
+        && g.tagIds.every(id=>tagIds.has(id)))
+})
+function saveSelectionAsGroup(){
+    const { ptIds, tagIds } = selectedIdSets()
+    saveStore.createSelectionGroup([...ptIds], [...tagIds])
+    selectionStore.clear()
+    showPop('已创建选区组', 'success')
+}
+function dissolveSelectionGroup(){
+    if(matchedSelectionGroup.value){
+        saveStore.removeSelectionGroup(matchedSelectionGroup.value.id)
+        selectionStore.clear()
+        showPop('已解散选区组', 'success')
+    }
+}
 
 let activeCvsRenderTimer = 0
 const waitKey = 'cvsInit'
@@ -115,6 +153,10 @@ defineExpose({init})
             @click="selectionStore.enableForTouchScreen('sub')">减选</button>
         <button class="lite" @click="selectionStore.selected.clear()"
             >退出多选模式{{ selectionStore.showedControl ? '' : '(Esc)' }}</button>
+        <button v-if="selectionStore.selected.size>=2 && !matchedSelectionGroup" class="lite"
+            @click="saveSelectionAsGroup">存为选区组</button>
+        <button v-if="matchedSelectionGroup" class="lite"
+            @click="dissolveSelectionGroup">解散选区组</button>
     </div>
 </template>
 

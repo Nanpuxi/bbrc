@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta, Line, LineType, Save, saveLineCount, saveStaCount } from "../save";
+import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta, Line, LineType, Save, SelectionGroup, saveLineCount, saveStaCount } from "../save";
 import { ensureValidCvsSize } from "../save/valid/cvsSize";
 import { Coord } from "../coord";
 import { isSameCoord } from "aarc-core/utils/sgn";
@@ -431,6 +431,7 @@ export const useSaveStore = defineStore('save', () => {
             line.pts = line.pts.filter(pt=>pt!==ptId)
         })
         removePointLinkByPt(ptId)
+        removeSelectionGroupMember(ptId, 'ptIds')
         const idx = save.value.points.findIndex(x=>x.id == ptId)
         if(idx >= 0){
             save.value.points.splice(idx, 1)
@@ -591,10 +592,50 @@ export const useSaveStore = defineStore('save', () => {
         return !!pt.name?.trim()
     }
     function removeTextTag(id:number){
+        removeSelectionGroupMember(id, 'tagIds')
         const idx = save.value?.textTags.findIndex(x=>x.id===id)
         if(idx !== undefined && idx !== -1){
             save.value?.textTags.splice(idx, 1)
         }
+    }
+    function createSelectionGroup(ptIds:number[], tagIds:number[], name?:string){
+        if(!save.value)
+            return;
+        if(!save.value.selectionGroups)
+            save.value.selectionGroups = []
+        const group:SelectionGroup = {
+            id: getNewId(),
+            ptIds,
+            tagIds
+        }
+        if(name)
+            group.name = name
+        save.value.selectionGroups.push(group)
+        return group.id
+    }
+    function removeSelectionGroup(id:number){
+        if(!save.value?.selectionGroups)
+            return;
+        const idx = save.value.selectionGroups.findIndex(x=>x.id===id)
+        if(idx >= 0)
+            save.value.selectionGroups.splice(idx, 1)
+    }
+    function renameSelectionGroup(id:number, name:string){
+        const group = save.value?.selectionGroups?.find(x=>x.id===id)
+        if(group)
+            group.name = name
+    }
+    //把被删元素的id从所有选区组中剔除，成员变空的组整个删除
+    function removeSelectionGroupMember(id:number, from:'ptIds'|'tagIds'){
+        if(!save.value?.selectionGroups)
+            return;
+        const needRemove = new Set<SelectionGroup>()
+        save.value.selectionGroups.forEach(group=>{
+            group[from] = group[from].filter(x=>x!==id)
+            if(group.ptIds.length===0 && group.tagIds.length===0)
+                needRemove.add(group)
+        })
+        removeAllByPred(save.value.selectionGroups, x=>needRemove.has(x))
     }
     function moveEverything(offset:Coord){
         if(!save.value?.points || !save.value?.textTags)
@@ -701,6 +742,7 @@ export const useSaveStore = defineStore('save', () => {
         insertNewPtToLine, insertPtToLine, createNewLine, arrangeLinesOfType, ensureLinesOrdered,
         removePt, removePtFromLine, removeNoLinePoints, removePointLinkByPt, removeDanglingPointLinks, tryMergePt, isNamedPt,
         removeTextTag, moveEverything, setCvsSize,
+        createSelectionGroup, removeSelectionGroup, renameSelectionGroup,
         isLineTypeWithoutSta, isPtNoSta, isPtOnlyOnFakeLines,
         getLineCount, getStaCount
     }

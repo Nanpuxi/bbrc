@@ -94,4 +94,59 @@ describe('normalizeSave', () => {
     expect(result.cvsSize[0]).toBe(100)
     expect(result.cvsSize[1]).toBe(100)
   })
+
+  it('selectionGroups 不是数组时应被丢弃', () => {
+    const existing = {
+      idIncre: 2,
+      points: [],
+      lines: [],
+      cvsSize: [200, 200],
+      textTags: [],
+      config: {},
+      meta: {},
+      selectionGroups: 'not-an-array'
+    }
+    const result = normalizeSave(existing) as Save
+    expect(result.selectionGroups).toBeUndefined()
+  })
+
+  it('selectionGroups 应过滤不存在的id并组内去重', () => {
+    const existing = {
+      idIncre: 10,
+      points: [{ id: 1, pos: [0, 0], dir: 0, sta: 0 }],
+      lines: [],
+      cvsSize: [200, 200],
+      textTags: [{ id: 2, pos: [0, 0] }],
+      config: {},
+      meta: {},
+      selectionGroups: [
+        { id: 3, ptIds: [1, 1, 999], tagIds: [2, 998] }
+      ]
+    }
+    const result = normalizeSave(existing) as Save
+    expect(result.selectionGroups!.length).toBe(1)
+    expect(result.selectionGroups![0].ptIds).toEqual([1])
+    expect(result.selectionGroups![0].tagIds).toEqual([2])
+  })
+
+  it('selectionGroups 应删除空组和缺合法id的组', () => {
+    const existing = {
+      idIncre: 10,
+      points: [{ id: 1, pos: [0, 0], dir: 0, sta: 0 }],
+      lines: [],
+      cvsSize: [200, 200],
+      textTags: [],
+      config: {},
+      meta: {},
+      selectionGroups: [
+        { id: 3, ptIds: [], tagIds: [] },
+        { ptIds: [1], tagIds: [] },
+        { id: 4, ptIds: [999], tagIds: [] },
+        { id: 5, name: 'ok', ptIds: [1], tagIds: [] }
+      ]
+    }
+    const result = normalizeSave(existing) as Save
+    expect(result.selectionGroups!.length).toBe(1)
+    expect(result.selectionGroups![0]).toEqual({ id: 5, name: 'ok', ptIds: [1], tagIds: [] })
+  })
 })

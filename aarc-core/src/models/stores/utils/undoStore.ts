@@ -3,11 +3,13 @@ import { AurPatchStore } from "@aurouscia/au-undo-redo";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useSaveStore } from "../saveStore";
+import { useSelectionStore } from "../selectionStore";
 import { useResetterStore } from "./resetterStore";
 import { SavePatch } from "../saveDerived/staClusterStore.pure";
 
 export const useUndoStore = defineStore('undo', ()=>{
     const saveStore = useSaveStore()
+    const selectionStore = useSelectionStore()
     const resetterStore = useResetterStore()
     
     let urPatches: AurPatchStore<Save>|null = null
@@ -55,6 +57,8 @@ export const useUndoStore = defineStore('undo', ()=>{
     async function restoreState(state: Save, patch?: SavePatch){
         // TODO: activeCvsDispatcher会因为获取不到画布报错一次，有点难看不过问题不大
         saveStore.save = state
+        // save被整体替换，selected中的引用全部失效，必须清空
+        selectionStore.selected.clear()
         resetterStore.resetDerivedStores(patch)
         await resetterStore.relaunchDerivedStores()
     }
