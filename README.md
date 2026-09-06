@@ -5,6 +5,14 @@
 Advanced Abstract Route Canvas
 </div>
 
+## ⚠重大架构调整⚠
+
+本项目于`2026/9/3`发生了重大架构调整，原`aarc`目录被**拆分**为`aarc-core`和`aarc-web`。Fork 项目如果需要同步更新，详情请查看 https://aarc.jowei19.com/#/decoupling-upstream-alert
+
+aarc 核心部分已分离，可自由移植到各种外围实现，例如 electron 或 tauri，或接入自己设计的保存/权限控制/分享/评论功能。
+
+外围实现适配指南：`aarc-core\README.md`
+
 ## 使用地址
 http://aarc.jowei19.com
 
