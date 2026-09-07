@@ -90,12 +90,7 @@ export interface SaveStorage {
 - `load()` 改为按当前 id 走 `saveStorage.load(id)`（不再直接碰 localStorage）。
 - `saveData()` 写 `saveStorage.store(id, name, payload)`；写失败要 `showPop('保存失败', 'failed')` 且**不** `releasePreventLeaving()`（保持脏态拦截）。
 - `leave()` 改为打开 `SaveManagerModal`。
-- **切换存档流程**（Modal 回调）：
-  1. `disposeEditor()`（注销主画布渲染回调）
-  2. `setCurrentSaveIdRaw(newId)` + 更新 ref + 回写 localStorage
-  3. `loadSaveIntoEditor(raw, ...)` 加载新存档（undo 基线由 core 重建）
-  4. 重新注册 `mainCvsDispatcher.initAfterMainCvsRendered(preventLeaving)`（与 `onBeforeMount` 中相同的回调）
-  5. Cvs/Menu 已挂载则不重挂载——存档数据走 store 驱动重渲染；若实测有派生态残留，再用 `loadComplete` 先 `false` 后 `true` 强制重挂载兜底。
+- **切换存档流程**（Modal 回调）：~~运行时切换（dispose + loadSaveIntoEditor 重载）~~ **仿照 web 的彻底 reload**：把目标存档 id 写入 `aarc-tauri-current-save` 后 `window.location.reload()`，启动流程自然加载目标存档。原因见"修订记录"。
 - 顺带注入 `saveInfo` provider（`initCoreHostServices` 或 `initSaveInfoProvider`）：按 `getCurrentSaveIdNum()` 从 manifest 查名字，让导出图片文件名使用存档名（id 设计为数值字符串正是为此）。
 
 ### 3.5 tauri 权限与配置
@@ -130,3 +125,7 @@ export interface SaveStorage {
    - `pnpm --filter aarc-tauri tauri:dev`：同上，并确认文件落在 `$APPLOCALDATA/saves/`（macOS: `~/Library/Application Support/com.aarc.app/saves/`），旧 localStorage 存档被自动迁移；
    - 导出图片文件名使用存档名。
 6. 收尾：更新本包 README（第 6 步状态、存档位置说明）与根 `AGENTS.md` 中 aarc-tauri 的描述。
+
+## 五、修订记录
+
+- **2026-09-07 切换存档改为整页 reload**（§3.4）。初版实现按原计划做运行时切换（`disposeEditor` + `loadSaveIntoEditor` 重载 + 调 `Cvs` 暴露的 `init()` 重渲染），但运行时切换存在一组状态清理缺陷——画布空白不自愈、Scaler 尺寸缓存不重置、`config` 跨存档串台（切换后保存会把旧存档的整套 config 写进新存档）等，完整清单与修复方案见 `aarc-web/docs/save-switching-problems.md`。这些问题修复前，本包与 web 保持一致：切换存档 = 写入目标 id 到 `aarc-tauri-current-save` + `window.location.reload()`。该文档 §4 的修复集落地后，可再回到运行时切换方案（届时需一并处理 §2.1/§2.2/§2.4 等阻断级问题）。
