@@ -84,8 +84,8 @@ importers:
   aarc-tauri:
     dependencies:
       '@aurouscia/au-color-picker':
-        specifier: ^1.1.0
-        version: 1.1.0(typescript@6.0.3)
+        specifier: ^2.2.0
+        version: 2.2.0(vue@3.5.42(typescript@6.0.3))
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
@@ -227,9 +227,6 @@ packages:
     resolution: {integrity: sha512-9WWYV5lprB+lfQuvrNJFa0LZsY2q96T++VNysJ876dpmGx+hq5dveIlOv66eHhLwQnRWKnXDl3ayCLlxzKmAvw==}
     peerDependencies:
       vue: ^3.3.0
-
-  '@aurouscia/au-color-picker@1.1.0':
-    resolution: {integrity: sha512-mxzFc7IzwFhnd5sknRuqHBFbvb7yh1wyx4dSJ1XqmRO0P2EIP1AlY23rmnYmgw0u65xxj5839/g/uHv2wKal+g==}
 
   '@aurouscia/au-color-picker@2.2.0':
     resolution: {integrity: sha512-kkLPkm6MzOYdEhwV0dfrRrwj1HLFOH9m4j8tWg0IKUGDj18MKTDKxaYPulElyqLnj3MsTNj+uQZXFBwICijXmg==}
@@ -2341,13 +2338,6 @@ snapshots:
   '@anilkumarthakur/vue3-json-viewer@0.6.0(vue@3.5.42(typescript@6.0.3))':
     dependencies:
       vue: 3.5.42(typescript@6.0.3)
-
-  '@aurouscia/au-color-picker@1.1.0(typescript@6.0.3)':
-    dependencies:
-      color-convert: 3.1.3
-      vue: 3.5.42(typescript@6.0.3)
-    transitivePeerDependencies:
-      - typescript
 
   '@aurouscia/au-color-picker@2.2.0(vue@3.5.42(typescript@6.0.3))':
     dependencies:
