@@ -25,7 +25,12 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
-src-tauri/gen/
+# gen/android 工程本体应提交（tauri 约定，需在其中维护签名等定制）；
+# 仅忽略可再生的 schemas 与 gen/android 内部 .gitignore 已覆盖的构建产物
+src-tauri/gen/schemas/
 
 # 图标产物（整个目录由 pnpm gen:icons 生成，见 scripts/gen-icons.mjs）
 src-tauri/icons/
+# gen:icons 同步进安卓工程的 mipmap 图标同样是生成产物（tauri android init 也会在此生成默认版），
+# 不入库；克隆/init 后跑一次 pnpm gen:icons 即重建
+src-tauri/gen/android/app/src/main/res/mipmap-*/

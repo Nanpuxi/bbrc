@@ -11,6 +11,8 @@ pnpm --filter aarc-tauri type-check
 pnpm --filter aarc-tauri build
 ```
 
+安卓打包（环境依赖、init/build 步骤与代理等坑）见 `docs/android-init.md`。
+
 注意：tauri webview 下页面源是 `tauri://localhost`，API/数据源等出站请求依赖 `.env.development` 注入的 `VITE_ApiUrlBase`（默认 `http://localhost:5250`，对应 WebApi 的 "http" profile）与 `src-tauri/tauri.conf.json` 中的 CSP `connect-src *` 放行。
 
 ## 图标生成
@@ -25,7 +27,7 @@ pnpm --filter aarc-tauri gen:icons
 
 - **macOS**：`icon.icns`（全尺寸）与桌面通用 png（squircle：824/1024 居中、圆角约 22.37%），Dock 圆角由此烘焙进资源，macOS 不会自动裁圆角
 - **Windows**：`icon.ico`（同一 squircle 源）与 Store 磁贴 `Square*Logo.png` / `StoreLogo.png`（满幅版）
-- **Android**：`android/mipmap-*/` 下 adaptive icon 前景/背景层（Λ 缩至 85% 居中，落在 66dp 安全区内；厂商遮罩形状由系统套用，无需按厂商区分）与 legacy 方/圆图标；`mipmap-anydpi-v26/ic_launcher.xml` 固定引用渐变 mipmap 背景
+- **Android**：`android/mipmap-*/` 下 adaptive icon 前景/背景层（Λ 缩至 85% 居中，落在 66dp 安全区内；厂商遮罩形状由系统套用，无需按厂商区分）与 legacy 方/圆图标；`mipmap-anydpi-v26/ic_launcher.xml` 固定引用渐变 mipmap 背景。生成后**自动同步**到 `gen/android/app/src/main/res/`（`tauri android init` 只会生成默认 logo，不会使用这里的定制图标；未 init 则跳过并提示，init 后重跑本脚本即可）；同步进 `res/` 的 `mipmap-*` 同样是生成产物，已加入 `.gitignore` 不入库
 - **iOS**：`ios/AppIcon-*.png` 全套（满幅版，经 `removeAlpha` 去除 alpha——App Store 不允许图标带透明通道）
 
 改动 logo 后重跑一次即可；不要用 `tauri icon` 覆盖（它会把 Android 前景塞成满幅、背景改回纯色）。

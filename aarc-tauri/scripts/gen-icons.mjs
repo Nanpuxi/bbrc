@@ -2,7 +2,7 @@
 // 生成全部平台图标：macOS（squircle icns + 各档 png）、Windows（ico + Store 磁贴）、
 // Android（adaptive icon 双层 + legacy）、iOS（AppIcon 全套，不透明满幅）。
 // 用法：pnpm --filter aarc-tauri gen:icons
-import { readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
@@ -147,3 +147,29 @@ write('android/mipmap-anydpi-v26/ic_launcher.xml', Buffer.from(`<?xml version="1
 
 console.log(`已生成 ${written.length} 个文件：`)
 for (const f of written) console.log(`  src-tauri/icons/${f}`)
+
+// 同步到安卓工程：tauri android init 只生成默认 logo，不会使用 icons/android 的定制图标，
+// 需把 mipmap-* 拷进 gen/android 的 res/（该目录随仓库提交）；init 未跑过则跳过并提示
+const androidResDir = path.resolve(here, '../src-tauri/gen/android/app/src/main/res')
+const androidIconsDir = path.join(iconsDir, 'android')
+if (existsSync(androidResDir)) {
+  for (const d of readdirSync(androidIconsDir)) {
+    if (d.startsWith('mipmap-')) {
+      cpSync(path.join(androidIconsDir, d), path.join(androidResDir, d), { recursive: true })
+    }
+  }
+  // 默认模板遗留的矢量背景/前景，已被 mipmap 位图取代
+  for (const stale of [
+    'drawable/ic_launcher_background.xml',
+    'drawable-v24/ic_launcher_foreground.xml',
+  ]) {
+    const p = path.join(androidResDir, stale)
+    if (existsSync(p)) {
+      rmSync(p)
+      console.log(`  已移除默认图标残留: gen/android/app/src/main/res/${stale}`)
+    }
+  }
+  console.log('已同步到 gen/android/app/src/main/res/（mipmap-* 全套）')
+} else {
+  console.log('提示：gen/android 不存在（未跑过 tauri android init），跳过安卓工程图标同步；init 之后重跑一次本脚本即可')
+}
