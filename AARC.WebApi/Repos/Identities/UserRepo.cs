@@ -41,7 +41,11 @@ namespace AARC.WebApi.Repos.Identities
         public User? MatchUser(string username, string password)
         {
             var pwdEncrypted = UserPwdEncryption.Encrypt(password);
+            // 用户名大小写敏感：先按数据库 collation 取候选，再在内存中做序号敏感过滤，
+            // 与 ExactMatchByNameCaseSensitive 策略一致，避免 SQL Server 不区分大小写的 collation 撞号
             return Existing
+                .Where(x => x.Name == username && x.Password == pwdEncrypted)
+                .AsEnumerable()
                 .FirstOrDefault(x => x.Name == username && x.Password == pwdEncrypted);
         }
 
