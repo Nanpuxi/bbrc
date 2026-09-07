@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Coord } from 'aarc-core/models/coord';
-import { strokeStyledLine } from 'aarc-core/models/cvs/common/strokeStyledLine';
+import { drawLineStylePreview, lineStylePreviewCvsWidth, lineStylePreviewCvsHeight } from 'aarc-core/models/cvs/common/lineStylePreview';
 import { LineStyle } from 'aarc-core/models/save';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
@@ -66,19 +65,12 @@ function getDefaultLayer():LineStyle['layers'][number]{
 function cvsEleId(styleId:number){
     return `lineStylePreviewCvs_${styleId}`
 }
-const cvsWidth = 400
-const cvsHeight = 60
+const cvsWidth = lineStylePreviewCvsWidth
+const cvsHeight = lineStylePreviewCvsHeight
 const cvsStyle:CSSProperties = {
     width: '200px',
     height: '30px'
 }
-const cvsCenterY = cvsHeight/2
-const cvsLineWidthBase = cvsHeight/3
-const cvsLRMargin = cvsWidth/10
-const cvsLeftX = cvsLRMargin
-const cvsRightX = cvsWidth - cvsLRMargin
-const cvsLeftCoord:Coord = [cvsLeftX, cvsCenterY]
-const cvsRightCoord:Coord = [cvsRightX, cvsCenterY]
 function renderPreviewCvs(){
     if(!save.value?.lineStyles)
         return
@@ -89,25 +81,11 @@ function renderPreviewCvs(){
     }
 }
 function renderPreviewCvsOf(lineStyle:LineStyle, dynaColor:string){
-    const layers = lineStyle.layers
-    if(!layers)
-        return
     const cvs = document.getElementById(cvsEleId(lineStyle.id)) as HTMLCanvasElement|null
     const ctx = cvs?.getContext('2d')
-    if(!cvs || !ctx)
+    if(!ctx)
         return
-    ctx.fillStyle = 'white'
-    ctx.fillRect(0, 0, cvsWidth, cvsHeight)
-    ctx.beginPath()
-    ctx.moveTo(...cvsLeftCoord)
-    ctx.lineTo(...cvsRightCoord)
-    strokeStyledLine(ctx, {
-        lineStyle: lineStyle,
-        lineWidthBase: cvsLineWidthBase,
-        dynaColor: dynaColor,
-        fixedColorConverter: (c)=>c,
-        baseCap: 'butt'
-    })
+    drawLineStylePreview(ctx, lineStyle, dynaColor)
 }
 
 const styleNameMaxLength = 8
