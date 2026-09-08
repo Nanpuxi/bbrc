@@ -59,7 +59,7 @@ Android Studio SDK Manager 勾选 "Android SDK Command-line Tools (latest)"，�
 ### 3.2 `tauri android init`
 
 ```sh
-pnpm --filter aarc-tauri tauri android init
+pnpm --filter aarc-tauri android:init    # 即 tauri android init
 ```
 
 生成 `src-tauri/gen/android/`（Gradle 工程），并自动安装 Rust Android targets。
@@ -102,7 +102,8 @@ systemProp.https.proxyPort=7890
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export NDK_HOME="$ANDROID_HOME/ndk/<ndk版本目录>"
 export JAVA_HOME=<JDK17 的 Home 路径>
-pnpm --filter aarc-tauri tauri android build --apk --debug
+pnpm --filter aarc-tauri android:build           # debug 包（等价 tauri android build --apk --debug）
+pnpm --filter aarc-tauri android:build:release   # release 包（按 ABI 分包；需先配签名，见六）
 ```
 
 ### 3.7 安装运行
@@ -142,5 +143,16 @@ sdkmanager 输出里的 `Failed to upload metrics: Failed to connect to https://
 - **gen/android 的 git 跟踪**：`gen/android/` 工程本体**应当提交**（tauri 约定——它自带的 `.gitignore` 只排除构建产物、`local.properties`、keystore 配置等，说明其余部分就是要进仓库的，后续签名/清单定制都在里面维护）；仓库已收窄为仅忽略可再生的 `gen/schemas/`，外加 `app/src/main/res/mipmap-*/`（图标生成产物，由 `pnpm gen:icons` 重建，见 3.3）。3.5 的开发机配置（`org.gradle.java.home`、代理）不要留在工程的 `gradle.properties` 里提交，应放 `~/.gradle/gradle.properties`。
 - **API 地址**：`.env.development` 的 `VITE_ApiUrlBase=http://localhost:5250` 在安卓上指向设备自身；模拟器需改为 `http://10.0.2.2:5250`，真机需局域网 IP（离线用编辑器可不管）。
 - **dev 模式**：`tauri android dev` 时设备要访问开发机的 vite dev server，`vite.config.ts` 目前 `server.host: '127.0.0.1'` 绑死回环，需按 `TAURI_DEV_HOST` 调整（未做）。
-- **release 签名（未做）**：需要自行生成 keystore，并在 `gen/android` 的 gradle 中配 signingConfigs。
+- **release 签名（已配好）**：方案为"本地持有 keystore + `keystore.properties`"，两者均被 `gen/android/.gitignore` 排除（含追加的 `*.keystore`/`*.jks` 规则），不入库：
+  - keystore 生成（JDK 的 `keytool`，有效期 10000 天）：
+    ```sh
+    cd aarc-tauri/src-tauri/gen/android
+    keytool -genkeypair -v -keystore aarc-release.keystore -alias aarc \
+      -keyalg RSA -keysize 2048 -validity 10000
+    ```
+    **注意**：JDK 17 默认生成 **PKCS12** 格式，它不支持独立的 key password——若生成时指定的 keypass 与 storepass 不同，keypass 会被静默忽略，之后打包报 `Get Key failed: Given final block not properly padded`（实测踩过）。**keystore.properties 里 `keyPassword` 必须与 `storePassword` 一致**。
+  - `gen/android/keystore.properties`（格式）：`storeFile` / `storePassword` / `keyAlias` / `keyPassword` 四项
+  - `app/build.gradle.kts` 已实现**条件启用**：`keystore.properties` 存在且含 `storeFile` 才创建 `release` signingConfig 并挂到 release buildType；没有该文件的开发者 debug/release 构建不受影响（release 产出未签名包）
+  - 验证签名：`~/Library/Android/sdk/build-tools/<版本>/apksigner verify --print-certs <apk>`
+  - **keystore 与密码必须安全备份**（丢失则永远无法以同一身份发布更新，应用商店会拒收）；团队协作时通过安全渠道分发，不要进任何仓库/聊天记录
 - **真机回归重点**：取色器显示（依赖 `@aurouscia/au-color-picker` 版本对齐，其 scoped CSS 的 `data-v` 哈希须与组件 JS 一致）、导出/存档的 fs 落盘（Android 走应用私有目录/SAF，行为与桌面不同）、`window.confirm/alert` 行为、触屏下右键菜单交互。编辑器 UI 未做触屏适配，功能可用但体验是桌面版原样。

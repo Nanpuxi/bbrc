@@ -19,7 +19,11 @@
     "gen:icons": "node scripts/gen-icons.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk --debug",
+    "android:build:release": "tauri android build --apk --split-per-abi"
   },
   "dependencies": {
     "@aurouscia/au-color-picker": "^2.2.0",

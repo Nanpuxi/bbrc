@@ -11,7 +11,14 @@ pnpm --filter aarc-tauri type-check
 pnpm --filter aarc-tauri build
 ```
 
-安卓打包（环境依赖、init/build 步骤与代理等坑）见 `docs/android-init.md`。
+安卓（详见 `docs/android-init.md`）：
+
+```sh
+pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标）
+pnpm --filter aarc-tauri android:dev             # 连接设备/模拟器的 dev 模式
+pnpm --filter aarc-tauri android:build           # debug APK（universal，全 ABI）
+pnpm --filter aarc-tauri android:build:release   # release APK（按 ABI 分包；需先配签名）
+```
 
 注意：tauri webview 下页面源是 `tauri://localhost`，API/数据源等出站请求依赖 `.env.development` 注入的 `VITE_ApiUrlBase`（默认 `http://localhost:5250`，对应 WebApi 的 "http" profile）与 `src-tauri/tauri.conf.json` 中的 CSP `connect-src *` 放行。
 
