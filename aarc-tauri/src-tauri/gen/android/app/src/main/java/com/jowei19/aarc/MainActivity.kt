@@ -1,4 +1,4 @@
-package com.aarc.app
+package com.jowei19.aarc
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

@@ -24,7 +24,7 @@ val hasReleaseSigning = keystoreProperties.containsKey("storeFile")
 
 android {
     compileSdk = 36
-    namespace = "com.aarc.app"
+    namespace = "com.jowei19.aarc"
     if (hasReleaseSigning) {
         signingConfigs {
             create("release") {
@@ -37,7 +37,7 @@ android {
     }
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.aarc.app"
+        applicationId = "com.jowei19.aarc"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

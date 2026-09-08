@@ -123,7 +123,7 @@ pnpm --filter aarc-tauri android:build:release   # release 包（按 ABI 分包�
 | compileSdk / targetSdk | 36 | `gen/android/app/build.gradle.kts` |
 | minSdk | 24（Android 7.0） | 同上 |
 | jvmTarget | 1.8（仅字节码目标，与 Gradle JVM 无关） | 同上 |
-| applicationId | `com.aarc.app`（debug 包加 `.debug` 后缀） | 同上 |
+| applicationId | `com.jowei19.aarc`（debug 包加 `.debug` 后缀） | 同上 |
 
 ## 五、网络与代理注意事项
 
