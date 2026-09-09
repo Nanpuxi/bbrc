@@ -42,11 +42,19 @@ saves/
 interface SaveIndexEntry {
     id: string          // 数值字符串，与文件名一致
     name: string        // 显示名，重命名时更新
+    groupId?: string    // 所属分组 id；缺省或指向已删除分组时按"未分组"处理
     createdAt: number
     updatedAt: number   // 每次保存时更新，列表按它倒序
 }
-interface SaveIndex { saves: SaveIndexEntry[] }
+interface SaveGroup {
+    id: string
+    name: string
+    order: number       // 组间显示顺序，归一化为 0..n-1
+}
+interface SaveIndex { saves: SaveIndexEntry[]; groups: SaveGroup[] }
 ```
+
+- **分组**（2026-09-09 新增）：存储依然扁平（存档文件布局不变），分组只是 index.json 里的元数据——`groups` 数组维护组定义（含用户可调的 `order`），存档经 `groupId` 引用。旧 index.json 无 `groups` 字段，读取时按空数组处理，零迁移成本。删除分组不删存档，成员回到未分组。
 
 - **存档文件内容**：`prepareSavePayload()` 返回的 `Save` 直接 `JSON.stringify`，不加包装层（与 web 服务端存档数据同构，未来互通/导入更容易）。站点数/线路数在列表项展开或加载时经 `saveStaCount`/`saveLineCount` 现算，不进 manifest（避免两处维护）。
 
@@ -62,8 +70,16 @@ export interface SaveStorage {
     store(id: string, name: string, data: unknown): Promise<void>  // 新建或覆盖，更新 manifest
     rename(id: string, name: string): Promise<void>
     remove(id: string): Promise<void>
+    listGroups(): Promise<SaveGroup[]>                 // 按 order 升序
+    createGroup(name: string): Promise<SaveGroup>
+    renameGroup(id: string, name: string): Promise<void>
+    removeGroup(id: string): Promise<void>             // 成员回未分组，不删存档
+    moveGroup(id: string, delta: number): Promise<void>  // 组间排序（上移/下移）
+    setSaveGroup(saveId: string, groupId?: string): Promise<void>  // 缺省 = 未分组
 }
 ```
+
+分组相关操作只碰清单，其变更逻辑抽成 `idx*` 纯函数（`idxCreateGroup`/`idxMoveGroup` 等），两个实现各自 read → 变更 → write。
 
 两个实现，模块内按 `isTauri()` 选择导出：
 
@@ -81,7 +97,9 @@ export interface SaveStorage {
   - **点击列表项** → 加载该存档并关闭 Modal（点当前项则仅关闭）。
   - **新建存档**：以默认名（"新存档"）创建空白存档并立即切入（走加载流程，core `normalizeSave({})` 会按全新存档初始化）。
   - **重命名**：行内输入或 `prompt` 式小输入框，仅改 manifest。
-  - **删除**：确认后删文件并移出清单；禁止删除当前正在编辑的存档（按钮禁用或先切走）。
+  - **删除**：先弹确认 Modal（标题"确认删除「名字」？"，描述"本操作不可撤销"；删除非空分组时追加一行"x个存档将变为未分组状态"，覆盖在最上层，存档与分组删除共用），确认后删文件并移出清单；禁止删除当前正在编辑的存档（按钮禁用或先切走）。
+  - **搜索**：顶部搜索框按名称过滤（不区分大小写），搜索时忽略分组扁平展示。
+  - **分组**（2026-09-09 新增）：列表按组分节，组头显示组名 + 存档数，点击折叠（折叠状态存 localStorage 键 `aarc-tauri-save-groups-collapsed`，纯 UI 态）；组头提供 ↑/↓ 调序、重命名、删除（成员回未分组）；存档项的"分组"按钮打开独立 Modal（覆盖在管理器上层，标题"为「存档名」设置分组"）：现有分组 + 未分组 + 新建分组。"未分组"固定排在所有分组之后且仅在有内容时显示；脏 `groupId`（指向已删分组）渲染时兜底进未分组。
 - 样式参考本包 `Pop.vue` 的简洁风格，遮罩 + 居中卡片即可；`Esc`/点遮罩关闭。
 
 ### 3.4 Editor.vue 接线改造
@@ -128,4 +146,5 @@ export interface SaveStorage {
 
 ## 五、修订记录
 
+- **2026-09-09 存档分组**（§3.1/§3.2/§3.3）：存储保持扁平，分组信息全部在 index.json（`groups` 数组 + 存档的 `groupId`），支持自定义组间顺序（`order` 字段 + `moveGroup`）；组头折叠/重命名/删除，存档经"分组"菜单移动或新建组。搜索时忽略分组扁平过滤。
 - **2026-09-07 切换存档改为整页 reload**（§3.4）。初版实现按原计划做运行时切换（`disposeEditor` + `loadSaveIntoEditor` 重载 + 调 `Cvs` 暴露的 `init()` 重渲染），但运行时切换存在一组状态清理缺陷——画布空白不自愈、Scaler 尺寸缓存不重置、`config` 跨存档串台（切换后保存会把旧存档的整套 config 写进新存档）等，完整清单与修复方案见 `aarc-web/docs/save-switching-problems.md`。这些问题修复前，本包与 web 保持一致：切换存档 = 写入目标 id 到 `aarc-tauri-current-save` + `window.location.reload()`。该文档 §4 的修复集落地后，可再回到运行时切换方案（届时需一并处理 §2.1/§2.2/§2.4 等阻断级问题）。

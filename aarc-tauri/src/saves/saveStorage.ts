@@ -9,12 +9,22 @@ export interface SaveIndexEntry {
     /** 数值字符串（时间戳+两位随机数），与存档文件名一致；取数值是为兼容 core 的 getCurrentSaveIdNum */
     id: string
     name: string
+    /** 所属分组 id；缺省或指向已删除的分组时按"未分组"处理 */
+    groupId?: string
     createdAt: number
     updatedAt: number
 }
 
+export interface SaveGroup {
+    id: string
+    name: string
+    /** 组间显示顺序，归一化为 0..n-1 */
+    order: number
+}
+
 interface SaveIndex {
     saves: SaveIndexEntry[]
+    groups: SaveGroup[]
 }
 
 export interface SaveStorage {
@@ -26,11 +36,73 @@ export interface SaveStorage {
     store(id: string, name: string, data: unknown): Promise<void>
     rename(id: string, name: string): Promise<void>
     remove(id: string): Promise<void>
+    /** 全部分组，按 order 升序 */
+    listGroups(): Promise<SaveGroup[]>
+    createGroup(name: string): Promise<SaveGroup>
+    renameGroup(id: string, name: string): Promise<void>
+    /** 删除分组；组内存档回到未分组（不删存档） */
+    removeGroup(id: string): Promise<void>
+    /** 分组上移/下移 delta 位 */
+    moveGroup(id: string, delta: number): Promise<void>
+    /** 设置存档所属分组；groupId 缺省表示移入未分组 */
+    setSaveGroup(saveId: string, groupId?: string): Promise<void>
 }
 
 /** 生成新存档 id：时间戳 + 两位随机数（纯数值字符串） */
 export function newSaveId(): string {
     return String(Date.now()) + String(Math.floor(Math.random() * 100)).padStart(2, '0')
+}
+
+// ---------- 清单分组操作（两个实现共用的纯函数，直接作用于 SaveIndex） ----------
+
+function idxSortedGroups(idx: SaveIndex): SaveGroup[] {
+    return [...idx.groups].sort((a, b) => a.order - b.order)
+}
+
+/** order 归一化为 0..n-1（按当前 order 升序重排） */
+function idxNormalizeGroupOrder(idx: SaveIndex): void {
+    idxSortedGroups(idx).forEach((g, i) => { g.order = i })
+}
+
+function idxCreateGroup(idx: SaveIndex, name: string): SaveGroup {
+    idxNormalizeGroupOrder(idx)
+    const g: SaveGroup = { id: newSaveId(), name, order: idx.groups.length }
+    idx.groups.push(g)
+    return g
+}
+
+function idxRenameGroup(idx: SaveIndex, id: string, name: string): void {
+    const g = idx.groups.find(x => x.id === id)
+    if (!g)
+        throw new Error(`分组 ${id} 不存在`)
+    g.name = name
+}
+
+function idxRemoveGroup(idx: SaveIndex, id: string): void {
+    idx.groups = idx.groups.filter(x => x.id !== id)
+    for (const s of idx.saves)
+        if (s.groupId === id)
+            s.groupId = undefined
+    idxNormalizeGroupOrder(idx)
+}
+
+function idxMoveGroup(idx: SaveIndex, id: string, delta: number): void {
+    const sorted = idxSortedGroups(idx)
+    const i = sorted.findIndex(x => x.id === id)
+    const j = i + delta
+    if (i < 0 || j < 0 || j >= sorted.length)
+        return
+    const t = sorted[i]
+    sorted[i] = sorted[j]
+    sorted[j] = t
+    sorted.forEach((g, k) => { g.order = k })
+}
+
+function idxSetSaveGroup(idx: SaveIndex, saveId: string, groupId?: string): void {
+    const s = idx.saves.find(x => x.id === saveId)
+    if (!s)
+        throw new Error(`存档 ${saveId} 不存在`)
+    s.groupId = groupId || undefined
 }
 
 const legacyStorageKey = 'aarc-tauri-save-local'
@@ -50,14 +122,16 @@ async function fsEnsureDir(): Promise<void> {
 async function fsReadIndex(): Promise<SaveIndex> {
     await fsEnsureDir()
     if (!await exists(fsIndexPath, fsOpts))
-        return { saves: [] }
+        return { saves: [], groups: [] }
     try {
         const idx = JSON.parse(await readTextFile(fsIndexPath, fsOpts))
-        if (idx instanceof Object && idx.saves instanceof Array)
+        if (idx instanceof Object && idx.saves instanceof Array) {
+            idx.groups = idx.groups instanceof Array ? idx.groups : []
             return idx as SaveIndex
+        }
     } catch { /* 落入下方重建 */ }
     console.warn('[存档] index.json 缺失或损坏，已按空清单重建')
-    return { saves: [] }
+    return { saves: [], groups: [] }
 }
 
 async function fsWriteIndex(idx: SaveIndex): Promise<void> {
@@ -101,6 +175,35 @@ const tauriFsSaveStorage: SaveStorage = {
         const idx = await fsReadIndex()
         idx.saves = idx.saves.filter(x => x.id !== id)
         await fsWriteIndex(idx)
+    },
+    async listGroups() {
+        return idxSortedGroups(await fsReadIndex())
+    },
+    async createGroup(name) {
+        const idx = await fsReadIndex()
+        const g = idxCreateGroup(idx, name)
+        await fsWriteIndex(idx)
+        return g
+    },
+    async renameGroup(id, name) {
+        const idx = await fsReadIndex()
+        idxRenameGroup(idx, id, name)
+        await fsWriteIndex(idx)
+    },
+    async removeGroup(id) {
+        const idx = await fsReadIndex()
+        idxRemoveGroup(idx, id)
+        await fsWriteIndex(idx)
+    },
+    async moveGroup(id, delta) {
+        const idx = await fsReadIndex()
+        idxMoveGroup(idx, id, delta)
+        await fsWriteIndex(idx)
+    },
+    async setSaveGroup(saveId, groupId) {
+        const idx = await fsReadIndex()
+        idxSetSaveGroup(idx, saveId, groupId)
+        await fsWriteIndex(idx)
     }
 }
 
@@ -112,10 +215,12 @@ const lsSaveKey = (id: string) => `aarc-tauri-save-${id}`
 function lsReadIndex(): SaveIndex {
     try {
         const idx = JSON.parse(localStorage.getItem(lsIndexKey) ?? '')
-        if (idx instanceof Object && idx.saves instanceof Array)
+        if (idx instanceof Object && idx.saves instanceof Array) {
+            idx.groups = idx.groups instanceof Array ? idx.groups : []
             return idx as SaveIndex
+        }
     } catch { /* 落入下方重建 */ }
-    return { saves: [] }
+    return { saves: [], groups: [] }
 }
 
 function lsWriteIndex(idx: SaveIndex): void {
@@ -156,6 +261,35 @@ const browserSaveStorage: SaveStorage = {
         localStorage.removeItem(lsSaveKey(id))
         const idx = lsReadIndex()
         idx.saves = idx.saves.filter(x => x.id !== id)
+        lsWriteIndex(idx)
+    },
+    async listGroups() {
+        return idxSortedGroups(lsReadIndex())
+    },
+    async createGroup(name) {
+        const idx = lsReadIndex()
+        const g = idxCreateGroup(idx, name)
+        lsWriteIndex(idx)
+        return g
+    },
+    async renameGroup(id, name) {
+        const idx = lsReadIndex()
+        idxRenameGroup(idx, id, name)
+        lsWriteIndex(idx)
+    },
+    async removeGroup(id) {
+        const idx = lsReadIndex()
+        idxRemoveGroup(idx, id)
+        lsWriteIndex(idx)
+    },
+    async moveGroup(id, delta) {
+        const idx = lsReadIndex()
+        idxMoveGroup(idx, id, delta)
+        lsWriteIndex(idx)
+    },
+    async setSaveGroup(saveId, groupId) {
+        const idx = lsReadIndex()
+        idxSetSaveGroup(idx, saveId, groupId)
         lsWriteIndex(idx)
     }
 }
@@ -201,5 +335,29 @@ export const saveStorage: SaveStorage = {
     async remove(id) {
         await ensureMigrated()
         return impl.remove(id)
+    },
+    async listGroups() {
+        await ensureMigrated()
+        return impl.listGroups()
+    },
+    async createGroup(name) {
+        await ensureMigrated()
+        return impl.createGroup(name)
+    },
+    async renameGroup(id, name) {
+        await ensureMigrated()
+        return impl.renameGroup(id, name)
+    },
+    async removeGroup(id) {
+        await ensureMigrated()
+        return impl.removeGroup(id)
+    },
+    async moveGroup(id, delta) {
+        await ensureMigrated()
+        return impl.moveGroup(id, delta)
+    },
+    async setSaveGroup(saveId, groupId) {
+        await ensureMigrated()
+        return impl.setSaveGroup(saveId, groupId)
     }
 }
