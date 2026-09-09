@@ -38,7 +38,9 @@ const cvsHeightPreview = computed(()=>{
     return w
 })
 const tooBigWarnThrs = 20000
-const tooBigRefuseThrs = 100000
+const tooBigConfirmThrs = 100000
+const tooBigRefuseThrs = 100000000
+const tooBigRefuseThrsDisplay = '一亿'
 const cvsPreviewTooBig = computed<boolean>(()=>{
     return cvsWidthPreview.value > tooBigWarnThrs || cvsHeightPreview.value > tooBigWarnThrs 
 })
@@ -109,14 +111,36 @@ function changeIncrementIncre(way:boolean){
 function abortChange(){
     pendingChanges.value = [0,0,0,0]
 }
+const sizeConfirming = ref<boolean>(false)
+const sizeNoRemindChecked = ref<boolean>(false)
+let sizeNoRemindUntil = 0
 function applyChange(){
-    const pc = pendingChanges.value
     const newW = cvsWidthPreview.value
     const newH = cvsHeightPreview.value
     if(newW > tooBigRefuseThrs || newH > tooBigRefuseThrs){
-        showPop(`边长最大${tooBigRefuseThrs}`, 'failed')
+        showPop(`边长最大${tooBigRefuseThrsDisplay}`, 'failed')
         return
     }
+    if((newW > tooBigConfirmThrs || newH > tooBigConfirmThrs) && Date.now() >= sizeNoRemindUntil){
+        sizeNoRemindChecked.value = false
+        sizeConfirming.value = true
+        return
+    }
+    executeApplyChange()
+}
+function cancelSizeConfirm(){
+    sizeConfirming.value = false
+}
+function confirmSizeApply(){
+    if(sizeNoRemindChecked.value)
+        sizeNoRemindUntil = Date.now() + 5 * 60 * 1000
+    sizeConfirming.value = false
+    executeApplyChange()
+}
+function executeApplyChange(){
+    const pc = pendingChanges.value
+    const newW = cvsWidthPreview.value
+    const newH = cvsHeightPreview.value
     if(newW < minCvsSide || newH < minCvsSide){
         showPop(`边长最小${minCvsSide}`, 'failed')
         return
@@ -329,6 +353,24 @@ function executeScale() {
         这样调整后<br/>所有内容都会被移出画布范围
     </Notice>
 
+    <!-- 尺寸过大确认弹窗 -->
+    <Prompt v-if="sizeConfirming" :bg-click-close="true" @close="cancelSizeConfirm">
+        <div class="promptConfirm">
+            <div class="promptConfirmMsg">
+                你即将修改尺寸为<br/>
+                <b>{{ cvsWidthPreview }}×{{ cvsHeightPreview }}</b><br/>
+                后果自负
+            </div>
+            <div class="promptConfirmNoRemind">
+                <input type="checkbox" v-model="sizeNoRemindChecked"/> 5分钟内不再提醒
+            </div>
+            <div class="promptConfirmBtns">
+                <button class="minor" @click="cancelSizeConfirm">取消</button>
+                <button class="danger" @click="confirmSizeApply">确认</button>
+            </div>
+        </div>
+    </Prompt>
+
     <ConfigSection :title="'图幅适配'">
         <div class="fitPad">
             <div class="fitPadRow">
@@ -382,12 +424,12 @@ function executeScale() {
 
     <!-- 确认弹窗 -->
     <Prompt v-if="scaleConfirming" :bg-click-close="true" @close="cancelScaleConfirm">
-        <div class="promptScale">
-            <div class="promptScaleTitle">警告</div>
-            <div class="promptScaleMsg">
+        <div class="promptConfirm">
+            <div class="promptConfirmTitle">警告</div>
+            <div class="promptConfirmMsg">
                 坐标乘除会破坏现有车站团的连接关系，需要重新手动拼合！你真的要执行此操作吗？
             </div>
-            <div class="promptScaleBtns">
+            <div class="promptConfirmBtns">
                 <button class="minor" @click="cancelScaleConfirm">取消</button>
                 <button class="danger" @click="executeScale">确认</button>
             </div>
@@ -605,24 +647,31 @@ input[type=number]{
     }
 }
 
-.promptScale {
+.promptConfirm {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    .promptScaleTitle {
+    .promptConfirmTitle {
         font-size: 18px;
         font-weight: bold;
         color: #c0392b;
     }
-    .promptScaleMsg {
+    .promptConfirmMsg {
         text-align: center;
         font-size: 14px;
         color: #333;
         line-height: 1.6;
         max-width: 240px;
     }
-    .promptScaleBtns {
+    .promptConfirmNoRemind {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        color: #666;
+    }
+    .promptConfirmBtns {
         display: flex;
         align-items: center;
         justify-content: center;
