@@ -1468,3 +1468,77 @@ describe('staClusterStore - 贴合配置变更后缓存失效', () => {
     expect(store.getStaClusters()).toHaveLength(1)
   })
 })
+
+describe('staClusterStore - 未构建缓存时的增量调用（进入存档首个操作回归）', () => {
+  beforeEach(() => {
+    resetIdCounter()
+    createTestPinia()
+  })
+
+  function setupSaveStore(save: ReturnType<typeof createEmptySave>) {
+    const saveStore = useSaveStore()
+    saveStore.save = save
+    return saveStore
+  }
+
+  it('未懒加载构建时移动无关点不应摧毁潜在 cluster', () => {
+    // 回归：进入存档后第一个操作就是移动点。配置 watch 可能在首次渲染后
+    // 清空缓存（见 docs/cluster.md 7.4），此时增量更新必须跳过、等懒加载
+    // 全量构建；否则新邻接表只含被移动点的边，既有 cluster 全部丢失，
+    // 且 staClusters 被置为已构建，懒加载无法自愈
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [10, 0] },
+        { ...createPoint(3), pos: [500, 500] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    // 注意：不预先调用 getStaClusters，模拟缓存尚未构建的状态
+    const pt3 = save.points.find(p => p.id === 3)!
+    pt3.pos = [600, 600]
+    store.updateClustersBecauseOf(pt3)
+
+    const clusters = store.getStaClusters()
+    expect(clusters).toHaveLength(1)
+    expect(clusters![0]!.map(p => p.id).sort()).toEqual([1, 2])
+  })
+
+  it('未懒加载构建时删除点不应摧毁潜在 cluster', () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [10, 0] },
+        { ...createPoint(3), pos: [500, 500] }
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+    // 模拟 saveStore 删除点：先从存档移除，再触发 deletedPoint 钩子
+    save.points = save.points.filter(p => p.id !== 3)
+    store.cleanClustersFromDeletedPt(3)
+
+    expect(store.getStaClusters()).toHaveLength(1)
+  })
+
+  it('配置整体替换为相同值时缓存不应失效（readConfigFromSave 场景）', async () => {
+    const save = createEmptySave({
+      points: [
+        { ...createPoint(1), pos: [0, 0] },
+        { ...createPoint(2), pos: [10, 0] }
+      ]
+    })
+    setupSaveStore(save)
+    const cs = useConfigStore()
+    const store = useStaClusterStore()
+    const before = store.getStaClusters()
+    expect(before).toHaveLength(1)
+
+    // readConfigFromSave 的做法是整体替换 config 对象；
+    // 值未实际变化时不应清缓存（否则首次渲染后缓存被误清，见 7.4）
+    cs.config = JSON.parse(JSON.stringify(cs.config))
+    await nextTick()
+    expect(store.getStaClusters()).toBe(before)
+  })
+})

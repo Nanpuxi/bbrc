@@ -80,6 +80,7 @@ store 层（`staClusterStore.ts`）懒初始化：`staClusters` 为 `undefined` 
   - 点变为非 sta 时只清除邻接直接返回
 - **点删除**：`saveStore.deletedPoint` 钩子指向 `cleanClustersFromDeletedPt` → `cleanNeighborsForDeletedPt`，从所有邻居的集合中移除该点并删除其条目
 - 两条路径最后都重新执行 `makeClustersFromNeighbors()`
+- 两条增量路径都以缓存已构建为前提：`staClusters` 为 `undefined`（尚未懒加载构建）时**直接跳过**——存档数据本身已是最新，之后的 `getStaClusters` 会全量构建，在空邻接表上做增量更新会摧毁既有 cluster（见 7.4）
 
 ## 5.1 undo/redo 的缓存保留（patch 驱动）
 
@@ -135,7 +136,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 - 修改 `lineWidthMapped` 后，没有任何 watcher 使 `neighbors`/`staClusters` 失效（`resetterStore` 只在存档加载/undo/redo 时重置；`configStore` 内无相关监听）。
 - 更隐蔽的是：改完配置后再移动某个点，`updateNeighborsForMovedPt` 会用**新尺寸**增量更新该点的邻接边，而邻接表中其他边仍是**旧尺寸**的计算结果——新旧混杂，旧的大尺寸远距离 cluster 会一直残留到页面刷新。
 
-**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建（后续 `snapOctaClingPtPtThrs`、`freePtClusterMode` 也加入同一 watch）。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"一组用例（含 `lineWidthMapped` 深层就地修改、以及 `freePtClusterMode` 切换到 strict/off 时的失效）。
+**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 watch，变化时 `clearItems()` 触发懒加载全量重建（后续 `snapOctaClingPtPtThrs`、`freePtClusterMode` 也加入同一 watch）。注意该 watch 现为**值键 watch**（四项值拼接为字符串比较），不再是 deep watch：`readConfigFromSave` 会整体替换 config 对象，deep watch 在值未实际变化时也会误触发清缓存（见 7.4）。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"一组用例（含 `lineWidthMapped` 深层就地修改、以及 `freePtClusterMode` 切换到 strict/off 时的失效）。
 
 ### 7.2 free 点"候选对候选"比较过度合并（已修复）
 
@@ -165,3 +166,19 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 `getSnapThrsRatio` 从 `snapStore` 移到 `saveStore` 供两处共用（`snapStore` 依赖 `staClusterStore`，反向引用会成环）。配置 watch 补充 `snapOctaClingPtPtThrs`。所有预筛（bbox、轴向粗筛、网格半径）仍按 `clingingDist + reach + epsMargin` 计算，比正式判断宽松，无需改动。回归测试见 `staClusterStore.pure.test.ts` 的"点的实际位置落在对方候选的吸附阈值内应贴合（与实际吸附对齐）"。
 
 注意一个已知的近似：候选的**生成**仍用各点自身尺寸（`snapDist = size(pt) × base`），而实际吸附的候选偏移距离按点对交叉尺寸 `(sizeA+sizeB)/2 × base` 计算；两者在双方尺寸相同时一致，尺寸不同时候选位置略有差异，暂不影响主要使用场景。
+
+### 7.4 缓存未构建时的增量更新摧毁既有 cluster（已修复）
+
+**现象**：进入存档后，若第一个操作就是移动点（哪怕与 cluster 毫不相干），既有 cluster 全部消失，只有手动移动 cluster 内的点才能重新产生；先移动 textTag 再移动点则不出现。
+
+**根因**：两个问题叠加——
+
+1. `Cvs.vue` 初始化时 `readConfigFromSave()` 整体替换 `config` 对象。即使各项值未变，7.1 引入的配置 deep watch 也会被触发（flush:'pre'，异步执行），在首次渲染**之后**把刚建好的邻接表/cluster 清空——画面仍是旧像素（cluster 看似还在），内部缓存已空。
+2. 增量路径 `updateClustersBecauseOf` / `cleanClustersFromDeletedPt` 没有"缓存未构建则跳过"的防护：在空邻接表上做增量更新，新邻接表只含被移动点的边，且 `makeClustersFromNeighbors()` 把 `staClusters` 置为"已构建"，懒加载无法自愈，既有 cluster 全部丢失。先移动 textTag 会触发主画布渲染 → `getStaClusters()` 懒加载正确全量重建，之后移动点走正常增量路径，所以不触发本 bug。
+
+**修复**：
+
+- 增量路径（`updateClustersBecauseOf`、`cleanClustersFromDeletedPt`）在 `staClusters` 未构建时直接跳过：存档数据本身已是最新，等懒加载全量构建即可（`restoreWithPatch` 原本就由 `decideClusterRestoreStrategy` 的 `alreadyBuilt` 覆盖了此情形）。
+- 配置 watch 由 deep watch 改为值键 watch（`snapOctaClingPtPtDist | snapOctaClingPtPtThrs | freePtClusterMode | JSON.stringify(lineWidthMapped)` 拼接比较）：值未实际变化的整体替换（如 `readConfigFromSave`）不再误清缓存。
+
+回归测试见 `staClusterStore.test.ts` 的"未构建缓存时的增量调用（进入存档首个操作回归）"三个用例。
