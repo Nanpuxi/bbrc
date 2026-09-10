@@ -30,6 +30,7 @@
         justify-content: flex-start;
         align-items: stretch;
         overflow-y: scroll;
+        overflow-x: hidden;
     }
     .lines.arranging{
         cursor: ns-resize;
