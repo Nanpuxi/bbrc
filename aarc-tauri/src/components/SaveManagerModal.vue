@@ -472,6 +472,11 @@ defineExpose({ open })
     min-height: 0;
     margin: 0 -20px;
     padding-left: 10px;
+    // overlay 滚动条平台（macOS 默认、安卓/iOS）scrollbar-gutter 无效，
+    // 右侧不会预留槽位，需补对称的右 padding，否则列表偏右贴边（检测见 main.ts）
+    html.overlay-scrollbar & {
+        padding-right: 10px;
+    }
 }
 .groupHeader {
     display: flex;

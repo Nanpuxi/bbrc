@@ -27,5 +27,14 @@ initSaveInfoProvider(async (saveId) => {
     return entry ? { name: entry.name } : undefined
 })
 
+// 检测滚动条类型：经典滚动条占用布局宽度（Windows），overlay 滚动条不占（macOS 默认、安卓/iOS）。
+// scrollbar-gutter 对 overlay 滚动条无效，CSS 里按 html.overlay-scrollbar 做补偿
+const probe = document.createElement('div')
+probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll'
+document.body.appendChild(probe)
+if (probe.offsetWidth - probe.clientWidth === 0)
+    document.documentElement.classList.add('overlay-scrollbar')
+probe.remove()
+
 const pinia = createPinia().use(piniaPluginPersistedstate)
 createApp(App).use(pinia).mount('#app')
