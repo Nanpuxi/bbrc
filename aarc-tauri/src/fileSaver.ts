@@ -6,12 +6,25 @@
 //（仅在 tauri 环境注入，浏览器 dev 模式仍走 core 的默认下载兜底）
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
-import { isAndroid, createNewPublicImageFile, writeFile as afsWriteFile } from 'tauri-plugin-android-fs-api'
+import { isAndroid, createNewPublicImageFile, writeFile as afsWriteFile, scanPublicFile } from 'tauri-plugin-android-fs-api'
 import { FileSaver } from 'aarc-core/components/sidebars/export/composables/useImageExport'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 
 const ALBUM_NAME = 'AARC'
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i
+const EXT_MIME: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+}
+
+// 按扩展名显式映射 MIME（blob.type 可能为空），避免个别相册应用识别异常
+function mimeOf(fileName: string, blob: Blob): string | null {
+    const ext = fileName.split('.').pop()?.toLowerCase()
+    return (ext && EXT_MIME[ext]) || blob.type || null
+}
 
 function errMsg(e: unknown): string {
     return e instanceof Error ? e.message : String(e)
@@ -25,8 +38,10 @@ async function saveToAlbum(blob: Blob, fileName: string): Promise<boolean> {
         return false
     }
     // 同名文件由系统自动追加序号，不会覆盖
-    const uri = await createNewPublicImageFile('Pictures', `${ALBUM_NAME}/${fileName}`, blob.type || null)
+    const uri = await createNewPublicImageFile('Pictures', `${ALBUM_NAME}/${fileName}`, mimeOf(fileName, blob))
     await afsWriteFile(uri, new Uint8Array(await blob.arrayBuffer()))
+    // 触发媒体扫描，让相册应用立即刷新显示（否则部分机型要重启相册才可见）
+    await scanPublicFile(uri)
     pop(`已保存到相册 ${ALBUM_NAME}`, 'success')
     return true
 }

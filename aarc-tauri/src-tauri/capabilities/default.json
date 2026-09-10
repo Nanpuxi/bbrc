@@ -10,6 +10,7 @@
     "dialog:allow-save",
     "android-fs:allow-create-new-public-image-file",
     "android-fs:allow-write-file",
+    "android-fs:allow-scan-public-file",
     "fs:allow-write-file",
     "fs:allow-write-text-file",
     "fs:allow-read-text-file",
