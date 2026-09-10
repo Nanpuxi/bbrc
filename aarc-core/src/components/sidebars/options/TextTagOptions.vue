@@ -32,6 +32,8 @@ function startEditing(tag: TextTag) {
         tag.textSOp = { size:0, color: cs.config.textTagSubFontColorHex }
     if(!tag.opacity)
         tag.opacity = 1
+    if(tag.zIndex === undefined)
+        tag.zIndex = 0
     picker1.value?.enforceTo(tag.textOp?.color || '#000000')
     picker2.value?.enforceTo(tag.textSOp?.color || '#000000')
     iconStore.enforcePrefixSelectedTo(tag.icon??0)
@@ -229,6 +231,18 @@ defineExpose({
                     <td>
                         <input type="checkbox" v-model="editing.sunken"/>
                         <div class="smallNote">标签将置于线路下方，用于区划名</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>层级</td>
+                    <td>
+                        <div class="viewableRange">
+                            <input type="range" v-model.number="editing.zIndex" :min="-9" :max="9" :step="1"/>
+                            <input type="number" v-model.number.lazy="editing.zIndex"/>
+                            <div class="smallNote">控制标签的显示顺序<br/>高层级会盖住低层级</div>
+                            <div class="smallNote">当前：{{ editing.zIndex ?? 0 }}</div>
+                            <div class="smallNote" v-if="editing.sunken">“置底”的标签仍整体<br/>位于线路下方</div>
+                        </div>
                     </td>
                 </tr>
                 <tr v-if="editing.forId">

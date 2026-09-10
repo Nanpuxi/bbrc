@@ -11,6 +11,7 @@ import { CvsContext } from "../common/cvsContext";
 import { enlargeQuad, quadBoundingRect, toQuadCoord } from "aarc-core/utils/coordUtils/coordRect";
 import { TextTagPerTypeGlobalConfig } from "aarc-core/models/config";
 import { TextTagIconData, useIconStore } from "aarc-core/models/stores/iconStore";
+import { keepOrderSort } from "aarc-core/utils/lang/keepOrderSort";
 import { drawQuad, fillQuad } from "aarc-core/utils/drawUtils/drawRect";
 import { drawCross } from "aarc-core/utils/drawUtils/drawCross";
 
@@ -29,6 +30,9 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         else{
             allTags = allTags?.filter(x=>!x.sunken)
         }
+        //sunken 分组关系不变，zIndex 只决定组内的叠放顺序
+        if(allTags)
+            keepOrderSort(allTags, (x,y)=>(x.zIndex??0)-(y.zIndex??0))
         allTags?.forEach(t=>{
             renderOneTextTag(ctx, t)
         })

@@ -164,6 +164,8 @@ export interface TextTag{
     angle?:number
     removeCarpet?:boolean
     sunken?:boolean
+    /** 显示层级（同一“置底/非置底”分组内，高层级盖住低层级；undefined 按 0 处理） */
+    zIndex?:number
     //rot?:FormalRotation
 }
 export interface TextOptions{
