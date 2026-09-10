@@ -118,6 +118,37 @@ export const useSaveStore = defineStore('save', () => {
         return res
     })
     /**
+     * 每个点对应的所有连接普通线路的 staNameSSize（副站名渲染尺寸）列表
+     * 最终取最大值作为该点的 ptNameSSize；0 表示未设置（跟随上级，最终跟随 ptNameSize 链路）
+     * 数据来源优先级（单条线路）：
+     *   1. 线路单独设置的 ptNameSSize（若 > 0）
+     *   2. config.lineWidthMapped[width].staNameSSize（线宽全局映射，若 > 0）
+     *   3. 未设置：0（不做 width/默认值兜底，兜底由渲染侧跟随 nameSize 完成）
+     */
+    const ptNameSSize = computed<Record<number, number|undefined>>(()=>{
+        const res:Record<number, number> = {}
+        if(!save.value?.points)
+            return res
+        for(const pt of save.value.points){
+            let maxSize = 0
+            const belongLines = ptBelongLineDict.value[pt.id] || []
+            const sizes = belongLines
+                .filter(x=>x.type===LineType.common)
+                .map(x=>{
+                    if(x.ptNameSSize && x.ptNameSSize>0){
+                        return x.ptNameSSize
+                    }
+                    const configMapped = readNumKeyedRecord(
+                        configStore.config.lineWidthMapped, x.width||1)?.staNameSSize
+                    return (configMapped && configMapped>0) ? configMapped : 0
+                })
+            if(sizes.length>0)
+                maxSize = Math.max(...sizes)
+            res[pt.id] = maxSize
+        }
+        return res
+    })
+    /**
      * 每个点对应的所有连接普通线路的 staNameSnapSize（站名吸附距离计算尺寸）列表
      * 与 ptSizes 分离，允许站名吸附距离和车站渲染尺寸独立配置
      * 注意：站名吸附距离取决于车站大小（ptSize），而非站名字体大小（ptNameSize）
@@ -304,6 +335,10 @@ export const useSaveStore = defineStore('save', () => {
     }
     function getLinesDecidedPtNameSize(ptId:number){
         return ptNameSize.value[ptId] || 1
+    }
+    //返回 0 表示各级来源均未设置副站名尺寸，渲染侧应跟随 nameSize
+    function getLinesDecidedPtNameSSize(ptId:number){
+        return ptNameSSize.value[ptId] || 0
     }
     function getLinesDecidedPtNameSnapSize(ptId:number){
         const sizes = ptNameSnapSizes.value[ptId]
@@ -737,7 +772,7 @@ export const useSaveStore = defineStore('save', () => {
     return { 
         save, getNewId, cvsWidth, cvsHeight, disposedStaNameOf, deletedPoint, deletedTextTag, linePtsChanged,
         getPtById, getPtsByIds, getLineById, getLinesByIds, linesSortedByZIndex,
-        getLinesDecidedPtSize, getLinesDecidedPtSizes, getLinesDecidedPtNameSize, getLinesDecidedPtNameSnapSize, getLinesDecidedPtSnapSizes, getLinesDecidedPtSnapSize,
+        getLinesDecidedPtSize, getLinesDecidedPtSizes, getLinesDecidedPtNameSize, getLinesDecidedPtNameSSize, getLinesDecidedPtNameSnapSize, getLinesDecidedPtSnapSizes, getLinesDecidedPtSnapSize,
         getNeighborByPt, getPtsInRange, adjacentSegs, getLinesByPt, getSnapThrsRatio, getLinesByType, getLinesByParent, getTextTagById, getPointLinksByPt,
         insertNewPtToLine, insertPtToLine, createNewLine, arrangeLinesOfType, ensureLinesOrdered,
         removePt, removePtFromLine, removeNoLinePoints, removePointLinkByPt, removeDanglingPointLinks, tryMergePt, isNamedPt,

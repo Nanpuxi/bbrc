@@ -39,6 +39,8 @@ export interface ControlPoint{
     nameS?:string
     nameP?:Coord
     nameSize?:number
+    /** 副站名尺寸；0/undefined 时跟随上级（cluster→线路推导），全部未设置时跟随 nameSize */
+    nameSSize?:number
     /** 站名旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
     nameAngle?:number
     anchorX?:SgnNumber
@@ -89,6 +91,8 @@ export interface Line{
     group?:number
     width?:number
     ptNameSize?:number
+    /** 副站名尺寸；0/undefined 时跟随上级（线宽映射→最终跟随 ptNameSize 链路） */
+    ptNameSSize?:number
     ptNameSnapSize?:number
     ptSize?:number
     ptSnapSize?:number

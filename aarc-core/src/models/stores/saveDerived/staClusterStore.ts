@@ -161,11 +161,13 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         target.nameP = transfer.nameP
         return target
     }
-    function getMaxSizePtWithinCluster(ptId:number, sizeType:'ptSize'|'ptNameSize'|'ptNameSnapSize'){
-        const get = sizeType === 'ptSize' 
+    function getMaxSizePtWithinCluster(ptId:number, sizeType:'ptSize'|'ptNameSize'|'ptNameSSize'|'ptNameSnapSize'){
+        const get = sizeType === 'ptSize'
             ? (id:number)=>saveStore.getLinesDecidedPtSize(id)
             : sizeType === 'ptNameSize'
             ? (id:number)=>saveStore.getLinesDecidedPtNameSize(id)
+            : sizeType === 'ptNameSSize'
+            ? (id:number)=>saveStore.getLinesDecidedPtNameSSize(id)
             : (id:number)=>saveStore.getLinesDecidedPtNameSnapSize(id)
         return getClusterMaxSizePure(staBelongToCluster.value[ptId], get, ptId)
     }

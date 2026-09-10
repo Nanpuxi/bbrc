@@ -111,6 +111,7 @@ watch(() => {
         width: l.width,
         style: l.style,
         ptNameSize: l.ptNameSize,
+        ptNameSSize: l.ptNameSSize,
         ptNameSnapSize: l.ptNameSnapSize,
         ptSize: l.ptSize,
         ptSnapSize: l.ptSnapSize,
@@ -159,6 +160,7 @@ function ensureLineNumOptionsNum(){
     props.line.width ||= 1
     props.line.style ||= 0
     props.line.ptNameSize ||= 0
+    props.line.ptNameSSize ||= 0
     props.line.ptNameSnapSize ||= 0
     props.line.ptSnapSize ||= 0
     props.line.ptSize ||= 0
@@ -249,6 +251,22 @@ onMounted(()=>{
                 :step="0.05"
                 />
             <div class="smallNote">(设为0使用"设置-线宽对应<br/>车站尺寸"中的全局设置)</div>
+        </td>
+    </tr>
+    <tr v-if="line.type===LineType.common">
+        <td>副站名</td>
+        <td class="viewableRange">
+            <input type="range" v-model.number="props.line.ptNameSSize"
+                :min="0"
+                :max="2"
+                :step="0.25"
+                />
+            <input type="number" v-model.number.lazy="props.line.ptNameSSize"
+                :min="0"
+                :max="2"
+                :step="0.05"
+                />
+            <div class="smallNote">(设为0使用"设置-线宽对应<br/>车站尺寸"中"副站名"的全局设置，<br/>均未设置时跟随"站名"尺寸)</div>
         </td>
     </tr>
     <tr v-if="line.type===LineType.common">

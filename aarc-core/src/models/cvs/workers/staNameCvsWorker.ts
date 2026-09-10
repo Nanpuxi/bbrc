@@ -24,8 +24,8 @@ const staNameFobThrsBase = 0.000001
 interface StaNamePrecomputed{
     //点 id 到其所属 cluster 的映射；未聚类的单点对应 undefined
     clusterForPt: Map<number, ControlPoint[] | undefined>
-    //每个 cluster 内三种尺寸的最大值，以 cluster 数组引用作为 key
-    clusterMaxSizes: Map<ControlPoint[], { ptSize:number, ptNameSize:number, ptNameSnapSize:number }>
+    //每个 cluster 内四种尺寸的最大值，以 cluster 数组引用作为 key
+    clusterMaxSizes: Map<ControlPoint[], { ptSize:number, ptNameSize:number, ptNameSSize:number, ptNameSnapSize:number }>
 }
 
 export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
@@ -44,7 +44,7 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
         const pts = saveStore.save.points;
         const viewRect = cvsFrameStore.getViewRectSideLengths()
         viewRectArea = viewRect[0] * viewRect[1]
-        //预计算聚类索引与尺寸缓存：renderPtName 原本每个站点要 3 次
+        //预计算聚类索引与尺寸缓存：renderPtName 原本每个站点要 4 次
         //在 clusters 中线性查找所属 cluster 并重复计算最大值，大地图下极慢。
         //这里一次性完成，后续查找均为 O(1)。
         const clusters = staClusterStore.getStaClusters() || []
@@ -54,11 +54,12 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
                 clusterForPt.set(pt.id, cluster)
             })
         })
-        const clusterMaxSizes = new Map<ControlPoint[], { ptSize:number, ptNameSize:number, ptNameSnapSize:number }>()
+        const clusterMaxSizes = new Map<ControlPoint[], { ptSize:number, ptNameSize:number, ptNameSSize:number, ptNameSnapSize:number }>()
         clusters.forEach(cluster=>{
             clusterMaxSizes.set(cluster, {
                 ptSize: getClusterMaxSizePure(cluster, id => saveStore.getLinesDecidedPtSize(id)),
                 ptNameSize: getClusterMaxSizePure(cluster, id => saveStore.getLinesDecidedPtNameSize(id)),
+                ptNameSSize: getClusterMaxSizePure(cluster, id => saveStore.getLinesDecidedPtNameSSize(id)),
                 ptNameSnapSize: getClusterMaxSizePure(cluster, id => saveStore.getLinesDecidedPtNameSnapSize(id))
             })
         })
@@ -81,7 +82,7 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             return
         //读取站点所属 cluster 的预计算最大尺寸；
         //无预计算结果时（如 renderPtNameById 单独调用）回退到原接口。
-        function getClusterMaxSize(sizeType:'ptSize'|'ptNameSize'|'ptNameSnapSize'):number{
+        function getClusterMaxSize(sizeType:'ptSize'|'ptNameSize'|'ptNameSSize'|'ptNameSnapSize'):number{
             if(precomputed){
                 const cluster = precomputed.clusterForPt.get(pt.id)
                 if(cluster){
@@ -91,12 +92,16 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
                 //未聚类的单点：直接取该点自身尺寸
                 if(sizeType === 'ptSize') return saveStore.getLinesDecidedPtSize(pt.id)
                 if(sizeType === 'ptNameSize') return saveStore.getLinesDecidedPtNameSize(pt.id)
+                if(sizeType === 'ptNameSSize') return saveStore.getLinesDecidedPtNameSSize(pt.id)
                 return saveStore.getLinesDecidedPtNameSnapSize(pt.id)
             }
             return staClusterStore.getMaxSizePtWithinCluster(pt.id, sizeType)
         }
         //字体大小：优先使用pt内设置的值，若pt内的值为undefined或0，再去找cluster内最大的
         const fontSizeRatio = Number(pt.nameSize) || getClusterMaxSize('ptNameSize')
+        //副站名字体大小：与主站名同样的三个来源（点级 nameSSize → cluster 内最大 → 线路推导），
+        //全部为0/undefined时维持原行为，跟随主站名的 fontSizeRatio
+        const fontSizeRatioSub = Number(pt.nameSSize) || getClusterMaxSize('ptNameSSize') || fontSizeRatio
         const rowHeight = cs.config.staNameRowHeight * fontSizeRatio
         if(!noOmit){
             //决定要不要糊弄
@@ -164,8 +169,8 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             font: cs.config.staNameSubFont,
             weight: cs.config.staNameSubFontWeight,
             style: cs.config.staNameSubFontStyle,
-            fontSize: cs.config.staNameSubFontSize * fontSizeRatio,
-            rowHeight: cs.config.staNameSubRowHeight * fontSizeRatio
+            fontSize: cs.config.staNameSubFontSize * fontSizeRatioSub,
+            rowHeight: cs.config.staNameSubRowHeight * fontSizeRatioSub
         },
         carpetStroke, needReportRect ? 'both' : 'draw', undefined, pt.nameAngle)
 

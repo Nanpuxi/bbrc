@@ -37,6 +37,8 @@ function startEditing(pt: ControlPoint) {
     editing.value = pt
     if(editing.value.nameSize===undefined)
         editing.value.nameSize = 0
+    if(editing.value.nameSSize===undefined)
+        editing.value.nameSSize = 0
     if(editing.value.nameP===undefined)
         editing.value.nameP = nameEditStore.optimizedNamePos(editing.value.id)
     showLineSplitMenu.value = false
@@ -227,13 +229,19 @@ defineExpose({
         <div v-if="!isLineTypeWithoutSta">
             <h2>站名尺寸</h2>
             <div class="optionSection">
+                <div class="smallNote" style="text-align: center;">主站名</div>
                 <div class="viewableRange" v-if="editing.nameSize!==undefined">
                     <input type="range" v-model.number="editing.nameSize" :min="0" :max="3" :step="0.25"/>
                     <input type="number" v-model.number="editing.nameSize" :min="0" :max="3"/>
                 </div>
+                <div class="smallNote" style="text-align: center;">副站名</div>
+                <div class="viewableRange" v-if="editing.nameSSize!==undefined">
+                    <input type="range" v-model.number="editing.nameSSize" :min="0" :max="3" :step="0.25"/>
+                    <input type="number" v-model.number="editing.nameSSize" :min="0" :max="3"/>
+                </div>
                 <div class="smallNote" style="text-align: center;">
                     设为0使用默认大小<br/>
-                    （即车站团内最大的“线路设置站名尺寸”）<br/>
+                    （即车站团内最大的“线路设置站名尺寸”，<br/>副站名均未设置时跟随主站名尺寸）<br/>
                     此处的设置仅影响本点，若站名被拖入<br/>车站团内其他点，则需要重新设置
                 </div>
             </div>

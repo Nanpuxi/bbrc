@@ -754,6 +754,16 @@ describe('staClusterStore - getMaxSizePtWithinCluster', () => {
     expect(store.getMaxSizePtWithinCluster(1, 'ptNameSnapSize')).toBe(1)
   })
 
+  it('单点且各级均未设置 ptNameSSize 时返回 0（跟随 nameSize 的信号）', () => {
+    const save = createEmptySave({
+      points: [createPoint(1)]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+
+    expect(store.getMaxSizePtWithinCluster(1, 'ptNameSSize')).toBe(0)
+  })
+
   it('cluster 内应返回指定类型的最大尺寸', () => {
     const save = createEmptySave({
       points: [
@@ -761,8 +771,8 @@ describe('staClusterStore - getMaxSizePtWithinCluster', () => {
         createPoint(2)
       ],
       lines: [
-        createLine([1], { ptSize: 2, ptNameSize: 3, ptNameSnapSize: 4 }),
-        createLine([2], { ptSize: 5, ptNameSize: 6, ptNameSnapSize: 7 })
+        createLine([1], { ptSize: 2, ptNameSize: 3, ptNameSSize: 0.5, ptNameSnapSize: 4 }),
+        createLine([2], { ptSize: 5, ptNameSize: 6, ptNameSSize: 0.8, ptNameSnapSize: 7 })
       ]
     })
     setupSaveStore(save)
@@ -772,7 +782,27 @@ describe('staClusterStore - getMaxSizePtWithinCluster', () => {
 
     expect(store.getMaxSizePtWithinCluster(1, 'ptSize')).toBe(5)
     expect(store.getMaxSizePtWithinCluster(1, 'ptNameSize')).toBe(6)
+    expect(store.getMaxSizePtWithinCluster(1, 'ptNameSSize')).toBe(0.8)
     expect(store.getMaxSizePtWithinCluster(1, 'ptNameSnapSize')).toBe(7)
+  })
+
+  it('cluster 内部分成员未设置 ptNameSSize 时按 0 参与最大值', () => {
+    const save = createEmptySave({
+      points: [
+        createPoint(1),
+        createPoint(2)
+      ],
+      lines: [
+        createLine([1], { ptNameSSize: 0.5 }),
+        createLine([2], { width: 5, ptNameSize: 6 })
+      ]
+    })
+    setupSaveStore(save)
+    const store = useStaClusterStore()
+
+    store.getStaClusters()
+
+    expect(store.getMaxSizePtWithinCluster(1, 'ptNameSSize')).toBe(0.5)
   })
 })
 

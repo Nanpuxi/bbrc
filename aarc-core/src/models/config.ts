@@ -90,6 +90,8 @@ export interface Config{
 export type LineWidthMappedConfig = Record<string, {
     staSize?:number,
     staNameSize?:number,
+    /** 副站名尺寸；0/undefined 时跟随上级（最终跟随 staNameSize 链路） */
+    staNameSSize?:number,
     staSnapSize?:number,
     staNameSnapSize?:number
 }|undefined>
