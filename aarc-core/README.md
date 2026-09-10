@@ -61,3 +61,4 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 - **core 会直接发网络请求**：`utils/urlUtils/checkUrl.ts:3`（`fetch` HEAD 探测 URL 可用性）、`models/save/dataSourceOps.ts:19`（`fetch` 拉取数据源）——core 并非零出站请求，宿主环境须允许这些请求发出（未来计划随注入模式 provider 化，见 `aarc-web/docs/decoupling.md` 第 19 步）。
 - **同源假设**：`utils/urlUtils/proxyUrl.ts:15`、`models/stores/iconStore.ts:40,174`、`components/sidebars/configs/CloudSvgConfig.vue:38` 用 `window.location.origin` 拼接 API/图标 URL，隐式要求后端与静态资源同源于页面；不同源时必须正确配置 `VITE_ApiUrlBase`。
 - **硬编码静态路径**：`models/save/upgrade/textTagIcons.ts:9-10` 的默认文本标签图标引用 `/icons/a/airport.svg`、`/icons/a/train.svg`，依赖宿主 `public/icons/` 目录提供。web：`aarc-web/public/icons/`。
+- **构建信息 `/gitInfo.json`**：`components/sidebars/configs/EtcConfig.vue` 底部显示分支/提交/构建时间（`utils/gitInfo/gitInfoGet.ts` 懒加载 fetch，失败则该行隐藏）。宿主应在 dev/build 前把 `gitInfo.json` 生成到自身 `public/` 下。web：`build.ts` 内调用 `src/utils/gitInfo/gitInfoGen.ts`；tauri：`scripts/gen-git-info.mjs`（已挂进 `dev`/`build` 脚本前置）。

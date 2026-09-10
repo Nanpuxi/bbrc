@@ -12,11 +12,12 @@
     "pnpm": ">=11"
   },
   "scripts": {
-    "dev": "vite",
-    "dev-host": "vite --host",
-    "build": "vite build",
+    "dev": "node scripts/gen-git-info.mjs && vite",
+    "dev-host": "node scripts/gen-git-info.mjs && vite --host",
+    "build": "node scripts/gen-git-info.mjs && vite build",
     "type-check": "vue-tsc --noEmit",
     "gen:icons": "node scripts/gen-icons.mjs",
+    "gen:git-info": "node scripts/gen-git-info.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

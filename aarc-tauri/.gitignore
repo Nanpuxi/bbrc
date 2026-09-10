@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# 构建信息生成产物（dev/build 前由 scripts/gen-git-info.mjs 生成）
+public/gitInfo.json
+
 # Tauri
 src-tauri/target/
 # gen/android 工程本体应提交（tauri 约定，需在其中维护签名等定制）；

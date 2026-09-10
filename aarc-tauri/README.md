@@ -22,6 +22,10 @@ pnpm --filter aarc-tauri android:build:release   # release APK（按 ABI 分包�
 
 注意：tauri webview 下页面源是 `tauri://localhost`，API/数据源等出站请求依赖 `.env.development` 注入的 `VITE_ApiUrlBase`（默认 `http://localhost:5250`，对应 WebApi 的 "http" profile）与 `src-tauri/tauri.conf.json` 中的 CSP `connect-src *` 放行。
 
+## 构建信息生成
+
+`dev`/`build` 前会自动运行 `scripts/gen-git-info.mjs`（也可手动 `pnpm gen:git-info`），把分支/提交/构建时间写入 `public/gitInfo.json`（生成产物，已 gitignore），供 core 的"杂项"配置区底部展示；无 git 环境时写入 unknown 兜底。
+
 ## 图标生成
 
 ```sh
