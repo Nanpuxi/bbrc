@@ -142,7 +142,7 @@ sdkmanager 输出里的 `Failed to upload metrics: Failed to connect to https://
 
 - **gen/android 的 git 跟踪**：`gen/android/` 工程本体**应当提交**（tauri 约定——它自带的 `.gitignore` 只排除构建产物、`local.properties`、keystore 配置等，说明其余部分就是要进仓库的，后续签名/清单定制都在里面维护）；仓库已收窄为仅忽略可再生的 `gen/schemas/`，外加 `app/src/main/res/mipmap-*/`（图标生成产物，由 `pnpm gen:icons` 重建，见 3.3）。3.5 的开发机配置（`org.gradle.java.home`、代理）不要留在工程的 `gradle.properties` 里提交，应放 `~/.gradle/gradle.properties`。
 - **API 地址**：`.env.development` 的 `VITE_ApiUrlBase=http://localhost:5250` 在安卓上指向设备自身；模拟器需改为 `http://10.0.2.2:5250`，真机需局域网 IP（离线用编辑器可不管）。
-- **dev 模式**：`tauri android dev` 时设备要访问开发机的 vite dev server，`vite.config.ts` 目前 `server.host: '127.0.0.1'` 绑死回环，需按 `TAURI_DEV_HOST` 调整（未做）。
+- **dev 模式**：`tauri android dev` 时设备要访问开发机的 vite dev server，`vite.config.ts` 已按 `TAURI_DEV_HOST` 调整——CLI 注入该变量（开发机局域网 IP）时，vite 自动改为监听该地址并放行对应 Host/CORS origin，真机与开发机需在同一局域网（无线 adb 场景天然满足）；未注入时仍绑 `127.0.0.1`，桌面/浏览器 dev 行为不变。macOS 防火墙若拦截 node 入站连接需放行 5174 端口。
 - **release 签名（已配好）**：方案为"本地持有 keystore + `keystore.properties`"，两者均被 `gen/android/.gitignore` 排除（含追加的 `*.keystore`/`*.jks` 规则），不入库：
   - keystore 生成（JDK 的 `keytool`，有效期 10000 天）：
     ```sh
