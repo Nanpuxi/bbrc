@@ -141,6 +141,15 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             ctx.stroke()
         }
 
+        const ptCarpet = pt.nameCarpet
+        const globalCarpet = cs.config.staNameCarpet
+        //宽度倍率为0（或负数）时不绘制基底，直接传false以省去整组strokeText draw call
+        const carpetWidthRatio = ptCarpet?.width ?? globalCarpet.width ?? 1
+        const carpetStroke = carpetWidthRatio <= 0 ? false : {
+            width: cs.config.staNameFontSize * fontSizeRatio/4 * carpetWidthRatio,
+            color: ptCarpet?.color ?? globalCarpet.color ?? cs.config.bgColor,
+            opacity: ptCarpet?.opacity ?? globalCarpet.opacity ?? 0.8
+        }
         const rects = drawText(ctx, globalPos, align, undefined, {
             text: pt.name,
             color: cs.config.staNameColor,
@@ -158,11 +167,7 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             fontSize: cs.config.staNameSubFontSize * fontSizeRatio,
             rowHeight: cs.config.staNameSubRowHeight * fontSizeRatio
         },
-        {
-            width: cs.config.staNameFontSize * fontSizeRatio/4,
-            color: cs.config.bgColor,
-            opacity: 0.8
-        }, needReportRect ? 'both' : 'draw', undefined, pt.nameAngle)
+        carpetStroke, needReportRect ? 'both' : 'draw', undefined, pt.nameAngle)
 
         if(rects){
             staNameRectStore.setStaNameRect(pt.id, rects.rectFull)

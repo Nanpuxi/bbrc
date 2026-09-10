@@ -49,6 +49,7 @@ export const configDefault:Config = {
     staNameSubFontStyle: '',
     staNameSubRowHeight: 20,
     staNameSubColor: '#888888',
+    staNameCarpet: {},
 
     gridMainLineColor: '#bbbbbb',
     gridSubLineColor: '#cccccc',

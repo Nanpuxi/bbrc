@@ -38,6 +38,7 @@ export interface Config{
     staNameSubFontStyle: string,
     staNameSubRowHeight: number,
     staNameSubColor: string,
+    staNameCarpet: StaNameCarpetConfig,
 
     gridMainLineColor: string,
     gridSubLineColor: string,
@@ -125,6 +126,18 @@ export type PinyinConvertConfig = {
     caseType?:number,
     variantType?:number,
     spaceBetweenChars?:boolean
+}
+/**
+ * 站名“地毯”（文字描边基底）配置，ControlPoint.nameCarpet 与全局 Config.staNameCarpet 共用。
+ * 各字段为 undefined 时回退到默认行为：
+ * width：倍率，默认 1（实际宽度 = staNameFontSize × 站名字号倍率 / 4 × width）
+ * color：默认使用 bgColor
+ * opacity：默认 0.8
+ */
+export type StaNameCarpetConfig = {
+    width?: number,
+    color?: string,
+    opacity?: number
 }
 
 export type ConfigInSave = Partial<Config>

@@ -1,4 +1,4 @@
-import { ConfigInSave } from "./config";
+import { ConfigInSave, StaNameCarpetConfig } from "./config";
 import { Coord, SgnNumber } from "./coord";
 
 export interface Save{
@@ -43,6 +43,8 @@ export interface ControlPoint{
     nameAngle?:number
     anchorX?:SgnNumber
     anchorY?:SgnNumber
+    /** 站名“地毯”（描边基底）设置；各字段 undefined 时回退到全局配置 config.staNameCarpet */
+    nameCarpet?:StaNameCarpetConfig
     noLeader?:boolean
     free?:boolean
 }
