@@ -131,8 +131,8 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
     }
     function onTextTag(c:Coord){
         let onTextTag:TextTag|undefined;
-        enumerateTextTagRects((id, quad)=>{
-            if(quadInside(quad, c)){
+        enumerateTextTagRects((id, item)=>{
+            if(quadInside(item.quad, c) || coordDistSqLessThan(item.anchor, c, cs.clickPtThrsSq)){
                 onTextTag = saveStore.save?.textTags.find(x=>x.id===id)
                 return true;
             }

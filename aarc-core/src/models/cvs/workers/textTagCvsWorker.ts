@@ -104,7 +104,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             }
             drawTextForLineName(ctx, justifiedPos, anchor, textAlign, optMain, optSub, false, 'draw', width, dropCap, angle)
             const quadEnlarged = enlargeQuad(quad, paddingValue)
-            textTagRectStore.setTextTagRect(t.id, quadEnlarged)
+            textTagRectStore.setTextTagRect(t.id, quadEnlarged, t.pos)
             if(strokeRect){
                 drawRectAndAnchor(ctx, t.pos, quadEnlarged)
             }
@@ -140,7 +140,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         }, 'both', undefined, undefined, t.angle ?? 0)
         if(drawLineNameRes?.rect){
             const quad = drawLineNameRes.rect
-            textTagRectStore.setTextTagRect(t.id, quad)
+            textTagRectStore.setTextTagRect(t.id, quad, t.pos)
             if(strokeRect){
                 drawRectAndAnchor(ctx, t.pos, quad)
             }

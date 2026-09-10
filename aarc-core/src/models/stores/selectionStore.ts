@@ -41,8 +41,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
                     selected.value.delete(p)
             }
         }
-        enumerateTextTagRects((id, quad)=>{
-            if(quadCoordDistSqLessThan(quad, coord, radiusSq)){
+        enumerateTextTagRects((id, item)=>{
+            if(quadCoordDistSqLessThan(item.quad, coord, radiusSq)){
                 const t = saveStore.getTextTagById(id)
                 if(!t) return
                 if(mode.value == 'add')
