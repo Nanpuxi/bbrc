@@ -47,7 +47,7 @@
      - `pairSpan(aId, bId)`：点对的真实贴合阈值（含尺寸）
      - `maxPairSpan = configClingingDist * maxSize`：全局最大点对阈值
      - `epsMargin = epsilon * 10`：与正式比较一致的余量
-   - 网格搜索半径 `cellRadius = ceil((maxPairSpan [+ 2*maxReach] + epsMargin) / cellSize)`，保证大尺寸点对跨格也能搜到
+   - 网格搜索半径 `cellRadius = max(1, ceil((maxPairSpan [+ 2*maxReach] + epsMargin) / cellSize))`，保证大尺寸点对跨格也能搜到
    - 对搜索到的每个点对，先做轴向粗筛（`|dx|`、`|dy|` 不超过 `pairSpan + reachA + reachB + epsMargin`），通过后才调用 `ptClingingPure` 正式判断
    - 分两条路径：不传 `getSnapCandidates` 时为标准位置判断；传入时把 free 点的吸附候选与 `reach`（候选相对点位的最大轴向偏移）也纳入
 2. **由邻接表生成 cluster** `makeClustersFromNeighborsPure`：对邻接表做洪水填充（`expandSetInNeighbors`），每个连通分量即一个 cluster
@@ -66,7 +66,7 @@ store 层（`staClusterStore.ts`）懒初始化：`staClusters` 为 `undefined` 
 
 两级缓存：
 
-1. **单个 cluster 多边形缓存** `clusterPolyCache`：以 `id:pos:dir:size` 拼接为 key，cluster 内点未变时直接复用已算好的四角点（四角点计算见 `docs/formalize-free-cluster.md`）
+1. **单个 cluster 多边形缓存** `clusterPolyCache`：以 `id:pos:dir:size` 拼接为 key，cluster 内点未变时直接复用已算好的四角点（四角点计算见 `../../aarc-web/docs/formalize-free-cluster.md`）
 2. **全量渲染数据缓存**（perf 提交 `8ebbdb92`）：
    - 把所有 cluster 点的 `id/pos/dir/size`、所有 pointLink 的内容、以及**非 dot 链接端点的 `pos/dir/size/sta`** 写入可复用的签名缓冲区 `sigBuf`，与上一帧**逐位比较**（数值严格相等，无哈希碰撞风险）。端点数据必须入签名：伪集群与 cluster 型链接的多边形由端点坐标决定，而端点未必属于真实 cluster，否则移动端点时缓存不失效、伪集群留在原地
    - 签名未变时直接复用 `polysCache`，不再重新遍历点和拼接缓存 key
@@ -95,7 +95,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 
 依据的不变量：patch 不含 points/lines 时，cluster 的全部输入（点位/状态/方向、吸附尺寸、free 点方向与 reach）都未变化。`lines` 之所以必须全量，是因为它决定吸附尺寸与 free 点方向/reach，无法按点增量。
 
-非 undo/redo 的调用方（`Editor.vue`、`stashStore.ts`）不传 patch，`patch === undefined` 保守走全量重建，行为与改造前一致。
+非 undo/redo 的调用方（`app/editorSession.ts` 的 `loadSaveIntoEditor`、`stashStore.ts`）不传 patch，`patch === undefined` 保守走全量重建，行为与改造前一致。
 
 ## 6. 历次 fix 的问题重点
 
@@ -135,7 +135,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 - 修改 `lineWidthMapped` 后，没有任何 watcher 使 `neighbors`/`staClusters` 失效（`resetterStore` 只在存档加载/undo/redo 时重置；`configStore` 内无相关监听）。
 - 更隐蔽的是：改完配置后再移动某个点，`updateNeighborsForMovedPt` 会用**新尺寸**增量更新该点的邻接边，而邻接表中其他边仍是**旧尺寸**的计算结果——新旧混杂，旧的大尺寸远距离 cluster 会一直残留到页面刷新。
 
-**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建（后续 `snapOctaClingPtPtThrs`、`freePtClusterMode` 也加入同一 watch）。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"三个用例（含 `lineWidthMapped` 深层就地修改）。
+**修复**：`configClingingDist` 改为 `getConfigClingingDist()` 使用时读取；新增对 `snapOctaClingPtPtDist` 与 `lineWidthMapped` 的 deep watch，变化时 `clearItems()` 触发懒加载全量重建（后续 `snapOctaClingPtPtThrs`、`freePtClusterMode` 也加入同一 watch）。回归测试见 `staClusterStore.test.ts` 的"贴合配置变更后缓存失效"一组用例（含 `lineWidthMapped` 深层就地修改、以及 `freePtClusterMode` 切换到 strict/off 时的失效）。
 
 ### 7.2 free 点"候选对候选"比较过度合并（已修复）
 
@@ -151,7 +151,7 @@ undo/redo 的链路为 `undoStore.undo()/redo()` → `restoreState(state, patch)
 
 即 cluster 最远可在约 **3.8 倍阈值**的距离上形成（双方偏移候选各伸出 ~1.41×snapDist，再加 clingingDist）。典型例：A(0,0)、B(50,50) 两个拐角朝向相对的 free 点，各自候选都含中点 (25,25)，距离 70.7 也被并入。`lineWidthMapped` 把 staSnapSize 调大时该效应同比放大。
 
-**修复**：候选比较已改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），修复时阈值仍用 `clingingDist + epsMargin`（后由 7.3 进一步收紧，偏移候选改用实际吸附阈值）。bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；第 2 节的描述已同步更新。回归测试见 `staClusterStore.pure.test.ts` 的"候选比较应为'点的实际位置 vs 对方候选'"两个用例。
+**修复**：候选比较已改为"点的实际位置 vs 对方候选"（`a.pos vs bSnap.candidates`、`b.pos vs aSnap.candidates`；候选列表本身包含 `pos`，因此也覆盖位置对位置的比较），修复时阈值仍用 `clingingDist + epsMargin`（后由 7.3 进一步收紧，偏移候选改用实际吸附阈值）。bbox 快速拒绝与全部预筛带 reach 余量，依然是"只会更宽松"，无需改动；第 2 节的描述已同步更新。回归测试见 `staClusterStore.pure.test.ts` 的"候选比较应为'点的实际位置 vs 对方候选'"用例。
 
 ### 7.3 free 点候选比较的阈值与实际吸附不对齐（已修复）
 
