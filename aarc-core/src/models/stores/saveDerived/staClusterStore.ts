@@ -47,10 +47,17 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     // 邻接表与 cluster 缓存必须整体失效（靠懒加载重建），
     // 否则会残留旧配置算出的邻接关系（如远距离 cluster）；
     // 且增量更新会用新配置重算单点邻接，与旧边混杂
+    // 值键 watch 而非 deep watch：readConfigFromSave 会整体替换 config 对象，
+    // 即使各项值未变也会触发 deep watch，在首次渲染后把刚建好的缓存误清
+    // （进存档后第一个操作若是移动点，增量更新会落在空邻接表上，见 docs/cluster.md 7.4）
     watch(
-        () => [cs.config.snapOctaClingPtPtDist, cs.config.snapOctaClingPtPtThrs, cs.config.lineWidthMapped, cs.config.freePtClusterMode],
-        () => clearItems(),
-        { deep: true }
+        () => [
+            cs.config.snapOctaClingPtPtDist,
+            cs.config.snapOctaClingPtPtThrs,
+            cs.config.freePtClusterMode,
+            JSON.stringify(cs.config.lineWidthMapped)
+        ].join('|'),
+        () => clearItems()
     )
 
     const getPtSnapCandidatesAndReach = (pt: ControlPoint): PtSnapCandidatesInfo =>
@@ -109,6 +116,13 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
     }
 
     function updateClustersBecauseOf(pt:ControlPoint){
+        // 邻接表/cluster 尚未懒加载构建时（如进入存档后第一个操作就是移动点，
+        // 或配置变更刚使缓存失效），存档数据本身已是最新，无需增量更新，
+        // 之后的 getStaClusters 会基于当前存档全量构建。
+        // 若在空邻接表上做增量更新：新邻接表只含被移动点的边，且 staClusters
+        // 会被置为“已构建”，导致既有 cluster 全部丢失且懒加载无法自愈
+        if(staClusters.value === undefined)
+            return
         const freeMode = getFreePtClusterMode()
         neighbors = updateNeighborsForMovedPt(
             neighbors,
@@ -124,6 +138,10 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         makeClustersFromNeighbors()
     }
     function cleanClustersFromDeletedPt(ptId:number){
+        // 与 updateClustersBecauseOf 同理：未构建时删除已反映在当前存档中，
+        // 无需清理，等懒加载全量构建即可
+        if(staClusters.value === undefined)
+            return
         neighbors = cleanNeighborsForDeletedPt(neighbors, ptId)
         makeClustersFromNeighbors()
     }
@@ -143,11 +161,13 @@ export const useStaClusterStore = defineStore('staCluster', ()=>{
         target.nameP = transfer.nameP
         return target
     }
-    function getMaxSizePtWithinCluster(ptId:number, sizeType:'ptSize'|'ptNameSize'|'ptNameSnapSize'){
-        const get = sizeType === 'ptSize' 
+    function getMaxSizePtWithinCluster(ptId:number, sizeType:'ptSize'|'ptNameSize'|'ptNameSSize'|'ptNameSnapSize'){
+        const get = sizeType === 'ptSize'
             ? (id:number)=>saveStore.getLinesDecidedPtSize(id)
             : sizeType === 'ptNameSize'
             ? (id:number)=>saveStore.getLinesDecidedPtNameSize(id)
+            : sizeType === 'ptNameSSize'
+            ? (id:number)=>saveStore.getLinesDecidedPtNameSSize(id)
             : (id:number)=>saveStore.getLinesDecidedPtNameSnapSize(id)
         return getClusterMaxSizePure(staBelongToCluster.value[ptId], get, ptId)
     }
