@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.Db.Context;
+using AARC.WebApi.Models.Db.Context;
 using AARC.WebApi.Models.Db.Context.Specific;
 using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Files;
@@ -106,7 +106,7 @@ namespace AARC.WebApi.Repos.Files
             return new UserFavoriteIdPage { Ids = ids, HasMore = hasMore };
         }
 
-        public List<int> GetUserFileFavoriteIds(UserFavoriteType type, string? search, int skip, int take)
+        public List<int> GetUserFileFavoriteIds(UserFavoriteType type, string? search, int skip, int take, UserFileType? fileType = null)
         {
             var uid = httpUserIdProvider.RequireUserId();
             var q = Existing
@@ -114,6 +114,14 @@ namespace AARC.WebApi.Repos.Files
                     x.OwnerUserId == uid
                     && x.Type == type
                     && x.ObjectId > 0);
+            if (fileType.HasValue)
+            {
+                var typedIds = Context.UserFiles.Existing()
+                    .Where(x => x.Type == fileType.Value)
+                    .Select(x => x.Id)
+                    .ToList();
+                q = q.Where(x => typedIds.Contains(x.ObjectId));
+            }
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var userFileQ = Context.UserFiles.Existing();

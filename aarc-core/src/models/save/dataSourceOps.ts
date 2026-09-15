@@ -88,11 +88,12 @@ export function mergeDataSourceItems(
         }
         const name = (item as Record<string, unknown>).name
         const cloned = JSON.parse(JSON.stringify(item))
-        ;(cloned as { id: number }).id = getNewId()
 
         if (typeof name === 'string' && existingByName.has(name)) {
             if (ds.overwriteSameName) {
                 const idx = existingByName.get(name)!
+                // 覆盖同名项时保留原 id：线路等处按 id 引用（如 lineStyleId），换 id 会让引用失效
+                ;(cloned as { id: number }).id = (existing[idx] as { id: number }).id
                 existing[idx] = cloned as never
                 report.overwritten++
             } else {
@@ -101,6 +102,7 @@ export function mergeDataSourceItems(
             continue
         }
 
+        ;(cloned as { id: number }).id = getNewId()
         existing.push(cloned as never)
         if (typeof name === 'string') {
             existingByName.set(name, existing.length - 1)

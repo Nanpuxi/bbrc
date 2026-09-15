@@ -2,8 +2,10 @@ using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Identities;
 using AARC.WebApi.Repos.Files;
 using AARC.WebApi.Services.App.ActionFilters;
+using AARC.WebApi.Services.Files;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace AARC.WebApi.Controllers.Files
 {
@@ -11,7 +13,8 @@ namespace AARC.WebApi.Controllers.Files
     [ApiController]
     [Route(ApiConsts.routePattern)]
     public class UserFileController(
-        UserFileRepo userFileRepo
+        UserFileRepo userFileRepo,
+        UserFileService userFileService
         ) : Controller
     {
         [HttpPost]
@@ -74,6 +77,38 @@ namespace AARC.WebApi.Controllers.Files
         public List<UserFileDto> Search(string search, string? orderby = null, int skip = 0, int take = 50)
         {
             return userFileRepo.SearchAccessible(search, orderby, skip, take);
+        }
+
+        /// <summary>
+        /// 按 id 输出文件内容（匿名可访问，与 /userfile 静态路径等价）。<br/>
+        /// 覆盖上传后物理文件（md5 URL）会变，但本路径按 id 解析、始终指向最新内容，
+        /// 适合作为存档数据源的长期引用。<br/>
+        /// 缓存策略：ETag 取内容 md5（StoreName），并要求每次回源校验（no-cache），
+        /// 内容未变时由 ETag/LastModified 命中 304，变化时客户端能拿到新版。
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet]
+        public IActionResult Content(int id)
+        {
+            var info = userFileRepo.GetContentInfo(id);
+            if (info is null)
+                return NotFound();
+            var (storeName, lastActive) = info.Value;
+            var path = userFileService.GetPhysicalPath(storeName);
+            if (!global::System.IO.File.Exists(path))
+                return NotFound();
+            var contentType = Path.GetExtension(storeName).ToLowerInvariant() switch
+            {
+                ".json" => "application/json",
+                ".svg" => "image/svg+xml",
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+            Response.Headers.CacheControl = "no-cache";
+            var etag = new EntityTagHeaderValue($"\"{storeName}\"");
+            return PhysicalFile(path, contentType, lastActive, etag, true);
         }
     }
 }

@@ -148,7 +148,7 @@ describe('mergeDataSourceItems', () => {
     expect(save.lineStyles![0].layers).toEqual([])
   })
 
-  it('同名且 overwriteSameName=true 应覆盖并分配新ID', () => {
+  it('同名且 overwriteSameName=true 应覆盖且保留原ID', () => {
     const save = makeSave()
     const ds: DataSource = { id: 1, url: '', type: 'lineStyles', overwriteSameName: true }
     const report = mergeDataSourceItems(save, makeGetNewId(200), ds, [
@@ -159,7 +159,7 @@ describe('mergeDataSourceItems', () => {
     expect(report.overwritten).toBe(1)
     expect(save.lineStyles!.length).toBe(1)
     expect(save.lineStyles![0].layers).toEqual([{ color: '#000' }])
-    expect(save.lineStyles![0].id).toBe(200)
+    expect(save.lineStyles![0].id).toBe(1)
   })
 
   it('非数组数据应报错', () => {

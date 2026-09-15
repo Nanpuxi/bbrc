@@ -96,6 +96,20 @@ namespace AARC.WebApi.Repos.Files
         }
 
         /// <summary>
+        /// 按 id 获取文件的存储信息（匿名内容输出用：与 /userfile 静态路径等价，仅多一步 id → StoreName 解析）
+        /// </summary>
+        public (string StoreName, DateTime LastActive)? GetContentInfo(int id)
+        {
+            var model = Existing.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => new { x.StoreName, x.LastActive })
+                .FirstOrDefault();
+            if (model is null)
+                return null;
+            return (model.StoreName, model.LastActive);
+        }
+
+        /// <summary>
         /// 查找当前用户名下同类型、同名的资源（preflight，用于覆盖确认）
         /// </summary>
         public UserFileDto? FindExisting(string displayName, UserFileType type)

@@ -155,33 +155,33 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 - core：`UserFileResourceUploader` 返回值改为 `'ok'/'canceled'/'failed'` 三态，
   `LineStylesConfigReuse.vue` 对"取消"与"失败"分别提示。
 
-### 第 3 步：改造收藏回调 store 以支持多消费方（core）
+### 第 3 步：改造收藏回调 store 以支持多消费方（core）✅ 已完成
 
-`userFileFavoriteStore.ts` 目前是单一 `onFavoriteFileSelected`。改为：
+`userFileFavoriteStore.ts` 已改为支持一次性取用意图：
 
-- `openFavoritesSidebar` 接受参数：`open(intent: 'icon' | 'lineStyle' | 'dataSource-lineStyles')`，
-  或
-- 把 `onFavoriteFileSelected` 改为"打开时由调用方传入回调"：store 增加
-  `pendingCallback`，`openFavoritesSidebar(cb?)` 时记录。
+- `openFavoritesSidebar(intent?: FavoritesPickIntent)`：intent 含一次性 `onSelected`
+  回调与可选 `fileType` 过滤（如 `'lineStyle'`，具体枚举由宿主映射）；每次打开重置。
+- 宿主选中文件时调 `notifyFileSelected(file)`：优先消费一次性 `onSelected`（消费后
+  失效），否则回退到全局 `onFavoriteFileSelected`（图标流程不变，见 web 侧
+  `UserFileFavorites.vue` 的 `select`）。
+- 收藏列表过滤：`UserFavoriteController.GetUserFiles` 新增可选 `fileType` 参数，
+  web 侧把 `'lineStyle'` 映射为 `UserFileType.LineStyle`。
 
-最小侵入做法：store 增加 `pendingCallback`，web 的 `UserFileFavorites.vue` 选中文件时
-优先调 `pendingCallback`，无则回退现有 `onFavoriteFileSelected`（保持图标流程不变）。
-注意 store 在 core、收藏夹 UI 在 web，两者经 store 共享状态，不涉及新的跨包依赖。
+### 第 4 步：从收藏引入为数据源（core）✅ 已完成
 
-### 第 4 步：从收藏引入为数据源（core）
+`DataSourcesConfig.vue` 的"添加数据源"区有"从收藏选择线路样式"按钮（仅宿主注入
+收藏夹侧栏时显示，经 `hasOpenFavoritesSidebar` 判断）：
 
-在 `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` 的"添加数据源"区加
-"从收藏选择"按钮：
-
-1. 用第 3 步的机制打开收藏夹，回调中拿到 `UserFileDto`（窄投影，含
-   `displayName`/`urlOriginal`）。
-2. 拼绝对 URL：`getCoreConfig().apiUrlBase + file.urlOriginal`（或
-   `window.location.origin + urlOriginal`，与 iconStore 一致）。
-3. 自动填入创建表单（type 固定 `lineStyles`，name 取 displayName），走现有
-   `addDataSource` 流程（URL 查重、id 分配不变）。
-4. 可选优化：`UserFileFavorites`（web）按 `UserFileType` 过滤列表（需要后端
-   `GetUserFiles` 支持 type 参数——目前不支持，属于可选的后端小改；不改则靠前端的
-   预览图/名称辨认）。
+1. 用第 3 步的机制打开收藏夹（`fileType: 'lineStyle'` 过滤），回调中拿到
+   `UserFileDto`（窄投影含 `id`/`displayName`）。
+2. 拼**按 id 的固定链接**：`{apiUrlBase || window.location.origin}/api/UserFile/Content?id={id}`。
+   后端 `UserFileController.Content`（匿名可访问）按 id 解析当前 `StoreName` 输出
+   物理文件——覆盖上传后 md5 物理路径变化也不影响引用；响应带
+   `Cache-Control: no-cache` + ETag（内容 md5），配合 `fetchDataSource` 的
+   `cache: 'no-cache'`，新版内容下次拉取即生效，未变时命中 304。
+3. 自动填入创建表单（type 固定 `lineStyles`，name 取 displayName，**默认开启**
+   "自动更新"与"覆盖同名"，用户可在添加前调整），走现有 `addDataSource` 流程
+   （URL 查重、id 分配不变）。
 
 引入后的拉取、合并、自动更新全部由现有 `dataSourceOps.ts` 与 core 会话 API
 （`editorSession.ts` 的 `loadSaveIntoEditor` 内部调 `autoUpdateDataSources`）接管，
@@ -193,8 +193,10 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 - **数据源 URL 必须绝对化**：相对路径在非编辑器域名下会拉取失败；且 dev 环境前端
   与 API 不同源。core 内拼 URL 只能用 `getCoreConfig().apiUrlBase` /
   `window.location.origin`，不能读 `import.meta.env`。
-- **内容寻址 = 不可变**：同一 URL 内容永远相同（改样式重新上传会得到新 md5 URL），
-  数据源的 `autoUpdate` 对 userFile 类 URL 实际无意义（内容不会变），但机制上无害。
+- **内容寻址 = 不可变**：`/userfile/{md5}.json` 静态 URL 内容永远相同（改样式重新上传
+  会得到新 md5 URL），数据源的 `autoUpdate` 对这类 URL 实际无意义。需要"引用最新版"
+  时应改用按 id 的 `/api/UserFile/Content?id=` 链接（"从收藏选择"入口生成的就是它），
+  其 ETag/no-cache 保证覆盖上传后客户端能拿到新版。
 - **预览图颜色固定**：必须用固定 dynaColor 渲染预览，否则同一样式每次上传缩略图
   md5 不同、产生垃圾文件；服务端目前不清理失去引用的文件（`UserFileRepo.cs` 内有
   TODO）。
@@ -215,9 +217,10 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 | `aarc-core/src/components/sidebars/configs/LineStylesConfig.vue` | ✅ 已改为复用 `drawLineStylePreview`；待做：可选单条上传按钮 |
 | `aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue` | ✅ 已加"上传为资源"按钮（仅宿主注入上传器时显示） |
 | `aarc-core/src/models/save/lineStyleResourceOps.ts` + `aarc-web/src/App.vue` ✅ | 已新建 `initUserFileUploader`/`uploadLineStylesAsResource` 注入口，web 经 `initCoreHostServices` 用 `api.userFile.upload` 实现 |
-| `aarc-core/src/models/stores/utils/userFileFavoriteStore.ts` | 支持按调用方传入回调（pendingCallback） |
-| `aarc-web/src/components/common/userFile/UserFileFavorites.vue` | 优先消费传入回调；（可选）类型过滤 |
-| `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` | "从收藏选择"入口 |
+| `aarc-core/src/models/stores/utils/userFileFavoriteStore.ts` ✅ | 已支持一次性取用意图（`openFavoritesSidebar(intent)` + `notifyFileSelected`） |
+| `aarc-web/src/components/common/userFile/UserFileFavorites.vue` ✅ | 选中时调 `notifyFileSelected`（一次性回调优先）；按 `pickFileType` 过滤列表 |
+| `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` ✅ | 已加"从收藏选择线路样式"入口（生成 `/api/UserFile/Content?id=` 固定链接，默认开自动更新+覆盖同名） |
+| 后端 ✅（id 固定链接 + 收藏过滤） | 已完成：`UserFileController.Content`（匿名，ETag=内容md5 + no-cache）、`UserFavoriteController.GetUserFiles` 加 `fileType` 过滤 |
 | （可选，已无需）`aarc-web/.../GenericFileUpload.vue` | ~~支持携带缩略图上传~~（改走注入口路线，未采用）✅ 另已接入同名覆盖预检 |
 | 后端 ✅（同名覆盖部分） | 已完成：`Upload` 加 `overwriteId`、新增 `FindExisting` preflight、`UserFileRepo.Overwrite` + `UserFileService.DeletePhysical`；（可选：GetUserFiles 加 type 过滤） |
 | `aarc-web/src/app/globalStores/overwriteConfirmStore.ts` ✅ | 已新建：覆盖确认弹窗状态（`request(items): Promise<boolean>`），与资源类型无关 |

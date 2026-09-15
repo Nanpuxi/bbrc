@@ -95,6 +95,14 @@ namespace AARC.WebApi.Services.Files
         }
 
         /// <summary>
+        /// 按存储名解析物理文件完整路径（目录不存在时创建）
+        /// </summary>
+        public string GetPhysicalPath(string storeName)
+        {
+            return Path.Combine(GetTargetSubdir(storeName).FullName, storeName);
+        }
+
+        /// <summary>
         /// 删除物理文件及其缩略图（若存在）。
         /// 调用方需自行确认无其他实体引用同一 StoreName。
         /// </summary>

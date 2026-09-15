@@ -1,6 +1,16 @@
 import { UserFileDto } from "aarc-core/models/types/apiShapes";
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
+
+/**
+ * 打开收藏夹时的一次性取用意图（由消费方在 openFavoritesSidebar 时传入）
+ */
+export interface FavoritesPickIntent {
+    /** 本次取用的回调（优先于全局 onFavoriteFileSelected），被消费一次后失效 */
+    onSelected?: (userFile: UserFileDto) => void
+    /** 按资源类型过滤收藏列表（如 'lineStyle'）；具体枚举由宿主映射 */
+    fileType?: string
+}
 
 export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
     const openFavoritesSidebarImpl = ref<()=>void>()
@@ -10,7 +20,14 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
         openFavoritesSidebarImpl.value = cb
         openFavoritesSidebarWarned = false
     }
-    function openFavoritesSidebar(){
+    const hasOpenFavoritesSidebar = computed(()=>!!openFavoritesSidebarImpl.value)
+    /** 本次取用的一次性回调（宿主选中文件时优先消费） */
+    const pendingOnSelected = ref<(userFile: UserFileDto)=>void>()
+    /** 本次打开的列表过滤类型（宿主映射为后端枚举；下次打开时重置） */
+    const pickFileType = ref<string>()
+    function openFavoritesSidebar(intent?: FavoritesPickIntent){
+        pendingOnSelected.value = intent?.onSelected
+        pickFileType.value = intent?.fileType
         if(openFavoritesSidebarImpl.value){
             openFavoritesSidebarImpl.value()
         }else if(!openFavoritesSidebarWarned){
@@ -19,9 +36,26 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
         }
     }
     const onFavoriteFileSelected = ref<(userFile:UserFileDto)=>void>(()=>{})
+    /**
+     * 宿主在用户选中收藏文件时调用；
+     * 返回 true 表示被本次意图的 onSelected 消费，否则走全局 onFavoriteFileSelected
+     */
+    function notifyFileSelected(userFile: UserFileDto): boolean{
+        const cb = pendingOnSelected.value
+        pendingOnSelected.value = undefined
+        if(cb){
+            cb(userFile)
+            return true
+        }
+        onFavoriteFileSelected.value(userFile)
+        return false
+    }
     return {
         initOpenFavoritesSidebar,
+        hasOpenFavoritesSidebar,
         openFavoritesSidebar,
-        onFavoriteFileSelected
+        pickFileType,
+        onFavoriteFileSelected,
+        notifyFileSelected
     }
 })
