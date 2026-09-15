@@ -17,13 +17,18 @@ const urlBase = import.meta.env.VITE_ApiUrlBase
 
 // core 打开收藏夹时传入的过滤类型（fileType 字符串 → 后端枚举）
 const fileTypeFilter = computed<UserFileType | undefined>(() => {
-    if (userFileFavoriteStore.pickFileType === 'lineStyle')
+    const ft = userFileFavoriteStore.pickFileType
+    if (ft === 'lineStyle')
         return UserFileType.LineStyle
+    if (ft === 'icon')
+        return UserFileType.Icon
     return undefined
 })
 const fileTypeFilterLabel = computed(() => {
     if (fileTypeFilter.value === UserFileType.LineStyle)
         return '仅显示线路样式资源'
+    if (fileTypeFilter.value === UserFileType.Icon)
+        return '仅显示图标资源'
     return undefined
 })
 let lastLoadedFilter: UserFileType | undefined
@@ -60,6 +65,9 @@ function select(file: UserFileDto) {
     const consumed = userFileFavoriteStore.notifyFileSelected(file)
     if (!consumed)
         showPop('已添加', 'success')
+    // 消费方要求时取用后立即关闭；否则保持打开以连续取用
+    if (userFileFavoriteStore.pickCloseOnSelect)
+        sidebar.value?.fold()
 }
 
 defineExpose({ open })

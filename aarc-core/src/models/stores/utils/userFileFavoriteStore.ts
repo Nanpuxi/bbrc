@@ -8,8 +8,10 @@ import { computed, ref } from "vue";
 export interface FavoritesPickIntent {
     /** 本次取用的回调（优先于全局 onFavoriteFileSelected），被消费一次后失效 */
     onSelected?: (userFile: UserFileDto) => void
-    /** 按资源类型过滤收藏列表（如 'lineStyle'）；具体枚举由宿主映射 */
+    /** 按资源类型过滤收藏列表（如 'icon' / 'lineStyle'）；具体枚举由宿主映射 */
     fileType?: string
+    /** 取用一次后立即关闭侧栏；缺省 false（允许连续取用多个） */
+    closeOnSelect?: boolean
 }
 
 export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
@@ -25,9 +27,12 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
     const pendingOnSelected = ref<(userFile: UserFileDto)=>void>()
     /** 本次打开的列表过滤类型（宿主映射为后端枚举；下次打开时重置） */
     const pickFileType = ref<string>()
+    /** 本次打开是否"取用后立即关闭侧栏"（宿主消费；下次打开时重置） */
+    const pickCloseOnSelect = ref(false)
     function openFavoritesSidebar(intent?: FavoritesPickIntent){
         pendingOnSelected.value = intent?.onSelected
         pickFileType.value = intent?.fileType
+        pickCloseOnSelect.value = intent?.closeOnSelect ?? false
         if(openFavoritesSidebarImpl.value){
             openFavoritesSidebarImpl.value()
         }else if(!openFavoritesSidebarWarned){
@@ -55,6 +60,7 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
         hasOpenFavoritesSidebar,
         openFavoritesSidebar,
         pickFileType,
+        pickCloseOnSelect,
         onFavoriteFileSelected,
         notifyFileSelected
     }

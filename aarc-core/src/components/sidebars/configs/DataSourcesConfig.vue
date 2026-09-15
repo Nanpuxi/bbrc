@@ -34,6 +34,7 @@ const createAllowed = ref(false)
 function pickFromFavorites() {
     userFileFavoriteStore.openFavoritesSidebar({
         fileType: 'lineStyle',
+        closeOnSelect: true,
         onSelected: (f) => {
             if (typeof f.id !== 'number' || f.id <= 0) {
                 showPop('该资源缺少 id，无法作为数据源', 'failed')
