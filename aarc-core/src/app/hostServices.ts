@@ -5,6 +5,7 @@ import { PinyinConvertProvider, initPinyinConvertProvider } from "aarc-core/comp
 import { SaveInfoProvider, initSaveInfoProvider } from "aarc-core/components/sidebars/export/composables/useImageExport";
 import { SiteLinks, initSiteLinks } from "aarc-core/app/siteLinks";
 import { RouteGuardRegistrar, initRouteGuardRegistrar } from "aarc-core/utils/eventUtils/preventLeavingUnsaved";
+import { UserFileResourceUploader, initUserFileUploader } from "aarc-core/models/save/lineStyleResourceOps";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 
 /**
@@ -27,6 +28,8 @@ export interface CoreHostServices {
     siteLinks?: SiteLinks
     /** “未保存离开”路由守卫；无路由的宿主可不注入（window.onbeforeunload 部分由 core 自理） */
     routeGuardRegistrar?: RouteGuardRegistrar
+    /** UserFile 资源上传（线路样式分享）；不注入则编辑器内隐藏"上传为资源"入口 */
+    userFileResourceUploader?: UserFileResourceUploader
 }
 
 /** 一次性注册全部宿主服务（内部依次调用既有各 init*） */
@@ -42,4 +45,6 @@ export function initCoreHostServices(services: CoreHostServices) {
         initSiteLinks(services.siteLinks)
     if (services.routeGuardRegistrar)
         initRouteGuardRegistrar(services.routeGuardRegistrar)
+    if (services.userFileResourceUploader)
+        initUserFileUploader(services.userFileResourceUploader)
 }

@@ -6,6 +6,7 @@ import copy from 'copy-to-clipboard'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { LineStyle } from 'aarc-core/models/save';
 import { upgradeLineStyle } from 'aarc-core/models/save/upgrade/lineStyles';
+import { hasUserFileUploader, uploadLineStylesAsResource } from 'aarc-core/models/save/lineStyleResourceOps';
 import rfdc from 'rfdc';
 
 const saveStore = useSaveStore()
@@ -76,6 +77,24 @@ function exportToFile() {
     a.download = 'lineStyles.json'
     a.click()
     URL.revokeObjectURL(url)
+}
+
+// 宿主（web）在应用启动时注入上传实现，编辑器打开时必定已就绪
+const uploaderAvailable = hasUserFileUploader()
+
+async function uploadAsResource() {
+    const data = getLineStylesForExport()
+    if (data.length === 0) {
+        showPop('请先选择要上传的样式', 'warning')
+        return
+    }
+    const res = await uploadLineStylesAsResource(data)
+    if (res === 'ok')
+        showPop('上传成功，可前往"文件"页收藏这些资源', 'success')
+    else if (res === 'canceled')
+        showPop('已取消上传', 'info')
+    else
+        showPop('上传失败', 'failed')
 }
 
 const wantToImport = ref(false)
@@ -195,6 +214,12 @@ function mergeLineStyles(importedStyles: unknown[]) {
         <button @click="exportToClipboard" class="ok">导出到剪切板</button>
         <button @click="exportToFile" class="ok">导出到json文件</button>
     </div>
+    <div class="btnGroup" v-if="uploaderAvailable">
+        <button @click="uploadAsResource" class="ok">上传为资源</button>
+    </div>
+    <p class="smallNote" v-if="uploaderAvailable">
+        上传为资源后（每条选中的样式各成为一个资源），可在"文件"页收藏它们，并在任意存档的"数据源"中引入，实现跨存档共享
+    </p>
     <p class="smallNote">
         导入时，新样式会追加到样式列表尾部，不会覆盖同名的样式
     </p>

@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.DbModels.Enums;
+using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Identities;
 using AARC.WebApi.Repos.Files;
 using AARC.WebApi.Services.App.ActionFilters;
@@ -21,10 +21,21 @@ namespace AARC.WebApi.Controllers.Files
             IFormFile? userFileThumb,
             [FromForm]string? displayName,
             [FromForm]string? intro,
-            [FromForm]UserFileType type = UserFileType.Icon)
+            [FromForm]UserFileType type = UserFileType.Icon,
+            [FromForm]int? overwriteId = null)
         {
-            userFileRepo.Add(userFile, userFileThumb, displayName, intro, type);
+            if (overwriteId.HasValue)
+                userFileRepo.Overwrite(overwriteId.Value, userFile, userFileThumb, intro);
+            else
+                userFileRepo.Add(userFile, userFileThumb, displayName, intro, type);
             return true;
+        }
+
+        [HttpGet]
+        [UserCheck(UserType.Member)]
+        public UserFileDto? FindExisting([FromQuery]string displayName, [FromQuery]UserFileType type)
+        {
+            return userFileRepo.FindExisting(displayName, type);
         }
 
         [HttpPost]

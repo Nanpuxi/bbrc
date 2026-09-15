@@ -103,25 +103,57 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 - `LineStylesConfig.vue` 的 `renderPreviewCvsOf` 已改为调用 `drawLineStylePreview`，
   两处绘制逻辑不会漂移。
 
-### 第 2 步：添加快捷上传入口（core 发起，web 执行）
+### 第 2 步：添加快捷上传入口（core 发起，web 执行）✅ 已完成
 
 上传本身需要 API 客户端，而 API 层在 web——core 不能直接调 `api.userFile.upload`。
-两种做法：
+已按注入模式实现：
 
-- **推荐**：仿照云上传/收藏夹的注入模式，在 core 定义 `initUserFileUploader` 注入口
-  （参数：JSON Blob、缩略图 Blob、默认 displayName、UserFileType），web 侧用现有上传
-  逻辑实现并注册。core 的 `LineStylesConfigReuse.vue`（已有选择多条样式的勾选 UI）加
-  "上传为资源"按钮，选中 N 条后：
-  1. `deepClone` 选中样式，`JSON.stringify`（与 `exportToFile` 同格式）。
-  2. 逐条调用第 1 步函数生成预览图，合成一张（竖向拼接，或仅取第一条的预览）。
-  3. 调注入的上传器，由 web 完成
-     `api.userFile.upload({data: jsonBlob, fileName: 'xxx.json'},
-     {data: thumbBlob, fileName: 'thumb.webp'}, displayName, intro, UserFileType.LineStyle)`。
-  4. 成功后提示用户去"文件"页收藏（或上传成功后自动调收藏接口，
-     `api.userFavorite` 相关方法，可省去手动收藏一步）。
-- 或者：给 web 的 `GenericFileUpload.vue` 增加可选的 `thumb` prop/参数，由 web 页面提供
-  "上传 LineStyle"入口，core 只负责产出预览图 Blob（经注入口传出）。前者更"快捷"，
-  后者对 core 侵入更小。
+- core 新增注入口 `aarc-core/src/models/save/lineStyleResourceOps.ts`：
+  - `initUserFileUploader(uploader)`（:20）由宿主注入；经
+    `CoreHostServices.userFileResourceUploader` 可选注入（`app/hostServices.ts`），
+    未注入被调用时 `console.warn`。
+  - `uploadLineStylesAsResource(lineStyles)`（:34）：**逐条**上传——每条样式单独打包
+    JSON（单元素数组，与 `exportToFile` 同格式，`JSON.stringify([style], null, 2)`），
+    用第 1 步的 `renderLineStylePreviewBlob` 取**各自**样式的正方形预览作缩略图，
+    displayName 取各自样式名（未命名则为"未命名线路样式"），逐条调注入的上传器；
+    因此每条选中的样式各自成为一个 UserFile，同名覆盖的 preflight 与确认也逐条
+    各自进行（web 侧 `uploadUserFileGuarded` 每次调用处理一条）。任一条取消/失败
+    即中止后续上传。
+- core 的 `LineStylesConfigReuse.vue` 导出按钮组下方新增"上传为资源"按钮
+  （仅 `hasUserFileUploader()` 为真时显示）；成功后提示用户前往"文件"页收藏。
+- web 侧在 `App.vue` 的 `initCoreHostServices` 聚合注册中实现
+  `userFileResourceUploader`：`api.userFile.upload`，type 固定 `UserFileType.LineStyle`，
+  缩略图以 `thumb.webp` 上传。
+
+未做的可选项：上传成功后自动收藏（`upload` 接口只返回 boolean，拿不到新文件 id，
+故保留"手动去文件页收藏"的提示）；`GenericFileUpload.vue` 的 thumb 扩展（未采用该路线）。
+
+### 第 2.5 步：同名资源覆盖（preflight + 覆盖确认弹窗）✅ 已完成
+
+行为：同一用户下同类型的资源，同名上传不再新建实体，而是**覆盖**——UserFile 实体
+不增删，仅写新文件并更新 `StoreName` 等字段。上传前先 preflight，发现同名则弹窗
+展示名称+预览图，用户确认后才实际覆盖。
+
+- 后端：
+  - `UserFileController.Upload` 新增可选表单参数 `overwriteId`（提供时走覆盖）；
+    新增 `GET /api/UserFile/FindExisting?displayName=&type=` 作 preflight（大小写
+    不敏感匹配当前用户下同类型资源，返回含 `urlThumb` 的 `UserFileDto`）。
+  - `UserFileRepo.Overwrite`（`UserFileRepo.cs:73`）：校验所有权后写入新文件，
+    旧 `StoreName` 无其他实体引用时经 `UserFileService.DeletePhysical` 清理物理文件
+    及其缩略图；`intro` 不传时保留原简介；`base.Update(model, true)` 刷新 `LastActive`。
+- web（弹窗与资源类型无关，后续其他类型资源上传可直接复用）：
+  - `app/globalStores/overwriteConfirmStore.ts`：`request(items)` 返回
+    `Promise<boolean>`，items 为 `{ name, existingThumbUrl?, newThumbUrl? }[]`。
+  - `components/common/userFile/OverwriteConfirmPrompt.vue`：基于 core 的
+    `Prompt.vue`，挂载于 `App.vue`，展示"当前 → 新上传"预览对比 + 确认/取消。
+  - `app/com/userFileUploadGuard.ts` 的 `uploadUserFileGuarded`：preflight →
+    （有同名则弹窗确认）→ `api.userFile.upload(..., overwriteId)`，返回
+    `'ok'/'canceled'/'failed'` 三态；新内容预览图用 `URL.createObjectURL(thumb)`，
+    弹窗关闭后回收。
+  - 接入点：`App.vue` 的 `userFileResourceUploader`（core 线路样式上传）与
+    `GenericFileUpload.vue`（"文件"页手动上传）。
+- core：`UserFileResourceUploader` 返回值改为 `'ok'/'canceled'/'failed'` 三态，
+  `LineStylesConfigReuse.vue` 对"取消"与"失败"分别提示。
 
 ### 第 3 步：改造收藏回调 store 以支持多消费方（core）
 
@@ -181,10 +213,13 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 |---|---|
 | `aarc-core/src/models/cvs/common/lineStylePreview.ts` ✅ | 已新建：`drawLineStylePreview` + `renderLineStylePreviewBlob`（正方形 webp） |
 | `aarc-core/src/components/sidebars/configs/LineStylesConfig.vue` | ✅ 已改为复用 `drawLineStylePreview`；待做：可选单条上传按钮 |
-| `aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue` | "上传为资源"按钮，调注入的上传器 |
+| `aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue` | ✅ 已加"上传为资源"按钮（仅宿主注入上传器时显示） |
+| `aarc-core/src/models/save/lineStyleResourceOps.ts` + `aarc-web/src/App.vue` ✅ | 已新建 `initUserFileUploader`/`uploadLineStylesAsResource` 注入口，web 经 `initCoreHostServices` 用 `api.userFile.upload` 实现 |
 | `aarc-core/src/models/stores/utils/userFileFavoriteStore.ts` | 支持按调用方传入回调（pendingCallback） |
 | `aarc-web/src/components/common/userFile/UserFileFavorites.vue` | 优先消费传入回调；（可选）类型过滤 |
 | `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` | "从收藏选择"入口 |
-| core 新增上传器注入口 + web 侧实现 | core 定义 `initUserFileUploader`，web 用 `api.userFile.upload` 实现 |
-| （可选）`aarc-web/.../GenericFileUpload.vue` | 支持携带缩略图上传 |
-| 后端 | 无必需改动（可选：GetUserFiles 加 type 过滤） |
+| （可选，已无需）`aarc-web/.../GenericFileUpload.vue` | ~~支持携带缩略图上传~~（改走注入口路线，未采用）✅ 另已接入同名覆盖预检 |
+| 后端 ✅（同名覆盖部分） | 已完成：`Upload` 加 `overwriteId`、新增 `FindExisting` preflight、`UserFileRepo.Overwrite` + `UserFileService.DeletePhysical`；（可选：GetUserFiles 加 type 过滤） |
+| `aarc-web/src/app/globalStores/overwriteConfirmStore.ts` ✅ | 已新建：覆盖确认弹窗状态（`request(items): Promise<boolean>`），与资源类型无关 |
+| `aarc-web/src/components/common/userFile/OverwriteConfirmPrompt.vue` ✅ | 已新建：基于 core `Prompt.vue` 的覆盖确认弹窗（名称+当前/新预览图），挂载于 `App.vue` |
+| `aarc-web/src/app/com/userFileUploadGuard.ts` ✅ | 已新建：`uploadUserFileGuarded`（preflight → 确认 → upload(overwriteId)，三态返回） |

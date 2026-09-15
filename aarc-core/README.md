@@ -41,6 +41,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
+| UserFile 资源上传（线路样式分享） | `initUserFileUploader(uploader)`（`models/save/lineStyleResourceOps.ts:27`，经 `CoreHostServices.userFileResourceUploader` 可选注入）；返回 `'ok'/'canceled'/'failed'` 三态；同名资源的 preflight 与覆盖确认由宿主实现负责；未注入则编辑器内隐藏"上传为资源"入口 | `App.vue` 聚合注册（userFileResourceUploader 字段），经 `app/com/userFileUploadGuard.ts` 调 `api.userFile.upload`（type 固定 `UserFileType.LineStyle`，附带正方形预览 webp 缩略图；同名时弹 `components/common/userFile/OverwriteConfirmPrompt.vue` 确认后覆盖） |
 
 **弹窗 / 等待遮罩的行为约定**（任何宿主的 pop/wait 实现都必须遵循）：
 
