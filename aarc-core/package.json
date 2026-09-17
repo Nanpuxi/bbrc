@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@aurouscia/au-color-picker": "^2.2.0",
-    "@aurouscia/au-undo-redo": "^1.0.2",
+    "@aurouscia/au-undo-redo": "^1.1.0",
     "@aurouscia/keyboard-shortcut": "^3.0.0",
     "@aurouscia/svgcanvas": "^2.6.1",
     "bowser": "^2.14.1",

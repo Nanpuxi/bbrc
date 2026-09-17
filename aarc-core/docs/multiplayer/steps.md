@@ -24,7 +24,7 @@
 - 已存在的 undo/redo 记录仍以各自 patch 为准。若远程变更与历史 patch 涉及同一属性，undo/redo 结果是 patch 覆盖语义（last-patch-wins），不会"合并"。
 - pointer ≠ 0（用户正处于 undo 中途）时收到远程变更，redo 语义同样是 best-effort。
 
-**临时本地引用**：API 发布前，aarc-core 通过 `link:` 协议引用本地包源码目录；确认无误后发布 npm 再切回版本号引用。
+**依赖状态**：`syncBaseline` 已随 `@aurouscia/au-undo-redo@1.1.0` 发布到 npm，aarc-core 正常使用版本号引用。
 
 ## 步骤二：拆"纯数据刷新"路径
 
