@@ -99,6 +99,7 @@ export interface SaveStorage {
   - **重命名**：行内输入或 `prompt` 式小输入框，仅改 manifest。
   - **删除**：先弹确认 Modal（标题"确认删除「名字」？"，描述"本操作不可撤销"；删除非空分组时追加一行"x个存档将变为未分组状态"，覆盖在最上层，存档与分组删除共用），确认后删文件并移出清单；禁止删除当前正在编辑的存档（按钮禁用或先切走）。
   - **搜索**：顶部搜索框按名称过滤（不区分大小写），搜索时忽略分组扁平展示。
+  - **打包导出**（2026-09-10 新增）：标题栏最右侧按钮，把全部存档打包为 `aarc-app-backup.zip`（zip 内为 `index.json` + 每个存档一个 `<id>.json`，与磁盘布局一致；实现见 `src/saves/backupExport.ts`）。安卓：写入公共目录 `Download/AARC/` 后调起系统分享面板（分享要求 content:// URI，私有目录文件不能直接分享，故走公共目录副本，也顺带在下载目录留底）；桌面：弹目录选择对话框，zip 写入所选目录。浏览器 dev 模式不可用（提示"仅在应用内可用"）。
   - **分组**（2026-09-09 新增）：列表按组分节，组头显示组名 + 存档数，点击折叠（折叠状态存 localStorage 键 `aarc-tauri-save-groups-collapsed`，纯 UI 态）；组头提供 ↑/↓ 调序、重命名、删除（成员回未分组）；存档项的"分组"按钮打开独立 Modal（覆盖在管理器上层，标题"为「存档名」设置分组"）：现有分组 + 未分组 + 新建分组。"未分组"固定排在所有分组之后且仅在有内容时显示；脏 `groupId`（指向已删分组）渲染时兜底进未分组。
 - 样式参考本包 `Pop.vue` 的简洁风格，遮罩 + 居中卡片即可；`Esc`/点遮罩关闭。
 
@@ -129,7 +130,7 @@ export interface SaveStorage {
 
 - pinia `persistedstate` 的 5 个 core store 仍走 localStorage（存的是 UI 态，不是存档本体）；是否换 fs 适配另行评估（README 第 6 步原话）。
 - "云端 SVG 缩略上传"的 fs 化（`cloudSvgUploader`）另行处理。
-- 存档导入/导出（`.aarc` 文件互传）、自动备份，后续再加。
+- 存档导入（从备份 zip 恢复）、自动备份，后续再加（zip 打包导出已于 2026-09-10 实现，见 §3.3）。
 
 ## 四、实施步骤
 
@@ -145,6 +146,8 @@ export interface SaveStorage {
 6. 收尾：更新本包 README（第 6 步状态、存档位置说明）与根 `AGENTS.md` 中 aarc-tauri 的描述。
 
 ## 五、修订记录
+
+- **2026-09-10 打包导出备份**（§3.3/§3.6）：存档管理器标题栏新增导出按钮，全部存档经 `fflate`（新增依赖）在 JS 侧打包为 `aarc-app-backup.zip`。安卓走 `createNewPublicFile`（Download/AARC/）+ `showShareFileAppChooser`；桌面走 `dialog.open({ directory })` + `writeFile`。capabilities 相应新增 `dialog:allow-open`、`android-fs:allow-create-new-public-file`、`android-fs:allow-show-share-file-app-chooser`。
 
 - **2026-09-09 存档分组**（§3.1/§3.2/§3.3）：存储保持扁平，分组信息全部在 index.json（`groups` 数组 + 存档的 `groupId`），支持自定义组间顺序（`order` 字段 + `moveGroup`）；组头折叠/重命名/删除，存档经"分组"菜单移动或新建组。搜索时忽略分组扁平过滤。
 - **2026-09-07 切换存档改为整页 reload**（§3.4）。初版实现按原计划做运行时切换（`disposeEditor` + `loadSaveIntoEditor` 重载 + 调 `Cvs` 暴露的 `init()` 重渲染），但运行时切换存在一组状态清理缺陷——画布空白不自愈、Scaler 尺寸缓存不重置、`config` 跨存档串台（切换后保存会把旧存档的整套 config 写进新存档）等，完整清单与修复方案见 `aarc-web/docs/save-switching-problems.md`。这些问题修复前，本包与 web 保持一致：切换存档 = 写入目标 id 到 `aarc-tauri-current-save` + `window.location.reload()`。该文档 §4 的修复集落地后，可再回到运行时切换方案（届时需一并处理 §2.1/§2.2/§2.4 等阻断级问题）。

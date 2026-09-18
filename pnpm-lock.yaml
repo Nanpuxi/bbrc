@@ -98,6 +98,9 @@ importers:
       aarc-core:
         specifier: workspace:*
         version: link:../aarc-core
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       pinia:
         specifier: ^4.0.3
         version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.42(typescript@6.0.3))
@@ -1610,6 +1613,9 @@ packages:
 
   fetch-cookie@2.0.3:
     resolution: {integrity: sha512-Awxvuqsf0Rc4tckszW1iJpBIRrKwEiYDL/XxQkRhpCTcuQdiCN1XP9MFOyzGaGbf0MU7gjBkcgwxT7IyjpCz3g==}
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   figures@6.1.0:
     resolution: {integrity: sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg==}
@@ -3457,6 +3463,8 @@ snapshots:
     dependencies:
       set-cookie-parser: 2.4.8
       tough-cookie: 4.0.0
+
+  fflate@0.8.3: {}
 
   figures@6.1.0:
     dependencies:

@@ -4,6 +4,7 @@
 // 本组件只管存档清单的读写（saveStorage），实际加载由父组件经 select 事件完成。
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { saveStorage, newSaveId, SaveIndexEntry, SaveGroup } from '../saves/saveStorage';
+import { exportSavesBackup } from '../saves/backupExport';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import foldIcon from 'aarc-core/assets/ui/fold.svg';
 import groupIcon from '../assets/ui/group.svg';
@@ -11,6 +12,7 @@ import renameIcon from '../assets/ui/rename.svg';
 import deleteIcon from '../assets/ui/delete.svg';
 import moveUpIcon from '../assets/ui/moveUp.svg';
 import moveDownIcon from '../assets/ui/moveDown.svg';
+import backupIcon from '../assets/ui/backup.svg';
 
 const props = defineProps<{
     currentSaveId: string
@@ -111,6 +113,17 @@ async function refresh() {
     } catch (e) {
         console.warn('[存档] 读取存档清单失败', e)
         showPop('读取存档清单失败', 'failed')
+    }
+}
+
+// 打包导出：全部存档打包为 aarc-app-backup.zip（实现与平台分流见 backupExport.ts）
+async function exportBackup() {
+    if (busy.value) return
+    busy.value = true
+    try {
+        await exportSavesBackup()
+    } finally {
+        busy.value = false
     }
 }
 
@@ -314,7 +327,11 @@ defineExpose({ open })
 <template>
     <div v-if="visible" class="mask" @click.self="close">
         <div class="card">
-            <div class="title">存档管理器</div>
+            <div class="titleRow">
+                <div class="title">存档管理器</div>
+                <button class="lite backupBtn" title="打包导出备份（zip）" :disabled="busy"
+                    @click="exportBackup"><img :src="backupIcon" /></button>
+            </div>
             <div class="searchBar">
                 <input v-model="searchText" placeholder="按名称搜索存档" />
             </div>
@@ -448,6 +465,37 @@ defineExpose({ open })
     font-size: 18px;
     font-weight: bold;
     text-align: center;
+}
+// 标题行：标题保持居中，导出按钮绝对定位到最右侧
+.titleRow {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    .backupBtn {
+        position: absolute;
+        right: 0;
+        display: inline-flex;
+        padding: 3px;
+        border-radius: 3px;
+        transition: 200ms;
+        &:not(:disabled):hover {
+            background-color: #eee;
+        }
+        img {
+            width: 16px;
+            height: 16px;
+        }
+        &:disabled {
+            cursor: not-allowed;
+            img {
+                opacity: 0.3;
+            }
+            &:hover {
+                text-decoration: none;
+            }
+        }
+    }
 }
 .searchBar {
     input {
