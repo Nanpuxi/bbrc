@@ -13,7 +13,10 @@ import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueCompo
 import { applyRemoteSaveDiff } from "aarc-core/models/collab/remoteOpApplier";
 import { applyRemoteCollabLock } from "aarc-core/models/collab/lockApplier";
 import { prepareSavePayload, reloadSaveFromSnapshot } from "aarc-core/app/editorSession";
-import { SaveDiff } from "aarc-core/models/save/saveDiff";
+import { SaveDiff, applySaveDiff, diffSave } from "aarc-core/models/save/saveDiff";
+import { Save } from "aarc-core/models/save";
+import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
+import rfdc from "rfdc";
 
 /**
  * 协作会话编排（步骤四 4.5.1/4.5.2）：状态机 + 事件分发 + 同步管线。
@@ -30,6 +33,15 @@ import { SaveDiff } from "aarc-core/models/save/saveDiff";
  *   防止复用已删除元素的 id）
  * - sessionEpoch 作废离开/重进前的在途异步流程
  *
+ * 本地 op 提交管线（4.6）：
+ * - captureLocalOp（挂在主画布渲染完成钩子）：diffSave(opBaseline, save) 生成 op，
+ *   随即把 diff 应用到 opBaseline 推进基线（applySaveDiff 内部 clone，无引用共享），
+ *   入未 ack 待发队列后触发 flush；队列上限 maxPendingLocalOps，溢出则退会话
+ * - 远程 op 在 applyOpNow 内同步应用到 opBaseline，保证后续 capture 不含他人变更
+ * - 快照整档重建后：队列内未 ack 编辑按原序重放到快照底上（之后 flush 会作为
+ *   全新 op 重提交，拿到新 seq）；基线重置为新存档
+ * - flush 遇提交失败（断线/限流/权限）即停，op 留队，重连补齐后按原序重发
+ *
  * 单房间假设：一个编辑器会话同时只在一个协作房间内（saveId 过滤所有事件）。
  */
 
@@ -42,10 +54,13 @@ export const collabSessionTiming = {
     snapshotPollTimeoutMs: 15000,
     snapshotMaxAttempts: 4,
     bufferDrainMaxRounds: 10,
+    /** 本地未 ack op 待发队列上限（防永久失败时内存无限增长；溢出即退会话） */
+    maxPendingLocalOps: 1000,
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const genOpId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+const cloneSaveData = rfdc()
 
 export const useCollabSessionStore = defineStore('collabSession', () => {
     const state = ref<CollabSessionState>('off')
@@ -69,6 +84,15 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     let catchingUp = false
     let snapshotUploading = false
     let sessionEpoch = 0
+    /**
+     * 本地 diff 基线（4.6）：始终等于"save 减去尚未捕获的本地编辑"。
+     * 本地捕获时随 diff 推进；远程 op 应用时同步应用同一 diff；
+     * 快照整档替换时重置。非响应式（整档数据，无渲染依赖）
+     */
+    let opBaseline: Save | null = null
+    /** 本地未 ack op 队列（断线期间累积，重连补齐后按原序重发） */
+    const pendingLocalDiffs: SaveDiff[] = []
+    let flushingLocal = false
 
     function requireTransport(): CollabTransport {
         const t = getCollabTransport()
@@ -93,6 +117,9 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     function applyOpNow(op: CollabOpMsg): Promise<void> {
         const diff = JSON.parse(op.patch) as SaveDiff
         const p = applyRemoteSaveDiff(diff)
+        // 基线同步应用同一 diff：否则下次本地 capture 会把他人变更误算成本地 op
+        if (opBaseline)
+            applySaveDiff(opBaseline, diff)
         lastSeq = op.seq
         return p
     }
@@ -184,11 +211,22 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 reloadSaveFromSnapshot(JSON.parse(snap.payload))
                 lastSeq = snap.seq
                 pendingOwnSeqs.clear()
+                // 本地未 ack 编辑随整档替换丢失：按原序重放到快照底上，保持用户可见状态不变
+                // （之后 flush 会把它们作为全新 op 重提交拿到新 seq）；
+                // 重放属"非本地编辑动作"，undo 基线对齐以免误入 undo 栈
+                const reloaded = useSaveStore().save
+                if (reloaded && pendingLocalDiffs.length > 0) {
+                    for (const d of pendingLocalDiffs)
+                        applySaveDiff(reloaded, d)
+                    useUndoStore().syncBaseline(reloaded)
+                }
+                opBaseline = reloaded ? cloneSaveData(reloaded) : null
                 const sync = await t.syncOps(sid, lastSeq)
                 if (sync.gap)
                     break  // 水位之后又被修剪（极端）：外层重试拿更新快照
                 await applyOrdered(sync.ops)
                 await drainBuffer()
+                void flushLocalOps()  // 稳态 Gap 重建路径：重放后的未 ack 本地 op 立即重发
                 return
             }
             // 本轮轮询超时：房主可能已断连换人（OwnerChanged 已更新 ownerUserId），下轮重新请求
@@ -343,6 +381,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             relockLocalHolds()
             applyIdPrefix(res.idPrefix)
             state.value = 'synced'
+            void flushLocalOps()  // 断线期间累积的本地 op 按原序重发（视作全新提交、获得新 Seq）
         }
         catch (e) {
             console.error('[协作]重连补齐失败', e)
@@ -353,6 +392,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 if (epoch !== sessionEpoch)
                     return
                 state.value = 'synced'
+                void flushLocalOps()
             }
             catch (e2) {
                 console.error('[协作]重连快照兜底也失败，退出协作会话', e2)
@@ -422,6 +462,9 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             applyLockSnapshot(res.locks)
             // 种子扫描必须在同步完成之后（之前的存档可能缺他人刚创建的元素）
             applyIdPrefix(res.idPrefix)
+            // 本地 diff 基线（快照路径已在 snapshotFlow 内设置）：以同步完成时的存档为底
+            if (!opBaseline && useSaveStore().save)
+                opBaseline = cloneSaveData(useSaveStore().save!)
             state.value = 'synced'
         }
         catch (e) {
@@ -451,6 +494,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         saveId.value = null
         ownerUserId.value = 0
         members.value = []
+        opBaseline = null
+        pendingLocalDiffs.length = 0
         useCollabStore().clearIdPrefix()
         const lockStore = useCollabLockStore()
         lockStore.lockRequestHandler = undefined
@@ -477,9 +522,73 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         return lastSeq
     }
 
+    // ---- 本地 op 捕获与提交（4.6）----
+
+    /**
+     * 本地变更捕获入口（挂在主画布渲染完成钩子，undo 入栈之后）。
+     * diffSave(opBaseline, save) 生成 op 入队并推进基线；无变化不产生 op。
+     * 同步期/断线期的捕获（蒙层生效前的在途渲染）也会入队，flush 自行等待时机。
+     */
+    function captureLocalOp(): void {
+        if (state.value === 'off')
+            return
+        const save = useSaveStore().save
+        if (!save)
+            return
+        if (!opBaseline) {
+            // 防御：基线未建立（如 fresh 房间 join 后首次渲染前就被调用）时以现状为基线
+            opBaseline = cloneSaveData(save)
+            return
+        }
+        const diff = diffSave(opBaseline, save)
+        if (!diff)
+            return
+        applySaveDiff(opBaseline, diff)  // 基线推进到当前状态（apply 内部 clone，与 save 无引用共享）
+        pendingLocalDiffs.push(diff)
+        if (pendingLocalDiffs.length > collabSessionTiming.maxPendingLocalOps) {
+            // 队列溢出：通常是提交被永久拒绝（权限/版本不兼容），同步状态已不可信
+            void handleSyncExhausted(Error('本地待发 op 队列溢出'))
+            return
+        }
+        void flushLocalOps()
+    }
+
+    /**
+     * 按原序提交待发队列：ack 即出队（seq 由 submitOp 登记进 pendingOwnSeqs）。
+     * 非稳态（同步中/断线）或提交失败即停，op 留队等下一次触发（捕获/重连补齐完成）。
+     */
+    async function flushLocalOps(): Promise<void> {
+        if (flushingLocal)
+            return
+        flushingLocal = true
+        try {
+            while (pendingLocalDiffs.length > 0) {
+                if (state.value !== 'synced' || connState.value !== 'online')
+                    return
+                try {
+                    await submitOp(pendingLocalDiffs[0])
+                    pendingLocalDiffs.shift()
+                }
+                catch (e) {
+                    console.warn('[协作]op 提交失败，留在待发队列（重连后自动按原序重发）', e)
+                    return
+                }
+            }
+        }
+        finally {
+            flushingLocal = false
+        }
+    }
+
+    /** 待 ack 的本地 op 数（诊断/测试用） */
+    function pendingLocalOpCount(): number {
+        return pendingLocalDiffs.length
+    }
+
     return {
         state, connState, saveId, ownerUserId, members, myUserId,
         isInSession, isOwner, canEdit,
         join, leave, submitOp, currentSeq,
+        captureLocalOp, flushLocalOps, pendingLocalOpCount,
     }
 })

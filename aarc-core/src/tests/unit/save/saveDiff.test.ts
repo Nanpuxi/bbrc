@@ -113,11 +113,14 @@ describe('diffSave 生成', () => {
         expect(diff).toEqual({ pointLinks: { $set: [{ pts: [1, 2], type: 0 }, { pts: [3, 4], type: 0 }] } })
     })
 
-    it('空数组与非空数组之间回退为原子 $set', () => {
+    it('空数组与非空 keyed 数组之间走 keyed diff（重放到他底上幂等）', () => {
         const a = createEmptySave()
         const b = createEmptySave({ points: [makePt(1)] })
-        const diff = diffSave(a, b)
-        expect(diff).toEqual({ points: { $set: [makePt(1)] } })
+        expect(diffSave(a, b)).toEqual({ points: { $add: [makePt(1)] } })
+        expect(diffSave(b, a)).toEqual({ points: { $rm: [1] } })
+        // 空 ↔ 非 keyed（无 id）仍回退 $set
+        const c = createEmptySave({ pointLinks: [{ pts: [1, 2], type: 0 }] })
+        expect(diffSave(a, c)).toEqual({ pointLinks: { $set: [{ pts: [1, 2], type: 0 }] } })
     })
 
     it('嵌套普通对象递归 diff，只含变化的键', () => {

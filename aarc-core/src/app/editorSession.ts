@@ -7,6 +7,7 @@ import { useIconStore } from "aarc-core/models/stores/iconStore";
 import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
+import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 
 /**
@@ -82,6 +83,8 @@ export function reloadSaveFromSnapshot(raw: unknown): void {
     // undo 基线：整档替换后历史不可信，重建基线
     undoStore.clear()
     undoStore.push(saveStore.save)
+    // 快照整档重建必须立即呈现（蒙层期间用户在等），无视活跃期抑制
+    useRemoteRenderScheduler().renderNow()
 }
 
 /**

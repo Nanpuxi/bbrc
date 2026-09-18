@@ -32,6 +32,7 @@ import { useLineFocusorStore } from "./utils/lineFocusorStore";
 import { useLineStateStore } from "./saveDerived/state/lineStateStore";
 import { useLineCreation } from "./composables/lineCreation";
 import { collabLockKey, collabLockKeyOf, useCollabLockStore } from "./collabLockStore";
+import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 
 export const useEnvStore = defineStore('env', ()=>{
     const saveStore = useSaveStore();
@@ -417,6 +418,8 @@ export const useEnvStore = defineStore('env', ()=>{
         else if(Date.now() - touchStartedAt < 300){
             return // 说明这个鼠标事件是紧跟在触屏事件后的（被补上的），应该忽略
         }
+        // 画布按下开始交互：通知协作渲染调度进入活跃期（期间远程 op 不主动触发整帧渲染）
+        useRemoteRenderScheduler().notifyCanvasInteraction()
         const clientCoord = eventClientCoord(e)
         if(!clientCoord)
             return;
@@ -500,6 +503,10 @@ export const useEnvStore = defineStore('env', ()=>{
         }
     }
     function movingHandler(e:MouseEvent|TouchEvent){
+        // 按住期间的移动：持续延展协作渲染调度的活跃期（hover 不算；firefox pc版无 TouchEvent，用 MouseEvent 区分）
+        const pressed = (e instanceof MouseEvent) ? e.buttons > 0 : e.touches.length > 0
+        if(pressed)
+            useRemoteRenderScheduler().notifyCanvasInteraction()
         const clientCoord = eventClientCoord(e)
         const coord = translateFromClient(clientCoord);
         if(clientCoord && coord){

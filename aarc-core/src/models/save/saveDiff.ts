@@ -15,8 +15,10 @@ import rfdc from "rfdc";
  *   - $seq 仅在“删除+追加后仍无法得到目标顺序”时输出（纯尾部追加不产生 $seq）
  * - 普通对象：递归的子 diff
  *
- * keyed 判定是自动的（无配置表）：数组非空、元素均为含唯一 number/string id 的普通对象。
- * 任一侧不满足（含空数组、重复 id）则回退为原子 $set 整体替换。
+ * keyed 判定是自动的（无配置表）：数组元素均为含唯一 number/string id 的普通对象；
+ * **空数组视为天然 keyed**——空 ↔ 非空 keyed 数组之间也输出 $add/$rm 而非 $set 整组替换，
+ * 这样本地未 ack op 重放到变化后的底上（快照重建）时幂等，不会整组覆盖他人并发新增。
+ * 任一侧元素无 id / id 重复则回退为原子 $set 整体替换。
  */
 
 const clone = rfdc()
@@ -245,10 +247,9 @@ function applyKeyedArr(target: Record<string, unknown>, key: string, node: Keyed
     }
 }
 
-/** 数组非空、元素均为含唯一 number/string id 的普通对象时返回 id 序列，否则返回 null */
+/** 数组元素均为含唯一 number/string id 的普通对象时返回 id 序列，否则返回 null；
+ *  空数组返回 []（天然 keyed：空 ↔ 非空 keyed 间走 $add/$rm，重放幂等） */
 function keyedIds(arr: unknown[]): Id[] | null {
-    if (arr.length === 0)
-        return null
     const ids: Id[] = []
     const seen = new Set<Id>()
     for (const el of arr) {

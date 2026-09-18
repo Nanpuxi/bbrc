@@ -6,6 +6,7 @@ import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
 import { useCollabLockStore } from "aarc-core/models/stores/collabLockStore";
+import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 
 /**
  * 把一条远程协作 op（SaveDiff）应用到本地存档，顺序：
@@ -29,6 +30,8 @@ export async function applyRemoteSaveDiff(diff: SaveDiff): Promise<void> {
     const resetterStore = useResetterStore()
     resetterStore.refreshDerivedStoresForRemote(diff)
     await resetterStore.relaunchDerivedStores()
+    // 数据已就位，请求一次"同步驱动"渲染（用户活跃期会被抑制/合并，见 remoteRenderScheduler）
+    useRemoteRenderScheduler().requestRemoteRender()
 }
 
 /**
