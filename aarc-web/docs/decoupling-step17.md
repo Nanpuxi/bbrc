@@ -109,9 +109,9 @@ core 新建 `src/app/hostServices.ts`：
 export interface CoreHostServices {
     pop: PopCallback                  // 复用 uniqueComponents 既有类型
     wait: WaitCallback
-    cloudSvgUploader: CloudSvgUploader
-    pinyinConvert: PinyinConvertProvider
-    saveInfo: SaveInfoProvider
+    cloudSvgUploader?: CloudSvgUploader  // 可选（2026-09 改）：不注入则"云端SVG"配置区隐藏
+    pinyinConvert?: PinyinConvertProvider  // 可选（2026-09 改）：不注入则转换按钮与配置区隐藏
+    saveInfo?: SaveInfoProvider         // 可选（2026-09 改）：不注入则导出文件名退化为存档id
     siteLinks?: SiteLinks             // 可选：不注入则链接隐藏（现状语义）
     routeGuardRegistrar?: RouteGuardRegistrar  // 可选：无路由的宿主（tauri 初期）不注入
 }

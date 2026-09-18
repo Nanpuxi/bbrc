@@ -12,22 +12,39 @@
     "pnpm": ">=11"
   },
   "scripts": {
-    "dev": "vite",
-    "dev-host": "vite --host",
-    "build": "vite build",
-    "type-check": "vue-tsc --noEmit"
+    "dev": "node scripts/gen-git-info.mjs && vite",
+    "dev-host": "node scripts/gen-git-info.mjs && vite --host",
+    "build": "node scripts/gen-git-info.mjs && vite build",
+    "type-check": "vue-tsc --noEmit",
+    "gen:icons": "node scripts/gen-icons.mjs",
+    "gen:git-info": "node scripts/gen-git-info.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk --debug",
+    "android:build:release": "tauri android build --apk --split-per-abi"
   },
   "dependencies": {
+    "@aurouscia/au-color-picker": "^2.2.0",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-fs": "^2.5.2",
     "aarc-core": "workspace:*",
-    "@aurouscia/au-color-picker": "^1.1.0",
-    "pinia": "^3.0.4",
+    "fflate": "^0.8.3",
+    "pinia": "^4.0.3",
     "pinia-plugin-persistedstate": "^4.7.1",
-    "vue": "^3.5.32"
+    "tauri-plugin-android-fs-api": "29.0.0",
+    "vue": "^3.5.42"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^25.6.0",
     "@vitejs/plugin-vue": "^6.0.6",
+    "png2icons": "^2.0.1",
     "sass": "^1.99.0",
+    "sharp": "^0.35.4",
     "typescript": "^6.0.3",
     "vite": "^7.3.1",
     "vite-plugin-full-reload": "^1.2.0",

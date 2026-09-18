@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 由 aarc-logo-fullbleed.svg 拆分出的前景层：透明底 + 白色 Λ 图形。 -->
+<!-- 用作 Android adaptive icon 的 foreground 层等场景的源图；与背景层叠加即还原完整 logo。 -->
+<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 255 255" style="enable-background:new 0 0 255 255;" xml:space="preserve">
+<style type="text/css">
+	.st1{fill:#FFFFFF;}
+</style>
+<g>
+	<path class="st1" d="M196.4,212.8h-16.7c-5.7,0-10.7-3.9-12-9.4l-27.9-111c-2.2-8.7-9.4-9.7-12.4-9.7c-3,0-10.2,0.9-12.4,9.7
+		l-27.9,111c-1.4,5.5-6.4,9.4-12,9.4H58.4c-8.1,0-14-7.6-12-15.5l28.9-115c6.1-24.3,27.1-40.7,52.2-40.7c12.5,0,24,4.1,33.2,11.2
+		s15.9,17.3,19,29.5l28.9,115C210.4,205.2,204.5,212.8,196.4,212.8z"/>
+</g>
+</svg>

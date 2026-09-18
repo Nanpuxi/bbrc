@@ -12,6 +12,11 @@ export function initPinyinConvertProvider(p: PinyinConvertProvider) {
     provider = p
 }
 
+/** 宿主是否已注入拼音转换实现；未注入时 core 隐藏相关入口 */
+export function hasPinyinConvertProvider(): boolean {
+    return !!provider
+}
+
 type TargetRef = Ref<string|undefined|null>
 export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void)=>{
     const { config } = storeToRefs(useConfigStore())

@@ -1,6 +1,47 @@
 # aarc-tauri
 
-AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1 步"纯浏览器 dev"与第 2 步"极简 Pop/Wait"已完成，尚未接入编辑器组件与 tauri）。
+AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1~5 步已完成，浏览器 dev 与 tauri dev 均可运行编辑器；尚未做 fs 化与收尾）。
+
+## 运行
+
+```sh
+pnpm --filter aarc-tauri dev          # 纯浏览器 dev（http://127.0.0.1:5174）
+pnpm --filter aarc-tauri tauri:dev    # tauri dev（自动拉起上面的 vite，再编译启动原生窗口）
+pnpm --filter aarc-tauri type-check
+pnpm --filter aarc-tauri build
+```
+
+安卓（详见 `docs/android-init.md`）：
+
+```sh
+pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标）
+pnpm --filter aarc-tauri android:dev             # 连接设备/模拟器的 dev 模式
+pnpm --filter aarc-tauri android:build           # debug APK（universal，全 ABI）
+pnpm --filter aarc-tauri android:build:release   # release APK（按 ABI 分包；需先配签名）
+```
+
+注意：tauri webview 下页面源是 `tauri://localhost`，API/数据源等出站请求依赖 `.env.development` 注入的 `VITE_ApiUrlBase`（默认 `http://localhost:5250`，对应 WebApi 的 "http" profile）与 `src-tauri/tauri.conf.json` 中的 CSP `connect-src *` 放行。
+
+## 构建信息生成
+
+`dev`/`build` 前会自动运行 `scripts/gen-git-info.mjs`（也可手动 `pnpm gen:git-info`），把分支/提交/构建时间写入 `public/gitInfo.json`（生成产物，已 gitignore），供 core 的"杂项"配置区底部展示；无 git 环境时写入 unknown 兜底。
+
+## 图标生成
+
+```sh
+pnpm --filter aarc-tauri gen:icons
+```
+
+整个 `src-tauri/icons/` 目录都是生成产物，已加入 `.gitignore`；克隆仓库或改动 logo 后需先跑一次本命令再 `tauri:dev`/`tauri:build`。
+
+`scripts/gen-icons.mjs` 以 `aarc-web/public/aarc-logo-background.svg`（渐变背景层）与 `aarc-web/public/aarc-logo-foreground.svg`（透明底白色 Λ 前景层）为源，经 `sharp`（SVG 栅格化，跨平台保留 alpha）与 `png2icons`（纯 JS 打包 icns/ico）生成：
+
+- **macOS**：`icon.icns`（全尺寸）与桌面通用 png（squircle：824/1024 居中、圆角约 22.37%），Dock 圆角由此烘焙进资源，macOS 不会自动裁圆角
+- **Windows**：`icon.ico`（同一 squircle 源）与 Store 磁贴 `Square*Logo.png` / `StoreLogo.png`（满幅版）
+- **Android**：`android/mipmap-*/` 下 adaptive icon 前景/背景层（Λ 缩至 85% 居中，落在 66dp 安全区内；厂商遮罩形状由系统套用，无需按厂商区分）与 legacy 方/圆图标；`mipmap-anydpi-v26/ic_launcher.xml` 固定引用渐变 mipmap 背景。生成后**自动同步**到 `gen/android/app/src/main/res/`（`tauri android init` 只会生成默认 logo，不会使用这里的定制图标；未 init 则跳过并提示，init 后重跑本脚本即可）；同步进 `res/` 的 `mipmap-*` 同样是生成产物，已加入 `.gitignore` 不入库
+- **iOS**：`ios/AppIcon-*.png` 全套（满幅版，经 `removeAlpha` 去除 alpha——App Store 不允许图标带透明通道）
+
+改动 logo 后重跑一次即可；不要用 `tauri icon` 覆盖（它会把 Android 前景塞成满幅、背景改回纯色）。
 
 目标：以最小装配跑通 `aarc-core` 编辑器（Cvs/Menu 及其闭包），验证"core + 非 web 宿主"的拆分成果，后续演进为具备本地文件读写能力的完整 `aarc-tauri`。
 
@@ -32,9 +73,12 @@ AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1 步"纯浏览器 de
 
 - `siteLinks`：不注入则"关于页/私服案例"链接隐藏（tauri 本就不需要）。
 - `routeGuardRegistrar`：tauri 无前端路由，可不注入；`window.onbeforeunload` 部分 core 自理。
-- `pinyinConvert` / `saveInfo`：不注入则站名拼音转换、导出图片读存档信息不可用。
-- `cloudSvgUploader`：minimal 阶段可注入 noop/本地保存占位；tauri 阶段换 fs 实现。
-- `initOpenFavoritesSidebar`：不注入则图标收藏夹入口仅 `console.warn`。
+- `pinyinConvert` / `saveInfo`：不注入则拼音转换按钮与"站名拼音转换"配置区隐藏；导出文件名退化为存档 id，不阻断导出。
+- `cloudSvgUploader`：不注入则"云端SVG"配置区整体隐藏；minimal 阶段也可注入 noop/本地保存占位，tauri 阶段换 fs 实现。
+- `initOpenFavoritesSidebar`：不注入则"添加资源"按钮隐藏（被调用时仅 `console.warn`）。
+- `fileSaver`：core 默认用浏览器 `<a download>` 下载兜底，tauri webview 下不可靠，**本包已注入原生实现**：`src/fileSaver.ts`（`main.ts` 经 `isTauri()` 判断仅在 tauri 环境注入，浏览器 dev 仍走默认下载）。实现按平台分流：
+  - **安卓**：图片（png/jpeg/webp/gif，gif/apng 导出的文件名也在此列）经 `tauri-plugin-android-fs` 的 MediaStore API 写入系统相册 `Pictures/AARC/`（子目录名即相册名）；不支持进相册的格式（svg、txt 等）用 Pop 报错，不落盘。权限：`android-fs:allow-create-new-public-image-file` + `android-fs:allow-write-file`（见 `src-tauri/capabilities/default.json`）；插件 feature `legacy_storage_permission` 仅为 Android 9 及以下补 `WRITE_EXTERNAL_STORAGE`
+  - **桌面（Win/Mac）**：plugin-dialog `save` 弹"另存为" + plugin-fs `writeFile` 写盘，对话框选中的路径自动进入 fs 运行时 scope
 
 ### 三、运行时环境约束（tauri webview 需处理）
 
@@ -53,5 +97,5 @@ AARC 编辑器的**最小 Tauri 宿主**（实现中：第 1 步"纯浏览器 de
 3. **Editor 宿主组件**：挂载 Cvs/Menu，接 `@save-data`/`@leave`，经 `loadSaveIntoEditor` 从 localStorage（或内置空存档）加载，保存时 `prepareSavePayload` 写回 localStorage；`setCurrentSaveIdRaw` 设固定值；注册 `initAfterMainCvsRendered` 做离开拦截。
 4. **浏览器内回归**：打开编辑器、编辑、保存、刷新后恢复、离开拦截、弹窗/等待、导出图片（降级项确认不崩溃）。
 5. **接入 tauri**：`tauri init` 生成 `src-tauri`，配置 CSP/网络放行，注入 `apiUrlBase`；icons 静态资源随包打包。
-6. **fs 化**：保存与 svg 缩略上传改本地文件读写（`@tauri-apps/plugin-fs` 或自定义 command）；persist 存储评估是否换 fs 适配。
+6. **fs 化**：保存与 svg 缩略上传改本地文件读写（`@tauri-apps/plugin-fs` 或自定义 command）；persist 存储评估是否换 fs 适配。（已部分完成：导出落盘经 core 的 `fileSaver` 注入——桌面走 dialog+fs，安卓走 MediaStore 相册，见"二、可省略"末节）
 7. **收尾**：原生对话框/右键抽象（如需要）；确认 web 侧 `analyze-deps.mjs` 的 core 闭包检查仍通过（本包不改 core，理论上无影响）；更新根 `AGENTS.md` 与 decoupling.md 第 18 步状态。

@@ -66,7 +66,7 @@ onMounted(async()=>{
         抱歉，本栏目仅限编辑者或所有者查看
     </div>
     <div v-else-if="ok" class="ttIconConfig">
-        <button class="add-from-favorites" @click="userFileFavoriteStore.openFavoritesSidebar()">添加资源</button>
+        <button v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" class="add-from-favorites" @click="userFileFavoriteStore.openFavoritesSidebar()">添加资源</button>
         <div class="ttIconPrefixSelect">
             图标组
             <select v-model="prefixSelected">
