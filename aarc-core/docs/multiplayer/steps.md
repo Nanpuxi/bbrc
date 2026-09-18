@@ -11,8 +11,10 @@
 
 - [x] ID 前缀分区（`collabStore`，负数 id = `-(prefix×2²⁰+counter)`）+ 测试
 - [x] 协作用 diff 生成/应用（`src/models/save/saveDiff.ts`，自定义应用导向格式）+ 测试
+- [x] 步骤一：undo 栈防污染（au-undo-redo@1.1.0 `syncBaseline`）
+- [x] 步骤二：纯数据刷新路径 + 远程 op 应用管线（`remoteOpApplier.applyRemoteSaveDiff`）
 
-## 步骤一：undo 栈防污染（进行中）
+## 步骤一：undo 栈防污染（已完成）
 
 **问题**：远程 op 应用到 `saveStore.save` 后，下一次本地 `undoStore.push()` 会把他人变更算进本地 diff，导致 undo 撤销别人的操作。
 
@@ -26,13 +28,16 @@
 
 **依赖状态**：`syncBaseline` 已随 `@aurouscia/au-undo-redo@1.1.0` 发布到 npm，aarc-core 正常使用版本号引用。
 
-## 步骤二：拆"纯数据刷新"路径
+## 步骤二：拆"纯数据刷新"路径（已完成）
 
-`resetterStore.resetDerivedStores(patch)` 目前吃 au-undo-redo 形状的 patch 且会 `cancelActive`。需要一条给远程 op 用的路径：
+已实现（含测试 `src/tests/unit/collab/remoteOpApplier.test.ts`）：
 
-- 输入改为 `saveDiff.ts` 的 `SaveDiff`（或整个新 save）
-- 只刷新派生 store（cvs 渲染、staCluster 等），不碰 undo、不取消本地正在进行的拖动
-- 例外：若被远程删除/修改的正是本地激活对象，需按步骤三处理
+- `resetterStore.refreshDerivedStoresForRemote(diff?)`：远程 op 专用刷新路径。只失效"由存档数据派生的缓存"（formalizedLine/staNameRect/textTagRect/lineExtend/cvsBlocksControl/icon），**不触碰**编辑与交互态（nameEdit/textTagEdit/pointLink/discardArea/namePosMemory/envStore 的激活对象），远程变更不打断本地进行中的输入、连线创建或拖动
+- `staClusterStore.pure.ts` 新增 `saveDiffToSavePatch(diff)`：把协作 SaveDiff 转换为 cluster 恢复所需的 SavePatch 视图（`$set`/`$del` → undefined 保守重建；`$seq` 跳过——cluster 与顺序无关；restoreWithPatch 只读 id 和 new 的 undefined 性，内容用占位对象）
+- `src/models/collab/remoteOpApplier.ts` 的 `applyRemoteSaveDiff(diff)`：远程 op 应用管线——① `applySaveDiff` 原地应用（保留引用，本地激活/选中对象存活）→ ② `undoStore.syncBaseline` → ③ `refreshDerivedStoresForRemote` + `relaunchDerivedStores`。独立成模块以避免与 saveStore→collabStore 的循环依赖
+- 顺带重构：`resetDerivedStores` 内的 envStore 改为函数内懒取，远程路径不再实例化 envStore
+
+待后续步骤处理：激活对象被远程 patch 删除/修改时的防御（步骤三）、渲染触发依赖 refreshBlocks 的 blocksReformHandler（undo 路径同款机制，已够用）。
 
 ## 步骤三：激活对象防御 + 对象锁落地
 
