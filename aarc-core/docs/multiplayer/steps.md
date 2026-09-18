@@ -54,14 +54,30 @@
 
 ## 步骤四：传输层
 
-- 定义 WS 消息协议：hello（分配 id 前缀）、lock/unlock、op（SaveDiff 透传）等
-- `collabStore` 已有前缀字段，接入服务器分发
-- 后端按 `backend-plan.md` 做透传，不解析不保存
-- **（阻塞上线）前缀复用问题**：同一前缀被重复分配且其旧负 id 仍在存档中时会撞号，须实现 id-allocation.md §7.1 的修复（服务器单调分配 + 客户端扫存档设 counter 种子兜底），**解决前不能上线**
-- **服务端并发语义测试（必要，方案定为"纯逻辑类 + xUnit"）**：一致性根基在服务端新代码（锁仲裁 first-write-wins、前缀单调分配、断连清锁、房间内有全序），前端单测全部建立在"服务器说话算数"的假设上，必须钉住。实施方式：
+细化结论（对账三份配套文档后）：
+
+- **协议缺口**：`backend-plan.md` §7 原定协议只有 op 透传，缺 lock/unlock 消息与锁仲裁；`JoinRoom` 返回值缺 id 前缀与锁表快照（后进房者必须知道存量锁，否则红叉与激活拦截对存量锁失效）。传输层动工前先修订 `backend-plan.md`（4.1）
+- **断连对锁是双向的**：服务器断连清锁 ⇒ 客户端重连后 `myLocks` 也已失效，重连流程须清空 `myLocks` 并重新评估本地激活/选中对象
+- **core/web 解耦**：SignalR 连接实现属宿主职责（aarc-web，参照 `signalrStore.ts`）；aarc-core 只定义传输接口并消费事件，不直接依赖 `@microsoft/signalr`
+
+子步骤：
+
+- [x] 4.1 **协议定稿**：修订 `backend-plan.md` §5/§6/§7——新增 `AcquireLock`/`ReleaseLock`（房间锁内 first-write-wins 仲裁）、`LockAcquired`/`LockReleased` 事件、`JoinCollabRoomResult` 加 `IdPrefix` + 锁表快照、断连清锁并广播
+- [ ] 4.2 **后端实现**：按 `backend-plan.md` §12 实现步骤 + 锁扩展（房间锁表与仲裁、单调前缀计数器、`OnDisconnectedAsync` 清锁广播）+ 快照上传/下载 HTTP endpoint（§10 新成员初始化）。`dotnet build` 验证；新增 HTTP endpoint 后需跑 gen-ts-client 重新生成 TS 客户端
+- [ ] 4.3 **（阻塞上线）前缀复用兜底**：id-allocation.md §7.1——服务器单调分配（4.2 已含）之外，客户端进房时扫存档设 counter 种子（前缀区间内已用最大值 + 1），`collabStore.setIdPrefix` 扩展种子参数 + 单测。**解决前不能上线**
+- [ ] 4.4 **服务端并发语义测试（必要，方案定为"纯逻辑类 + xUnit"）**：一致性根基在服务端新代码（锁仲裁 first-write-wins、前缀单调分配、断连清锁、房间内有全序），前端单测全部建立在"服务器说话算数"的假设上，必须钉住。实施方式：
   - 房间状态（锁表、前缀计数、成员表）放进**实例化**的 `CollabRoomManager`（DI 单例，测试每次 new 新实例获得隔离），Hub 只做鉴权+转发——避免重蹈 `ChatHub` 静态 `ConcurrentDictionary` 无法隔离的坑
   - 新建 `AARC.WebApi.Test` 项目（xUnit），用 `Task.WhenAll` 并发压测断言：锁竞争恰好一个胜者、前缀跨进出单调不复用（§7.1）、断连后其锁全部释放、op 按到达顺序出队
   - SignalR 全链路集成测试（TestServer+测试鉴权+EF InMemory）**降级为可选**：Hub 层是纯透传，逻辑薄，正确性由步骤五双浏览器 E2E 顺带验证
+- [ ] 4.5 **前端传输层**：core 定义传输接口（join/leave/submitOp/acquireLock/releaseLock/requestSnapshot + 事件回调注册），aarc-web 侧新建 `collabSignalrStore` 实现并注入（连 `/collab`，自动重连模式参照 `signalrStore.ts`）。接线：进房 → `setIdPrefix`（含种子）+ 应用锁表快照 + 记录房主（`OwnerUserId`）；`ReceiveOp` → `applyRemoteSaveDiff`（同步期先缓冲）；`LockAcquired` → `applyRemoteCollabLock`（含败方降级）；`LockReleased` → `applyRemoteUnlock`；`UserLeft` → `clearLocksOfHolder`；`OwnerChanged` → 更新房主状态（我是新房主时启用保存入口并补发心跳）；`SnapshotRequested`（我是房主时）→ 序列化存档 + 记录已应用 Seq 水位 → POST `/collab/snapshot` 上传；设置 `lockRequestHandler`/`lockReleaseHandler` 两个挂钩。**新客初始化**（backend-plan.md §10）：进房后缓冲 ReceiveOp → requestSnapshot → 轮询 GET 快照 → 以快照为底 + SyncOps(水位) + 缓冲按 Seq 去重重放；**同步完成前禁止本地编辑**（diff 基线未建立）
+- [ ] 4.6 **本地 op 提交管线 + 保存权限**：捕获本地变更生成 SaveDiff → `SubmitOp`（返回值即 ack，携带 baseSeq）；维护 `lastSeq`，重连后 `JoinRoom` + `SyncOps` 增量补齐，`Gap=true` 走快照流程（§10，DB 底不可靠，不再是 HTTP 整档重载）；断线期本地编辑缓存、重连后基于新 LatestSeq 重新 diff 提交；重连后清 `myLocks` 并重设前缀种子；离房/关档走 `LeaveRoom` + `clearIdPrefix` + `clearAllLocks`。**保存责任人 = 房主**（backend-plan.md §8 已定稿）：协作者不发心跳、禁用保存入口（按钮/Ctrl+S），`UpdateDataAndDiff` 的心跳校验天然拒绝非房主保存，后端保存路径零改动
+- [ ] 4.7 **验证**：`pnpm --filter aarc-core type-check`、`pnpm --filter aarc-web type-check`、core 单测（mock 传输接口）、`dotnet test AARC.WebApi.Test`
+
+已定稿（原"待明确"）：**持久化责任人 = 房主制**——第一个打开/加入存档的人才能保存，协作者只能把编辑实时传递给房主；房主离开由最早加入者继任（`OwnerChanged`）。详见 `backend-plan.md` §8。
+
+待明确（不阻塞 4.1~4.4）：锁是否需心跳保活（当前设计锁随连接存活、断连即释放，大概率够用）
+
+执行顺序：4.1 → 4.2 →（4.3、4.4 与 4.5/4.6 可并行）→ 4.7
 
 ## 步骤五：收尾验证
 
