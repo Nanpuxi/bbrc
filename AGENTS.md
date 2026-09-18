@@ -3,6 +3,7 @@
 ## 项目结构
 
 - `AARC.WebApi/`：ASP.NET Core 后端（解决方案入口 `AARC.slnx`）
+- `AARC.WebApi.Test/`：WebApi 纯逻辑测试（xUnit，目前覆盖协作房间管理器 `CollabRoomManager` 的并发语义）
 - `AARC.Diff/`、`AARC.Diff.Test/`：C# diff 类库及其测试
 - `aarc-core/`：前端编辑器核心包（见下文"前端 workspace"）
 - `aarc-web/`：前端站点包（见下文"前端 workspace"），内含 `docs/decoupling.md`（core/web 拆分方案与进度）
