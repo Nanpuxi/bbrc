@@ -165,7 +165,7 @@ internal class CollabRoom
 
 | 方法 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `JoinRoom` | `int saveId` | `JoinCollabRoomResult` | 校验存档可见性与编辑权限（见第 8 节）；分配 id 前缀（单调不回收）；首个加入者即房主（唯一保存责任人）；加入 SignalR group、登记成员与连接映射；向其他人广播 `UserJoined`。重复加入幂等（已加入时返回原前缀） |
+| `JoinRoom` | `int saveId` | `JoinCollabRoomResult` | 校验存档编辑权限（见第 8 节）；分配 id 前缀（单调不回收）；首个加入者即房主（唯一保存责任人）；加入 SignalR group、登记成员与连接映射；向其他人广播 `UserJoined`。重复加入幂等（已加入时返回原前缀） |
 | `LeaveRoom` | `int saveId` | — | 移出成员与 group、释放该连接全部锁（广播 `LockReleased`），广播 `UserLeft`；房主离开时按 JoinedAt 最早继任并广播 `OwnerChanged`；空房触发回收 |
 | `SubmitOp` | `int saveId, string opId, string patch, long baseSeq` | `long`（分配的 Seq） | 校验成员身份、patch 大小（`patch.Length`）、提交频率；锁内分配 Seq + 入队；锁外 `OthersInGroup` 广播 `ReceiveOp`。返回值即 ack，发送方据此确认服务器已受理 |
 | `SyncOps` | `int saveId, long afterSeq` | `SyncCollabOpsResult` | 增量补齐。队列中最早 Seq > afterSeq 时正常返回；否则 `Gap = true`。不要求调用者是成员（重连竞态下允许先 Sync 后 Join） |
@@ -196,7 +196,7 @@ internal class CollabRoom
 
 ### 权限
 
-- `JoinRoom`：存档须对当前用户可见（复用 `SaveRepo` 的 `Viewable` 查询，与打开编辑器同一口径）
+- `JoinRoom`：要求对存档有**编辑权限**（与编辑器打开存档同一标准：`AuthGrantCheckService.CheckFor(AuthGrantOn.Save, saveId, (byte)AuthGrantTypeOfSave.Edit, false)`）。Hub 内 `IHttpContextAccessor` 不可用，故该服务提供显式传入身份信息的重载，判定逻辑与 HTTP 场景共用同一份代码
 - `SubmitOp`：要求 `UserType.Member` 及以上（对齐 `ChatHub.SendMessage` 的做法）。协作者是否必须是存档 owner / 心跳持有者——见第 13 节开放问题，v1 建议放宽为"任何可见且 Member 以上的用户"
 - Hub 构造函数注入 `AarcContext` 与 `ILogger`，用户解析方式照抄 `ChatHub.TryGetCurrentUserInfo`
 

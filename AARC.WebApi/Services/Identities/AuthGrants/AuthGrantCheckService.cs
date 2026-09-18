@@ -19,6 +19,17 @@ public class AuthGrantCheckService(
             || (!defaultAllow && res == AuthGrantCheckResult.Default))
             throw new RqEx("拒绝访问");
     }
+    /// <summary>
+    /// 供 SignalR Hub 等非 HTTP 场景使用（此时 IHttpContextAccessor 取不到 HttpContext）：
+    /// 身份信息由调用方显式提供，判定逻辑与 HTTP 场景完全一致
+    /// </summary>
+    public void CheckFor(AuthGrantOn on, int onId, byte type, bool defaultAllow, int uid, bool isAdmin, bool isMember)
+    {
+        var res = CalculateFor(on, [onId], type, uid, isAdmin, isMember).FirstOrDefault();
+        if (res == AuthGrantCheckResult.Reject
+            || (!defaultAllow && res == AuthGrantCheckResult.Default))
+            throw new RqEx("拒绝访问");
+    }
     public List<bool> CalculateFor(AuthGrantOn on, List<int> onIds, byte type, bool defaultAllow)
     {
         return CalculateFor(on, onIds, type)
@@ -33,9 +44,6 @@ public class AuthGrantCheckService(
     }
     public List<AuthGrantCheckResult> CalculateFor(AuthGrantOn on, List<int> onIds, byte type)
     {
-        var isSaveEditing = 
-            on == AuthGrantOn.Save 
-            && type == (byte)AuthGrantTypeOfSave.Edit;
         // 先从 HttpUserIdProvider 安全读取 uid（未登录时为 0）
         int uid = userIdProvider.UserIdLazy.Value;
         bool isAdmin = false;
@@ -46,6 +54,14 @@ public class AuthGrantCheckService(
             isAdmin = userInfoService.IsAdmin;
             isMember = userInfoService.IsMember;
         }
+        return CalculateFor(on, onIds, type, uid, isAdmin, isMember);
+    }
+    /// 核心计算：身份信息显式传入（HTTP 场景由上方重载从 HttpContext 读取后委托到这里）
+    public List<AuthGrantCheckResult> CalculateFor(AuthGrantOn on, List<int> onIds, byte type, int uid, bool isAdmin, bool isMember)
+    {
+        var isSaveEditing = 
+            on == AuthGrantOn.Save 
+            && type == (byte)AuthGrantTypeOfSave.Edit;
 
         // 如果是管理员，且不是“存档编辑”，直接allow所有
         if (isAdmin && !isSaveEditing)

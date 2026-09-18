@@ -63,7 +63,7 @@
 子步骤：
 
 - [x] 4.1 **协议定稿**：修订 `backend-plan.md` §5/§6/§7——新增 `AcquireLock`/`ReleaseLock`（房间锁内 first-write-wins 仲裁）、`LockAcquired`/`LockReleased` 事件、`JoinCollabRoomResult` 加 `IdPrefix` + 锁表快照、断连清锁并广播
-- [ ] 4.2 **后端实现**：按 `backend-plan.md` §12 实现步骤 + 锁扩展（房间锁表与仲裁、单调前缀计数器、`OnDisconnectedAsync` 清锁广播）+ 快照上传/下载 HTTP endpoint（§10 新成员初始化）。`dotnet build` 验证；新增 HTTP endpoint 后需跑 gen-ts-client 重新生成 TS 客户端
+- [x] 4.2 **后端实现**：按 `backend-plan.md` §12 实现步骤 + 锁扩展（房间锁表与仲裁、单调前缀计数器、`OnDisconnectedAsync` 清锁广播）+ 快照上传/下载 HTTP endpoint（§10 新成员初始化）。`dotnet build` 验证；新增 HTTP endpoint 后需跑 gen-ts-client 重新生成 TS 客户端
 - [ ] 4.3 **（阻塞上线）前缀复用兜底**：id-allocation.md §7.1——服务器单调分配（4.2 已含）之外，客户端进房时扫存档设 counter 种子（前缀区间内已用最大值 + 1），`collabStore.setIdPrefix` 扩展种子参数 + 单测。**解决前不能上线**
 - [ ] 4.4 **服务端并发语义测试（必要，方案定为"纯逻辑类 + xUnit"）**：一致性根基在服务端新代码（锁仲裁 first-write-wins、前缀单调分配、断连清锁、房间内有全序），前端单测全部建立在"服务器说话算数"的假设上，必须钉住。实施方式：
   - 房间状态（锁表、前缀计数、成员表）放进**实例化**的 `CollabRoomManager`（DI 单例，测试每次 new 新实例获得隔离），Hub 只做鉴权+转发——避免重蹈 `ChatHub` 静态 `ConcurrentDictionary` 无法隔离的坑

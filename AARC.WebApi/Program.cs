@@ -4,6 +4,7 @@ using AARC.WebApi.Repos;
 using AARC.WebApi.Services.App;
 using AARC.WebApi.Services.App.Logging;
 using AARC.WebApi.Services.Chat;
+using AARC.WebApi.Services.Collab;
 using AARC.WebApi.Services.Files;
 using AARC.WebApi.Services.Identities;
 using AARC.WebApi.Services.Saves;
@@ -33,10 +34,15 @@ try
     builder.Services.AddFilesServices();
     //添加存档处理服务
     builder.Services.AddSavesServices();
+    //添加协作房间服务
+    builder.Services.AddCollabServices(c);
     //添加身份有关服务
     builder.Services.AddIdentitiesServices();
-    //添加 SignalR 实时通信服务
-    builder.Services.AddSignalR();
+    //添加 SignalR 实时通信服务（调大消息上限以容纳协作 patch，默认 32KB 放不下 256KB 上限的 patch）
+    builder.Services.AddSignalR(o =>
+    {
+        o.MaximumReceiveMessageSize = 512 * 1024;
+    });
     
     var app = builder.Build();
     if (app.Environment.IsDevelopment())
@@ -56,6 +62,7 @@ try
     app.UseResponseCompression();
     app.MapControllers();
     app.MapHub<ChatHub>("/chat");
+    app.MapHub<CollabHub>("/collab");
     app.MapF3SsoAudienceEndpoints();
 
     Log.Information("AARC启动成功=============================================");
