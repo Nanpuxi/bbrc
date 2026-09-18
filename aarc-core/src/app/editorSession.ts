@@ -66,6 +66,25 @@ export function disposeEditor(): void {
 }
 
 /**
+ * 协作快照整档装填（collabSession 新客初始化 / Gap 重建用）：
+ * 以房主快照为底替换当前存档——normalize → 重建派生态 → undo 基线重建。
+ * 与 loadSaveIntoEditor 的差异：跳过数据源自动更新与图标预加载
+ * （快照来自已在编辑中的房主，数据源合并结果已含在其内；图标随渲染懒加载），
+ * 也不触碰 visitorMode 等宿主层装配。
+ */
+export function reloadSaveFromSnapshot(raw: unknown): void {
+    const saveStore = useSaveStore()
+    const resetterStore = useResetterStore()
+    const undoStore = useUndoStore()
+    saveStore.save = normalizeSave(raw)
+    resetterStore.resetDerivedStores()
+    saveStore.ensureLinesOrdered()
+    // undo 基线：整档替换后历史不可信，重建基线
+    undoStore.clear()
+    undoStore.push(saveStore.save)
+}
+
+/**
  * 保存前的 core 侧处理：配置写回存档 + 站名坐标截断，返回可序列化的 Save。
  * 压缩/序列化与上传仍由宿主负责。
  */

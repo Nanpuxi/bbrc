@@ -182,6 +182,9 @@ export const useApiStore = defineStore('api', () => {
     const saveComment = w(new api.SaveCommentClient(baseUrl, instance))
     const userFavorite = w(new api.UserFavoriteClient(baseUrl, instance))
     const saveSvg = w(new api.SaveSvgClient(baseUrl, instance))
+    // 协作快照直传不用 w() 包装：成员轮询时 404（快照未就绪）属正常流程，
+    // 不能弹窗/转圈/吞错误；404→null 等错误分类由 collabSignalrStore 自行处理
+    const collab = new api.CollabClient(baseUrl, instance)
 
     return {
         abortAll,
@@ -200,6 +203,7 @@ export const useApiStore = defineStore('api', () => {
         saveFolder,
         saveComment,
         userFavorite,
-        saveSvg
+        saveSvg,
+        collab
     }
 })

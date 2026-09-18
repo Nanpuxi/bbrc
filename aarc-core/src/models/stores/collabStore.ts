@@ -53,6 +53,18 @@ export const useCollabStore = defineStore('collab', () => {
         idPrefix.value = prefix
         idCounter.value = seed
     }
+    /**
+     * 同前缀重设种子（重连场景）：计数器只增不减。
+     * 已删除元素的 id 不会出现在扫描结果里，若允许计数器回退就会复用这些 id，
+     * 而它们仍可能被 undo 历史/在途 op 引用
+     */
+    function reseedIdCounter(seed:number){
+        if(idPrefix.value === null)
+            throw Error('尚未设置协作id前缀')
+        if(!Number.isInteger(seed) || seed < 0 || seed > collabIdCounterCap)
+            throw Error('非法的协作id计数种子：' + seed)
+        idCounter.value = Math.max(idCounter.value, seed)
+    }
     function clearIdPrefix(){
         idPrefix.value = null
         idCounter.value = 0
@@ -66,5 +78,5 @@ export const useCollabStore = defineStore('collab', () => {
             throw Error('协作id计数耗尽，需要向服务器申请新前缀')
         return -(p * collabIdCounterCap + idCounter.value++)
     }
-    return { idPrefix, setIdPrefix, clearIdPrefix, nextCollabId }
+    return { idPrefix, setIdPrefix, reseedIdCounter, clearIdPrefix, nextCollabId }
 })

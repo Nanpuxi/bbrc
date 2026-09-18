@@ -8,6 +8,7 @@ import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
 import { initCoreHostServices } from 'aarc-core/app/hostServices';
+import { initWebCollabTransport } from './app/com/collabSignalrStore';
 import { useRouter } from 'vue-router';
 import { aboutName } from './pages/identities/routes/routesNames';
 import { forkAarcName } from './pages/etc/routes/routesNames';
@@ -38,6 +39,7 @@ onMounted(()=>{
             forkAarc: router.resolve({ name: forkAarcName }).href
         }
     })
+    initWebCollabTransport()
 })
 </script>
 

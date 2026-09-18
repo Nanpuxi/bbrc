@@ -123,6 +123,23 @@ describe('collabStore 会话前缀 id 分配', () => {
         expect(() => collabStore.setIdPrefix(1, collabIdCounterCap + 1)).toThrow()
     })
 
+    it('reseedIdCounter 只增不减（重连场景防复用已删除元素的 id）', () => {
+        const collabStore = useCollabStore()
+        collabStore.setIdPrefix(1, 10)
+        collabStore.reseedIdCounter(5)   // 小于当前计数：不回退
+        expect(collabStore.nextCollabId()).toBe(-(collabIdCounterCap + 10))
+        collabStore.reseedIdCounter(20)  // 大于当前计数：前进
+        expect(collabStore.nextCollabId()).toBe(-(collabIdCounterCap + 20))
+    })
+
+    it('reseedIdCounter 未设前缀或非法种子时抛错', () => {
+        const collabStore = useCollabStore()
+        expect(() => collabStore.reseedIdCounter(1)).toThrow()
+        collabStore.setIdPrefix(1)
+        expect(() => collabStore.reseedIdCounter(-1)).toThrow()
+        expect(() => collabStore.reseedIdCounter(collabIdCounterCap + 1)).toThrow()
+    })
+
     it('种子等于区间容量时立即耗尽（前缀区间已满，需换前缀）', () => {
         const collabStore = useCollabStore()
         collabStore.setIdPrefix(1, collabIdCounterCap)
