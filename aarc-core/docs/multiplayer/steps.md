@@ -13,6 +13,7 @@
 - [x] 协作用 diff 生成/应用（`src/models/save/saveDiff.ts`，自定义应用导向格式）+ 测试
 - [x] 步骤一：undo 栈防污染（au-undo-redo@1.1.0 `syncBaseline`）
 - [x] 步骤二：纯数据刷新路径 + 远程 op 应用管线（`remoteOpApplier.applyRemoteSaveDiff`）
+- [x] 步骤三：对象锁（`collabLockStore` + envStore/selectionStore 挂钩 + 败方降级 + 红叉渲染）
 
 ## 步骤一：undo 栈防污染（已完成）
 
@@ -39,20 +40,28 @@
 
 待后续步骤处理：激活对象被远程 patch 删除/修改时的防御（步骤三）、渲染触发依赖 refreshBlocks 的 blocksReformHandler（undo 路径同款机制，已够用）。
 
-## 步骤三：激活对象防御 + 对象锁落地
+## 步骤三：激活对象防御 + 对象锁落地（已完成）
 
-按 `object-locking.md` 结论实现：
+已实现（测试：`src/tests/unit/store/collabLockStore.test.ts`、`src/tests/unit/collab/lockApplier.test.ts`、`src/tests/unit/collab/remoteOpApplier.test.ts` 防御用例、`src/tests/unit/cvs/lockCvsWorker.test.ts`）：
 
-- 第一步（点击选中）后广播 lock；第三步（点击他处/操作完成，即 `mainCvsDispatcher.ts` 中 undo push 的提交边界）广播 unlock + 新状态
-- 锁覆盖位置、dir、sta 变化与删除
-- 试图操作被他人锁定的对象时，自动解除选中
-- 本地三步流程期间，激活对象被远程 patch 删除/修改时的防御（解锁 + 解除选中 + 刷新）
+- `src/models/stores/collabLockStore.ts`：锁表。锁键带类型前缀（`pt:5`/`line:3`/`tag:7`）；乐观加锁（`acquireMine` 立即视为持有，被他人持有时失败）；`releaseMineExcept(keep)` 统一释放咽喉；传输层挂钩 `lockRequestHandler`/`lockReleaseHandler`（步骤四接线，未设置时纯本地行为）
+- 激活拦截（envStore `pureClickHandler` 四个命中分支）：命中他人锁定的对象视同点中空白（抽出的 `blankClickHandler` 闭包）；激活成功即乐观加锁；站名拖动的车站团转移时锁跟随转移
+- 释放挂钩：`cancelActive`、删除路径（`delActivePt`/`delActiveTextTag`/丢弃区）、选区清空都汇入 `releaseStaleMyLocks`（保留集 = 激活 ∪ 选中）
+- 多选（selectionStore）：brush/applyGroups 过滤被他人锁定的对象，进入选区即加锁、离开即释放
+- 败方降级（`models/collab/lockApplier.ts` 的 `applyRemoteCollabLock`）：他人获得我激活/选中对象的锁时，**先把对象恢复为加锁时登记的快照**（`acquireMine(key, obj)` 深拷贝存于 collabLockStore，正常释放时随锁丢弃），再取消激活 + 移出选区。恢复后 save 与 undo 基线一致、下一次 diff 为空，半截改动零网络痕迹；对象已被删除时跳过恢复；无快照（兼容路径）时退回保留改动 + LWW 兜底
+- 防御（`remoteOpApplier.dropStaleLocalHolds`）：远程 patch 删除本地激活对象 → 结束编辑+取消激活；删除选中对象 → 移出选区；指向已删除对象的他人锁 → 清理。激活对象被远程修改（未删除）时保留本地编辑（v1 策略）
+- 红叉渲染（`cvs/workers/lockCvsWorker.ts`）：被他人锁定的对象在 active 图层画红色 ×（白边垫底；点按 ptSize 缩放，文本标签优先用渲染登记的包围盒、否则锚点固定大小，线取点质心）。画在 active 图层是因 Cvs.vue 的 50ms 重绘循环使锁变化无需触发主画布渲染；`noNeedActiveCvs` 已加入 `hasOtherLocks` 条件
 
 ## 步骤四：传输层
 
 - 定义 WS 消息协议：hello（分配 id 前缀）、lock/unlock、op（SaveDiff 透传）等
 - `collabStore` 已有前缀字段，接入服务器分发
 - 后端按 `backend-plan.md` 做透传，不解析不保存
+- **（阻塞上线）前缀复用问题**：同一前缀被重复分配且其旧负 id 仍在存档中时会撞号，须实现 id-allocation.md §7.1 的修复（服务器单调分配 + 客户端扫存档设 counter 种子兜底），**解决前不能上线**
+- **服务端并发语义测试（必要，方案定为"纯逻辑类 + xUnit"）**：一致性根基在服务端新代码（锁仲裁 first-write-wins、前缀单调分配、断连清锁、房间内有全序），前端单测全部建立在"服务器说话算数"的假设上，必须钉住。实施方式：
+  - 房间状态（锁表、前缀计数、成员表）放进**实例化**的 `CollabRoomManager`（DI 单例，测试每次 new 新实例获得隔离），Hub 只做鉴权+转发——避免重蹈 `ChatHub` 静态 `ConcurrentDictionary` 无法隔离的坑
+  - 新建 `AARC.WebApi.Test` 项目（xUnit），用 `Task.WhenAll` 并发压测断言：锁竞争恰好一个胜者、前缀跨进出单调不复用（§7.1）、断连后其锁全部释放、op 按到达顺序出队
+  - SignalR 全链路集成测试（TestServer+测试鉴权+EF InMemory）**降级为可选**：Hub 层是纯透传，逻辑薄，正确性由步骤五双浏览器 E2E 顺带验证
 
 ## 步骤五：收尾验证
 

@@ -10,6 +10,7 @@ import { coordAdd, coordSub } from "aarc-core/utils/coordUtils/coordMath";
 import { isFocusingInput } from "aarc-core/utils/domUtils/focusingInput";
 import { useCvsFrameStore } from "./cvsFrameStore";
 import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
+import { collabLockKeyOf, useCollabLockStore } from "./collabLockStore";
 
 type SelectionTarget = ControlPoint|TextTag
 export const useSelectionStore = defineStore('selection', ()=>{
@@ -24,6 +25,21 @@ export const useSelectionStore = defineStore('selection', ()=>{
     const saveStore = useSaveStore()
     const { save } = storeToRefs(saveStore)
     const { enumerateTextTagRects } = useTextTagRectStore()
+    const collabLockStore = useCollabLockStore()
+
+    //协作锁：被他人锁定的对象不进选区（否则 draggingCommit 会连带移动它们）；
+    //进入选区的对象乐观加锁，离开选区（含清空）时释放
+    function trySelectWithLock(t: SelectionTarget){
+        const key = collabLockKeyOf(t)
+        if(collabLockStore.isLockedByOther(key))
+            return
+        selected.value.add(t)
+        collabLockStore.acquireMine(key, t)
+    }
+    function deselectWithLock(t: SelectionTarget){
+        selected.value.delete(t)
+        collabLockStore.releaseMine(collabLockKeyOf(t))
+    }
     
     function getBrushRadius(){
         return useCvsFrameStore().getViewRectBiggerSideLength() / 10 * useEditorLocalConfigStore().selectionSize
@@ -36,9 +52,9 @@ export const useSelectionStore = defineStore('selection', ()=>{
         for(const p of save.value?.points ?? []){
             if(coordDistSqLessThan(coord, p.pos, radiusSq)){
                 if(mode.value == 'add')
-                    selected.value.add(p)
+                    trySelectWithLock(p)
                 else if(mode.value == 'sub')
-                    selected.value.delete(p)
+                    deselectWithLock(p)
             }
         }
         enumerateTextTagRects((id, item)=>{
@@ -46,9 +62,9 @@ export const useSelectionStore = defineStore('selection', ()=>{
                 const t = saveStore.getTextTagById(id)
                 if(!t) return
                 if(mode.value == 'add')
-                    selected.value.add(t)
+                    trySelectWithLock(t)
                 else if(mode.value == 'sub')
-                    selected.value.delete(t)
+                    deselectWithLock(t)
             }
         })
     }
@@ -62,12 +78,12 @@ export const useSelectionStore = defineStore('selection', ()=>{
             for(const id of g.ptIds){
                 const pt = saveStore.getPtById(id)
                 if(pt)
-                    selected.value.add(pt)
+                    trySelectWithLock(pt)
             }
             for(const id of g.tagIds){
                 const tag = saveStore.getTextTagById(id)
                 if(tag)
-                    selected.value.add(tag)
+                    trySelectWithLock(tag)
             }
         }
     }
@@ -161,6 +177,7 @@ export const useSelectionStore = defineStore('selection', ()=>{
     }
     function clear(){
         disableForTouchScreen()
+        selected.value.forEach(s=>collabLockStore.releaseMine(collabLockKeyOf(s)))
         selected.value.clear()
     }
 

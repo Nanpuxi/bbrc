@@ -31,6 +31,7 @@ import { useOptionsOpenerStore } from "./utils/optionsOpenerStore";
 import { useLineFocusorStore } from "./utils/lineFocusorStore";
 import { useLineStateStore } from "./saveDerived/state/lineStateStore";
 import { useLineCreation } from "./composables/lineCreation";
+import { collabLockKey, collabLockKeyOf, useCollabLockStore } from "./collabLockStore";
 
 export const useEnvStore = defineStore('env', ()=>{
     const saveStore = useSaveStore();
@@ -82,6 +83,7 @@ export const useEnvStore = defineStore('env', ()=>{
 
     const optionsOpenerStore = useOptionsOpenerStore()
     const lineFocusorStore = useLineFocusorStore()
+    const collabLockStore = useCollabLockStore()
     const deepClone = rfdc()
     function init(){
         if(!cvsCont.value || !cvsFrame.value)
@@ -115,6 +117,19 @@ export const useEnvStore = defineStore('env', ()=>{
     
     const somethingActive = computed<boolean>(()=>{
         return !!activePt.value || !!activeLine.value || !!activeTextTag.value})
+    /** 当前仍被本地持有（激活或选中）的对象对应的协作锁键集合 */
+    function currentHeldLockKeys():Set<string>{
+        const keep = new Set<string>()
+        if(activePt.value) keep.add(collabLockKeyOf(activePt.value))
+        if(activeLine.value) keep.add(collabLockKeyOf(activeLine.value))
+        if(activeTextTag.value) keep.add(collabLockKeyOf(activeTextTag.value))
+        selectionStore.selected.forEach(s=>keep.add(collabLockKeyOf(s)))
+        return keep
+    }
+    /** 释放本地不再持有的协作锁（激活结束、删除、选区清空等路径的统一收尾） */
+    function releaseStaleMyLocks(){
+        collabLockStore.releaseMineExcept(currentHeldLockKeys())
+    }
     function cancelActive(){
         activePt.value = undefined
         activeLine.value = undefined
@@ -123,6 +138,7 @@ export const useEnvStore = defineStore('env', ()=>{
         movedPoint.value = false
         movedTextTag.value = false
         setOpsPos(false)
+        releaseStaleMyLocks()
     }
     function endEveryEditing(options?:{
         exceptName?:boolean,
@@ -238,14 +254,36 @@ export const useEnvStore = defineStore('env', ()=>{
         //清除snap可视化线条
         snapStore.snapLines = []
 
+        //点中空白位置的收尾（也用于“点中被他人锁定的对象，视同点中空白”）
+        const blankClickHandler = ()=>{
+            setOpsPos(false)
+            activePtNameSnapped.value = 'no'
+            endEveryEditing()
+            //根据本地配置，真实点击空白处可退出多选模式（noDetect的“视为点击空白处”不触发）
+            if(!noDetect){
+                const blankClick = editorLocalConfigStore.blankClickBehavior
+                if(blankClick === 'exitAlways'
+                    || (blankClick === 'exitWhenGrouped' && selectionStore.matchedSelectionGroup)){
+                    selectionStore.selected.clear()
+                    releaseStaleMyLocks()
+                }
+            }
+        }
+
         if(!noDetect){
             //判断是否在站名上
             const staName = onStaName(coord, true)
+            if(staName && collabLockStore.isLockedByOther(collabLockKey('pt', staName.id))){
+                //被他人锁定：视同点中空白，不再命中其下方的对象
+                blankClickHandler()
+                return
+            }
             if(staName){
                 //点到站名上了
                 endEveryEditing({exceptName:true})
                 activePt.value = saveStore.getPtById(staName.id)
                 activePtType.value = 'name'
+                collabLockStore.acquireMine(collabLockKey('pt', staName.id), activePt.value)
                 applySelectionGroupsOf(staName.id)
                 if(isRightBtnOnly){
                     nameEditStore.startEditing(staName.id, true)
@@ -275,8 +313,13 @@ export const useEnvStore = defineStore('env', ()=>{
 
             //判断是否在文本标签上
             const textTagMatch = onTextTag(coord);
+            if(textTagMatch && collabLockStore.isLockedByOther(collabLockKey('tag', textTagMatch.id))){
+                blankClickHandler()
+                return
+            }
             if(textTagMatch){
                 activeTextTag.value = textTagMatch
+                collabLockStore.acquireMine(collabLockKey('tag', textTagMatch.id), textTagMatch)
                 applySelectionGroupsOf(textTagMatch.id)
                 setOpsPos(false)
                 endEveryEditing()
@@ -287,11 +330,16 @@ export const useEnvStore = defineStore('env', ()=>{
             //判断是否在点上
             const pt = onPt(coord, true)
             const activePtChanged = activePtIdJustNow !== pt?.id
+            if(pt && collabLockStore.isLockedByOther(collabLockKey('pt', pt.id))){
+                blankClickHandler()
+                return
+            }
             if(pt){
                 //点到点上了
                 endEveryEditing({exceptName:true})
                 activePt.value = pt
                 activePtType.value = 'body'
+                collabLockStore.acquireMine(collabLockKey('pt', pt.id), pt)
                 applySelectionGroupsOf(pt.id)
                 cursorPos.value = [...pt.pos]
                 if(isRightBtnOnly){
@@ -334,7 +382,13 @@ export const useEnvStore = defineStore('env', ()=>{
             if(lineMatches && lineMatches.length>0){
                 //点到线上了
                 const lineMatch = lineMatches[0]
+                if(collabLockStore.isLockedByOther(collabLockKey('line', lineMatch.lineId))){
+                    blankClickHandler()
+                    return
+                }
                 activeLine.value = saveStore.getLineById(lineMatch.lineId)
+                if(activeLine.value)
+                    collabLockStore.acquireMine(collabLockKey('line', activeLine.value.id), activeLine.value)
                 cursorPos.value = [...lineMatch.alignedPos]
                 cursorOnLineAfterPtIdx.value = lineMatch.afterPtIdx
                 cursorDir.value = lineMatch.dir
@@ -349,16 +403,7 @@ export const useEnvStore = defineStore('env', ()=>{
             }
         }
         //点击空白位置
-        setOpsPos(false)
-        activePtNameSnapped.value = 'no'
-        endEveryEditing()
-        //根据本地配置，真实点击空白处可退出多选模式（noDetect的“视为点击空白处”不触发）
-        if(!noDetect){
-            const blankClick = editorLocalConfigStore.blankClickBehavior
-            if(blankClick === 'exitAlways'
-                || (blankClick === 'exitWhenGrouped' && selectionStore.matchedSelectionGroup))
-                selectionStore.selected.clear()
-        }
+        blankClickHandler()
     }
     let oneFingerForSureTimer = 0
     let oneFingerBrushed = false
@@ -485,6 +530,10 @@ export const useEnvStore = defineStore('env', ()=>{
                             setStaNameRect(pt.id, undefined)
                             nameEditStore.targetPtId = transferRes.id
                             activePt.value = transferRes
+                            //协作锁跟随激活对象转移（对方锁定该点时 acquireMine 失败，
+                            //拖动中途无法回退，按 best-effort 处理，收尾提交时按 LWW 覆盖）
+                            collabLockStore.acquireMine(collabLockKeyOf(transferRes), transferRes)
+                            releaseStaleMyLocks()
                             pt = transferRes
                         }
                         const nameGlobalPos = coordSub(coord, activePtNameGrabbedAt.value)
@@ -563,6 +612,7 @@ export const useEnvStore = defineStore('env', ()=>{
                     activePt.value = undefined
                 }
             }
+            releaseStaleMyLocks()
             rerender.value()
         }
         discardAreaStore.resetDiscarding()
@@ -807,6 +857,7 @@ export const useEnvStore = defineStore('env', ()=>{
         activePt.value = undefined
         activeLine.value = undefined
         cursorPos.value = undefined
+        releaseStaleMyLocks()
         pointlessLineScan('rerenderIfNeeded')
         if(rerenderAfterDone){
             rerender.value()
@@ -932,6 +983,7 @@ export const useEnvStore = defineStore('env', ()=>{
             textTagEditStore.endEditing()
             saveStore.removeTextTag(activeTextTag.value.id)
             activeTextTag.value = undefined
+            releaseStaleMyLocks()
             if(rerenderAfterDone){
                 rerender.value()
             }

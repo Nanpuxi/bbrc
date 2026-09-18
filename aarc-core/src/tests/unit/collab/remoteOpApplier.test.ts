@@ -8,12 +8,13 @@ import { useUndoStore } from 'aarc-core/models/stores/utils/undoStore'
 import { useNamePosMemoryStore } from 'aarc-core/models/stores/utils/namePosMemoryStore'
 import { applyRemoteSaveDiff } from 'aarc-core/models/collab/remoteOpApplier'
 import { diffSave, SaveDiff } from 'aarc-core/models/save/saveDiff'
+import { ensureDomStub } from '../../helpers/domStub'
+import { useEnvStore } from 'aarc-core/models/stores/envStore'
+import { useSelectionStore } from 'aarc-core/models/stores/selectionStore'
+import { useCollabLockStore } from 'aarc-core/models/stores/collabLockStore'
 
-// selectionStore（undoStore 的依赖）在 setup 时注册全局键盘监听，
-// node 测试环境提供最小 document 桩
-if (typeof document === 'undefined') {
-    (globalThis as Record<string, unknown>).document = { addEventListener: () => {} }
-}
+// selectionStore（undoStore/envStore 的依赖）在 setup 时注册全局键盘监听，需 document 桩
+ensureDomStub()
 
 describe('saveDiffToSavePatch', () => {
     it('diff 未触及 points/lines 时返回空对象（preserve）', () => {
@@ -171,5 +172,70 @@ describe('applyRemoteSaveDiff', () => {
     it('save 未加载时应用远程 diff 不报错', async () => {
         useSaveStore().save = undefined
         await expect(applyRemoteSaveDiff({ idIncre: { $set: 1 } })).resolves.toBeUndefined()
+    })
+
+    it('远程删除本地激活的点：自动取消激活', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1), { ...createPoint(2), pos: [100, 100] }]
+        })
+        useSaveStore().save = save
+        const envStore = useEnvStore()
+        envStore.activePt = save.points[1]
+
+        const next = structuredClone(save)
+        next.points = next.points.filter(p => p.id !== 2)
+        await applyRemoteSaveDiff(diffSave(save, next)!)
+
+        expect(save.points).toHaveLength(1)
+        expect(envStore.activePt).toBeUndefined()
+    })
+
+    it('远程删除本地选区中的点：自动移出选区', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1), { ...createPoint(2), pos: [100, 100] }]
+        })
+        useSaveStore().save = save
+        const selectionStore = useSelectionStore()
+        selectionStore.selected.add(save.points[0])
+        selectionStore.selected.add(save.points[1])
+
+        const next = structuredClone(save)
+        next.points = next.points.filter(p => p.id !== 2)
+        await applyRemoteSaveDiff(diffSave(save, next)!)
+
+        expect(selectionStore.selected.size).toBe(1)
+        expect([...selectionStore.selected][0].id).toBe(1)
+    })
+
+    it('远程删除被他人锁定的对象：锁被清理（不残留红叉）', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1), { ...createPoint(2), pos: [100, 100] }]
+        })
+        useSaveStore().save = save
+        const lockStore = useCollabLockStore()
+        lockStore.applyRemoteLock('pt:2', 'userB')
+
+        const next = structuredClone(save)
+        next.points = next.points.filter(p => p.id !== 2)
+        await applyRemoteSaveDiff(diffSave(save, next)!)
+
+        expect(lockStore.isLockedByOther('pt:2')).toBe(false)
+    })
+
+    it('远程修改（未删除）本地激活的点：保留本地激活状态', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1), { ...createPoint(2), pos: [100, 100] }]
+        })
+        useSaveStore().save = save
+        const envStore = useEnvStore()
+        envStore.activePt = save.points[1]
+
+        const next = structuredClone(save)
+        next.points[1].pos = [300, 300]
+        await applyRemoteSaveDiff(diffSave(save, next)!)
+
+        // v1 策略：不打断本地编辑，提交时按服务器全序 LWW 覆盖
+        expect(envStore.activePt?.id).toBe(2)
+        expect(save.points[1].pos).toEqual([300, 300])
     })
 })
