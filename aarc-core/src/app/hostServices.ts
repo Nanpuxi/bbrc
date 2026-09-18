@@ -2,7 +2,7 @@ import { PopCallback } from "aarc-core/components/common/types/pop";
 import { WaitCallback } from "aarc-core/components/common/types/wait";
 import { CloudSvgUploader, initCloudSvgUploader } from "aarc-core/models/save/cloudSvgOps";
 import { PinyinConvertProvider, initPinyinConvertProvider } from "aarc-core/components/composables/usePinyinConvert";
-import { SaveInfoProvider, initSaveInfoProvider } from "aarc-core/components/sidebars/export/composables/useImageExport";
+import { SaveInfoProvider, initSaveInfoProvider, FileSaver, initFileSaver } from "aarc-core/components/sidebars/export/composables/useImageExport";
 import { SiteLinks, initSiteLinks } from "aarc-core/app/siteLinks";
 import { RouteGuardRegistrar, initRouteGuardRegistrar } from "aarc-core/utils/eventUtils/preventLeavingUnsaved";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
@@ -17,12 +17,14 @@ export interface CoreHostServices {
     pop: PopCallback
     /** 等待遮罩 */
     wait: WaitCallback
-    /** 存档缩略 SVG 云上传 */
-    cloudSvgUploader: CloudSvgUploader
-    /** 拼音转换 */
-    pinyinConvert: PinyinConvertProvider
-    /** 存档信息读取（导出图片用） */
-    saveInfo: SaveInfoProvider
+    /** 存档缩略 SVG 云上传；不注入则"云端SVG"配置区隐藏 */
+    cloudSvgUploader?: CloudSvgUploader
+    /** 拼音转换；不注入则转换按钮与"站名拼音转换"配置区隐藏 */
+    pinyinConvert?: PinyinConvertProvider
+    /** 存档信息读取（导出图片用）；不注入则导出文件名退化为存档id */
+    saveInfo?: SaveInfoProvider
+    /** 文件保存（导出落盘）；不注入则使用浏览器 <a download> 下载兜底（tauri 等 webview 下载不可靠的宿主应注入） */
+    fileSaver?: FileSaver
     /** 站点内链接；不注入则对应链接隐藏 */
     siteLinks?: SiteLinks
     /** “未保存离开”路由守卫；无路由的宿主可不注入（window.onbeforeunload 部分由 core 自理） */
@@ -35,9 +37,14 @@ export function initCoreHostServices(services: CoreHostServices) {
         popCallback: services.pop,
         waitCallback: services.wait
     })
-    initCloudSvgUploader(services.cloudSvgUploader)
-    initPinyinConvertProvider(services.pinyinConvert)
-    initSaveInfoProvider(services.saveInfo)
+    if (services.cloudSvgUploader)
+        initCloudSvgUploader(services.cloudSvgUploader)
+    if (services.pinyinConvert)
+        initPinyinConvertProvider(services.pinyinConvert)
+    if (services.saveInfo)
+        initSaveInfoProvider(services.saveInfo)
+    if (services.fileSaver)
+        initFileSaver(services.fileSaver)
     if (services.siteLinks)
         initSiteLinks(services.siteLinks)
     if (services.routeGuardRegistrar)

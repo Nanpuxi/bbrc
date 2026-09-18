@@ -20,7 +20,7 @@ import { useRenderOptionsStore } from 'aarc-core/models/stores/renderOptionsStor
 import ExportEtcConfig from './configs/ExportEtcConfig.vue';
 import ExportTimeConfig from './configs/ExportTimeConfig.vue';
 import Prompt from '../../common/Prompt.vue';
-import { useImageExport } from './composables/useImageExport';
+import { useImageExport, hasFileSaver } from './composables/useImageExport';
 import { useApngExport } from './composables/useApngExport';
 import { useGifExport } from './composables/useGifExport';
 import { useAnimatedExport } from './composables/useAnimatedExport';
@@ -54,6 +54,9 @@ const {
     finishExport,
     setExportFailed
 } = useImageExport()
+
+// 宿主注入了文件保存实现（如 tauri 原生另存为）时，不再需要浏览器下载的兜底提示
+const browserDownloadFallback = !hasFileSaver()
 
 const {
     exporting: apngExporting,
@@ -429,7 +432,7 @@ const showFileFormatPrompt = ref(false)
                     <p v-if="isWindows">Windows 自带相册无法查看 APNG，请右键选择打开方式 Edge 查看。</p>
                 </template>
             </Prompt>
-            <div v-show="exported" class="note">
+            <div v-show="exported" class="note" v-if="browserDownloadFallback">
                 若点击导出后没有开始下载<br />请尝试<a :id="downloadAnchorElementId" class="downloadAnchor">点击此处</a>
             </div>
             <Notice v-show="exporting && !exportFailedMsg" :title="'请等待'" :type="'info'">

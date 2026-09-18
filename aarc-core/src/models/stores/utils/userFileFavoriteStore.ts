@@ -1,9 +1,11 @@
 import { UserFileDto } from "aarc-core/models/types/apiShapes";
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
     const openFavoritesSidebarImpl = ref<()=>void>()
+    /** 宿主是否已注入“打开收藏夹侧栏”实现；未注入时 core 隐藏相关入口 */
+    const hasOpenFavoritesSidebar = computed(()=>!!openFavoritesSidebarImpl.value)
     let openFavoritesSidebarWarned = false
     /** 由宿主注入“打开收藏夹侧栏”的实现（web 在 UserFileFavorites.vue 注册） */
     function initOpenFavoritesSidebar(cb: ()=>void){
@@ -22,6 +24,7 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
     return {
         initOpenFavoritesSidebar,
         openFavoritesSidebar,
+        hasOpenFavoritesSidebar,
         onFavoriteFileSelected
     }
 })

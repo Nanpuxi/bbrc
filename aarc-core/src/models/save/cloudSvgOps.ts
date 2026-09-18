@@ -9,6 +9,11 @@ export function initCloudSvgUploader(u: CloudSvgUploader) {
     uploader = u
 }
 
+/** 宿主是否已注入云端SVG上传实现；未注入时 core 隐藏相关入口 */
+export function hasCloudSvgUploader(): boolean {
+    return !!uploader
+}
+
 export async function renderAndUploadCloudSvg(saveId: number): Promise<boolean> {
     const mainCvsDispatcher = useMainCvsDispatcher()
     try {
