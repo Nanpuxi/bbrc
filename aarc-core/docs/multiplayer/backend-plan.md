@@ -48,7 +48,7 @@ ChatHub 的局限（协作功能需要改进的点）：
 ```
 
 - `CollabHub`（`AARC.WebApi/Services/Collab/CollabHub.cs`）：只负责鉴权、参数校验、调用管理器、广播；无状态
-- `CollabRoomManager`（DI 单例，`AARC.WebApi/Services/Collab/CollabRoomManager.cs`）：持有全部房间状态，负责序号分配、入队、修剪、成员管理、空房回收、**对象锁仲裁（first-write-wins）与 id 前缀租约分发**。**用 DI 单例而非 ChatHub 式 static 字段**，便于后续加单元测试
+- `CollabRoomManager`（DI 单例，独立零依赖类库 `AARC.Collab/CollabRoomManager.cs`；Hub/Controller 胶水层留在 WebApi）：持有全部房间状态，负责序号分配、入队、修剪、成员管理、空房回收、**对象锁仲裁（first-write-wins）与 id 前缀租约分发**。**用 DI 单例而非 ChatHub 式 static 字段**，便于后续加单元测试
 - patch 内容对服务器是**不透明负载**：服务器不解析、不应用、不合并，只做大小校验后原样转发
 
 ## 4. Patch 格式
@@ -74,7 +74,7 @@ ChatHub 的局限（协作功能需要改进的点）：
 ## 5. 数据模型
 
 ```csharp
-// AARC.WebApi/Services/Collab/CollabDtos.cs
+// AARC.Collab/CollabDtos.cs
 
 /// 一次协作操作（服务器分配的 Seq 为房间内全序）
 public class CollabOpDto
@@ -298,8 +298,8 @@ public class CollabSnapshotResult
 
 | # | 动作 | 文件 |
 |---|------|------|
-| 1 | 新建 DTO（第 5 节）+ 快照 DTO（第 10 节） | `AARC.WebApi/Services/Collab/CollabDtos.cs` |
-| 2 | 新建 `CollabRoomManager`：房间表、序号、入队、修剪、成员、空房回收、锁仲裁、前缀分发、快照缓存（第 6、10 节） | `AARC.WebApi/Services/Collab/CollabRoomManager.cs` |
+| 1 | 新建 DTO（第 5 节）+ 快照 DTO（第 10 节） | `AARC.Collab/CollabDtos.cs` |
+| 2 | 新建 `CollabRoomManager`：房间表、序号、入队、修剪、成员、空房回收、锁仲裁、前缀分发、快照缓存（第 6、10 节） | `AARC.Collab/CollabRoomManager.cs` |
 | 3 | 新建 `CollabHub`：7 个方法 + 7 个事件 + 断连清理（含清锁广播、房主继任广播）+ 限流（第 7、11 节） | `AARC.WebApi/Services/Collab/CollabHub.cs` |
 | 4 | 新建 `CollabController`：快照上传/下载 HTTP endpoint（第 10 节） | `AARC.WebApi/Controllers/CollabController.cs` |
 | 5 | 新建 `AddCollabServices()` 扩展并注册单例 | `AARC.WebApi/Services/Collab/CollabServiceCollection.cs`，`Program.cs` |

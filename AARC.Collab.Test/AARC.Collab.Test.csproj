@@ -22,11 +22,10 @@
 
     <ItemGroup>
         <Using Include="Xunit" />
-        <Using Include="AARC.WebApi.Utils.Exceptions.RequestInvalidException" Alias="RqEx" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\AARC.WebApi\AARC.WebApi.csproj" />
+        <ProjectReference Include="..\AARC.Collab\AARC.Collab.csproj" />
     </ItemGroup>
 
 </Project>

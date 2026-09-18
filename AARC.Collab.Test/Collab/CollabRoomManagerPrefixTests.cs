@@ -1,7 +1,7 @@
-using AARC.WebApi.Services.Collab;
+using AARC.Collab;
 using System.Collections.Concurrent;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 /// <summary>
 /// 前缀租约语义（id-allocation.md §7.1）：在房期间唯一、离房/断连回收、回收后可复用
@@ -109,7 +109,7 @@ public class CollabRoomManagerPrefixTests
             TestRooms.Join(mgr, SaveId, u);
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => TestRooms.Join(mgr, SaveId, 11));
+        Assert.Throws<CollabException>(() => TestRooms.Join(mgr, SaveId, 11));
     }
 
     [Fact]
@@ -121,6 +121,6 @@ public class CollabRoomManagerPrefixTests
         TestRooms.Join(mgr, SaveId, 2);
 
         // Act & Assert：无空闲前缀时拒绝加入
-        Assert.Throws<RqEx>(() => TestRooms.Join(mgr, SaveId, 3));
+        Assert.Throws<CollabException>(() => TestRooms.Join(mgr, SaveId, 3));
     }
 }

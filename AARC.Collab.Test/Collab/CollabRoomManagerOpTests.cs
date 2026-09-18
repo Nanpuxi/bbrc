@@ -1,7 +1,7 @@
-using AARC.WebApi.Services.Collab;
+using AARC.Collab;
 using System.Collections.Concurrent;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 public class CollabRoomManagerOpTests
 {
@@ -124,7 +124,7 @@ public class CollabRoomManagerOpTests
         TestRooms.Join(mgr, SaveId, 1);
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => mgr.AppendOp(SaveId, 99, "ghost", "op-x", "{}", 0));
-        Assert.Throws<RqEx>(() => mgr.AppendOp(999, 1, "user1", "op-x", "{}", 0));
+        Assert.Throws<CollabException>(() => mgr.AppendOp(SaveId, 99, "ghost", "op-x", "{}", 0));
+        Assert.Throws<CollabException>(() => mgr.AppendOp(999, 1, "user1", "op-x", "{}", 0));
     }
 }

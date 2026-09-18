@@ -1,7 +1,7 @@
-using AARC.WebApi.Services.Collab;
+using AARC.Collab;
 using System.Collections.Concurrent;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 public class CollabRoomManagerLockTests
 {
@@ -65,8 +65,8 @@ public class CollabRoomManagerLockTests
         TestRooms.Join(mgr, SaveId, 1);
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => mgr.TryAcquireLock(SaveId, 99, "ghost", "conn-99", "pt:1"));
-        Assert.Throws<RqEx>(() => mgr.TryAcquireLock(999, 1, "user1", "conn-1", "pt:1"));
+        Assert.Throws<CollabException>(() => mgr.TryAcquireLock(SaveId, 99, "ghost", "conn-99", "pt:1"));
+        Assert.Throws<CollabException>(() => mgr.TryAcquireLock(999, 1, "user1", "conn-1", "pt:1"));
     }
 
     [Fact]

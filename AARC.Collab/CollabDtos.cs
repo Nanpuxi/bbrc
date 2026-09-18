@@ -1,4 +1,4 @@
-namespace AARC.WebApi.Services.Collab
+namespace AARC.Collab
 {
     /// 一次协作操作（服务器分配的 Seq 为房间内全序）
     public class CollabOpDto

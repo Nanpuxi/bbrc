@@ -1,7 +1,6 @@
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
-namespace AARC.WebApi.Services.Collab
+namespace AARC.Collab
 {
     /// 协作功能限流与容量配置（appsettings.json 的 "Collab" 节可覆盖，默认硬编码）
     public class CollabOptions
@@ -41,9 +40,9 @@ namespace AARC.WebApi.Services.Collab
         private readonly CollabOptions _options;
         public CollabOptions Options => _options;
 
-        public CollabRoomManager(IOptions<CollabOptions> options)
+        public CollabRoomManager(CollabOptions options)
         {
-            _options = options.Value;
+            _options = options;
         }
 
         /// <summary>
@@ -68,7 +67,7 @@ namespace AARC.WebApi.Services.Collab
                     if (!room.MemberIdPrefixes.TryGetValue(userId, out int prefix))
                     {
                         if (room.Members.Count >= _options.MaxRoomMembers)
-                            throw new RqEx("协作房间人数已满");
+                            throw new CollabException("协作房间人数已满");
                         prefix = AllocFreePrefix(room);
                         room.MemberIdPrefixes[userId] = prefix;
                     }
@@ -182,11 +181,11 @@ namespace AARC.WebApi.Services.Collab
         public CollabOpDto AppendOp(int saveId, int userId, string userName, string opId, string patch, long baseSeq)
         {
             if (!_rooms.TryGetValue(saveId, out var room))
-                throw new RqEx("协作房间不存在");
+                throw new CollabException("协作房间不存在");
             lock (room.SyncRoot)
             {
                 if (!room.Members.ContainsKey(userId))
-                    throw new RqEx("尚未加入协作房间");
+                    throw new CollabException("尚未加入协作房间");
                 var op = new CollabOpDto
                 {
                     OpId = opId,
@@ -236,11 +235,11 @@ namespace AARC.WebApi.Services.Collab
         public bool TryAcquireLock(int saveId, int userId, string userName, string connectionId, string key)
         {
             if (!_rooms.TryGetValue(saveId, out var room))
-                throw new RqEx("协作房间不存在");
+                throw new CollabException("协作房间不存在");
             lock (room.SyncRoot)
             {
                 if (!room.Members.ContainsKey(userId))
-                    throw new RqEx("尚未加入协作房间");
+                    throw new CollabException("尚未加入协作房间");
                 if (room.Locks.TryGetValue(key, out var existing))
                     return existing.ConnectionId == connectionId;
                 room.Locks[key] = (userName, connectionId);
@@ -272,11 +271,11 @@ namespace AARC.WebApi.Services.Collab
         public List<string> GetOwnerConnectionIds(int saveId, int userId)
         {
             if (!_rooms.TryGetValue(saveId, out var room))
-                throw new RqEx("协作房间不存在");
+                throw new CollabException("协作房间不存在");
             lock (room.SyncRoot)
             {
                 if (!room.Members.ContainsKey(userId))
-                    throw new RqEx("尚未加入协作房间");
+                    throw new CollabException("尚未加入协作房间");
                 var owner = OwnerOf(room);
                 if (owner is null)
                     return [];
@@ -293,15 +292,15 @@ namespace AARC.WebApi.Services.Collab
         public void UploadSnapshot(int userId, CollabSnapshotUpload upload)
         {
             if (upload.Payload is null || upload.Payload.Length > _options.MaxSnapshotPayloadLength)
-                throw new RqEx("快照过大");
+                throw new CollabException("快照过大");
             if (!_rooms.TryGetValue(upload.SaveId, out var room))
-                throw new RqEx("协作房间不存在");
+                throw new CollabException("协作房间不存在");
             string fromUserName;
             lock (room.SyncRoot)
             {
                 var owner = OwnerOf(room);
                 if (owner is null || owner.UserId != userId)
-                    throw new RqEx("仅当前房主可上传快照");
+                    throw new CollabException("仅当前房主可上传快照");
                 fromUserName = owner.UserName;
             }
             _snapshots[upload.SaveId] = new CollabSnapshotEntry
@@ -319,11 +318,11 @@ namespace AARC.WebApi.Services.Collab
         public CollabSnapshotResult? GetSnapshot(int saveId, int userId)
         {
             if (!_rooms.TryGetValue(saveId, out var room))
-                throw new RqEx("协作房间不存在");
+                throw new CollabException("协作房间不存在");
             lock (room.SyncRoot)
             {
                 if (!room.Members.ContainsKey(userId))
-                    throw new RqEx("仅房间成员可获取快照");
+                    throw new CollabException("仅房间成员可获取快照");
             }
             if (!_snapshots.TryGetValue(saveId, out var snap))
                 return null;
@@ -352,7 +351,7 @@ namespace AARC.WebApi.Services.Collab
                 if (!room.MemberIdPrefixes.ContainsValue(p))
                     return p;
             }
-            throw new RqEx("协作房间 id 前缀已耗尽，请稍后重试");
+            throw new CollabException("协作房间 id 前缀已耗尽，请稍后重试");
         }
 
         // 双阈值修剪：条数超限或头部操作超出时间窗口即从头出队

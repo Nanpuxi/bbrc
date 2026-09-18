@@ -1,6 +1,7 @@
 <Solution>
+  <Project Path="AARC.Collab.Test/AARC.Collab.Test.csproj" />
+  <Project Path="AARC.Collab/AARC.Collab.csproj" />
   <Project Path="AARC.Diff.Test/AARC.Diff.Test.csproj" />
   <Project Path="AARC.Diff/AARC.Diff.csproj" />
-  <Project Path="AARC.WebApi.Test/AARC.WebApi.Test.csproj" />
   <Project Path="AARC.WebApi/AARC.WebApi.csproj" />
 </Solution>

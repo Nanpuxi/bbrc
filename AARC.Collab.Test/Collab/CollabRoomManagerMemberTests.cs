@@ -1,6 +1,6 @@
-using AARC.WebApi.Services.Collab;
+using AARC.Collab;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 public class CollabRoomManagerMemberTests
 {
@@ -109,7 +109,7 @@ public class CollabRoomManagerMemberTests
         // Assert：房间回收；之后 SyncOps 视为全新房间，AppendOp 找不到房间
         Assert.True(res?.RoomDestroyed);
         Assert.Equal(0, mgr.SyncOps(SaveId, 0).LatestSeq);
-        Assert.Throws<RqEx>(() => mgr.AppendOp(SaveId, 1, "user1", "op-1", "{}", 0));
+        Assert.Throws<CollabException>(() => mgr.AppendOp(SaveId, 1, "user1", "op-1", "{}", 0));
     }
 
     [Fact]
@@ -142,6 +142,6 @@ public class CollabRoomManagerMemberTests
         Assert.Contains("conn-1a", conns);
         Assert.Contains("conn-1b", conns);
         // 非成员调用抛错
-        Assert.Throws<RqEx>(() => mgr.GetOwnerConnectionIds(SaveId, 99));
+        Assert.Throws<CollabException>(() => mgr.GetOwnerConnectionIds(SaveId, 99));
     }
 }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -57,6 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AARC.Collab\AARC.Collab.csproj" />
     <ProjectReference Include="..\AARC.Diff\AARC.Diff.csproj" />
   </ItemGroup>
 

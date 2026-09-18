@@ -1,6 +1,6 @@
-using AARC.WebApi.Services.Collab;
+using AARC.Collab;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 public class CollabRoomManagerSnapshotTests
 {
@@ -18,7 +18,7 @@ public class CollabRoomManagerSnapshotTests
         TestRooms.Join(mgr, SaveId, 2);
 
         // Act & Assert：非房主上传被拒
-        Assert.Throws<RqEx>(() => mgr.UploadSnapshot(2, Upload()));
+        Assert.Throws<CollabException>(() => mgr.UploadSnapshot(2, Upload()));
 
         // 房主上传成功，成员可下载
         mgr.UploadSnapshot(1, Upload());
@@ -49,8 +49,8 @@ public class CollabRoomManagerSnapshotTests
         mgr.UploadSnapshot(1, Upload());
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => mgr.GetSnapshot(SaveId, 99));
-        Assert.Throws<RqEx>(() => mgr.GetSnapshot(999, 1));
+        Assert.Throws<CollabException>(() => mgr.GetSnapshot(SaveId, 99));
+        Assert.Throws<CollabException>(() => mgr.GetSnapshot(999, 1));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class CollabRoomManagerSnapshotTests
         TestRooms.Join(mgr, SaveId, 1);
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => mgr.UploadSnapshot(1, Upload(payload: "abcd")));
+        Assert.Throws<CollabException>(() => mgr.UploadSnapshot(1, Upload(payload: "abcd")));
     }
 
     [Fact]
@@ -100,6 +100,6 @@ public class CollabRoomManagerSnapshotTests
         var mgr = TestRooms.NewManager();
 
         // Act & Assert
-        Assert.Throws<RqEx>(() => mgr.UploadSnapshot(1, Upload(saveId: 999)));
+        Assert.Throws<CollabException>(() => mgr.UploadSnapshot(1, Upload(saveId: 999)));
     }
 }

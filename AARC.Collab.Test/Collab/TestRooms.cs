@@ -1,7 +1,6 @@
-using AARC.WebApi.Services.Collab;
-using Microsoft.Extensions.Options;
+using AARC.Collab;
 
-namespace AARC.WebApi.Test.Collab;
+namespace AARC.Collab.Test;
 
 /// <summary>
 /// 每个测试 new 一个全新 CollabRoomManager 实例获得隔离（不依赖 DI 单例）
@@ -12,7 +11,7 @@ internal static class TestRooms
     {
         var options = new CollabOptions();
         configure?.Invoke(options);
-        return new CollabRoomManager(Options.Create(options));
+        return new CollabRoomManager(options);
     }
 
     public static JoinCollabRoomResult Join(CollabRoomManager mgr, int saveId, int userId, string? connectionId = null)

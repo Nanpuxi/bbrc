@@ -1,4 +1,5 @@
-﻿using AARC.WebApi.Utils.Exceptions;
+using AARC.Collab;
+using AARC.WebApi.Utils.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.Net;
@@ -26,6 +27,15 @@ namespace AARC.WebApi.Services.App.ActionFilters
                         Content = rqex.Message,
                         ContentType = Text.Plain,
                         StatusCode = (int)rqex.StatusCode,
+                    };
+                }
+                else if (ex is CollabException cex)
+                {
+                    context.Result = new ContentResult()
+                    {
+                        Content = cex.Message,
+                        ContentType = Text.Plain,
+                        StatusCode = (int)cex.StatusCode,
                     };
                 }
                 else
