@@ -71,6 +71,9 @@ export function normalizeSave(obj:any){
     // 旧存档未记录聊天开关时默认关闭
     if(obj.meta.chatEnabled === undefined)
         obj.meta.chatEnabled = false
+    // 旧存档未记录多人协作开关时默认关闭
+    if(obj.meta.collabEnabled === undefined)
+        obj.meta.collabEnabled = false
     ensureValidCvsSize(obj)
     ensureValidSliceEndpoints(obj)
     removeInvalidSlices(obj)
@@ -94,5 +97,6 @@ function getFreshNewMeta():SaveMetaData{
         textTagIconsVersion: freshNewTextTagIconsVersion,
         patternsVersion: freshNewPatternsVersion,
         chatEnabled: false,
+        collabEnabled: false,
     }
 }

@@ -77,6 +77,7 @@
   - **断线蒙层**：`pages/editors/components/CollabStatusOverlay.vue`（`isInSession && !canEdit` 时全屏盖住画布，z-index 400 低于聊天窗 499，含"离开编辑器"按钮）；离房/关档走 `leave` + `clearIdPrefix` + `clearAllLocks`（会话层 cleanupLocal 统一处理）
   - **远程 op 渲染调度**（`models/collab/remoteRenderScheduler.ts`）：数据应用即时、只有渲染被调度——大存档整帧渲染 100ms+ 且在主线程，每条远程 op 都立即渲染会打断本地操作。规则：画布按住交互中（envStore `moveStartHandler`/`movingHandler` 按住时上报）与距上次主画布渲染不足 `idleMs`（默认 2000ms，可调）时不主动渲染（用户自己的渲染会自然带出远程更新），被抑制的请求合并为一次静止后补渲染（到点重判）；远程渲染同样刷新时间戳，对方持续操作时天然节流到每 idleMs 一帧；快照整档重建走 `renderNow` 无视抑制立即呈现；渲染函数由 mainCvsDispatcher 注入（未注入时静默跳过，node 单测友好）；7 个单测钉住调度行为
 - [ ] 4.7 **验证**：`pnpm --filter aarc-core type-check`、`pnpm --filter aarc-web type-check`、core 单测（mock 传输接口）、`dotnet test AARC.Collab.Test`
+- [x] 4.8 **协作功能开关**（`save.meta.collabEnabled`，旧存档 normalize 默认 false）：编辑器右上角新增 `CollabPanel.vue`（按钮在聊天按钮左侧），仅存档所有者可编辑开关、其他人仅见启用状态；未启用时打开存档不加入协作房间（Occupied 回退协作前的仅浏览行为）；所有者关闭时先把开关变更作为 op 广播（meta 变更不触发画布渲染，手动 `captureLocalOp` + 限时 `flushLocalOps`）再离房，所有成员（含所有者自己）经 Editor 的 meta watch 断开并弹窗"所有者已关闭协作"（`CollabPanel.notifyCollabClosed`）；关闭导致的离房不触发"会话异常结束"刷新，非心跳持有者改提示"无法保存请刷新"
 
 已定稿（原"待明确"）：**持久化责任人 = 房主制**——第一个打开/加入存档的人才能保存，协作者只能把编辑实时传递给房主；房主离开由最早加入者继任（`OwnerChanged`）。详见 `backend-plan.md` §8。
 

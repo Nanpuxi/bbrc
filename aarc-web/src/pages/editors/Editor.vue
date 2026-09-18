@@ -39,6 +39,7 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useSignalrStore } from '@/app/com/signalrStore';
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore';
 import CollabStatusOverlay from './components/CollabStatusOverlay.vue';
+import CollabPanel from './components/CollabPanel.vue';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
 import { throttle } from '@/utils/lang/throttle';
@@ -75,6 +76,7 @@ const userInfoStore = useUserInfoStore()
 const signalrStore = useSignalrStore()
 const kickedFromCanvasStore = useKickedFromCanvasStore()
 const chatRoom = useTemplateRef('chatRoom')
+const collabPanel = useTemplateRef('collabPanel')
 const { loadedSave } = storeToRefs(useLoadedSave())
 const loadComplete = ref(false)
 const mainCvsDispatcher = useMainCvsDispatcher()
@@ -87,7 +89,7 @@ const savingDisabledWarningStore = useSavingDisabledWarningStore()
 
 const saveStatus = ref<SaveDto>()
 const chatEnabled = computed(() => saveStore.save?.meta.chatEnabled === true)
-const chatCanEnable = computed(() => {
+const isSaveOwner = computed(() => {
     const currentUserId = userInfoStore.userInfo?.id
     return !!currentUserId && currentUserId === ownerUserInfo.value?.userId
 })
@@ -144,8 +146,8 @@ async function load() {
             }
             savingDisabledWarningStore.setWarning('当前为仅浏览模式，无法保存更改', true)
         }
-        // Occupied（他人在编辑）不再转仅浏览：加载后以协作者身份加入协作房间（见 joinCollabRoom），
-        // 房间加入失败时才回退仅浏览
+        // Occupied（他人在编辑）：仅当存档启用了多人协作时才以协作者身份加入（见下方解析处的回退与 joinCollabRoom）；
+        // 未启用协作则回退仅浏览；房间加入失败时也回退仅浏览
 
         await checkLoginLeftTime(userInfo)
         
@@ -162,6 +164,16 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
+            // 协作未启用且存档被他人占用：回退协作功能出现前的行为——仅浏览。
+            // （collabEnabled 存在存档数据里，必须先解析才能判定；Occupied 时 loadData 已用 forEdit=false）
+            if(preRes.status == SavePreflightStatus.Occupied && obj?.meta?.collabEnabled !== true){
+                if(!viewOnly.value){
+                    console.log('他人编辑中且未启用多人协作，已设为viewOnly模式')
+                    viewOnly.value = true
+                }
+                savingDisabledWarningStore.setWarning(`当前有其他用户在编辑，无法保存更改\n占用者：${preRes.editingByUserName ?? '??'}`)
+                savingDisabledWarningStore.editingUserId = preRes.editingByUserId ?? 0
+            }
             await loadSaveIntoEditor(obj, {
                 visitorMode: viewOnly.value || notOwner,
                 blockIconAccess: viewOnly.value && notOwner, //浏览模式且不是所有者：隐藏图标栏目
@@ -178,7 +190,9 @@ async function load() {
         else{
             if(preRes.status != SavePreflightStatus.Occupied)
                 startHeartbeat() // loadData(forEdit) 已完成 Initialization 心跳
-            await joinCollabRoom()
+            // 仅当存档启用了多人协作功能时才加入协作房间（开关见 CollabPanel）
+            if(saveStore.save?.meta.collabEnabled === true)
+                await joinCollabRoom()
         }
         // 加载完成后获取状态（warn/rule信息）
         const statusRes = await api.save.loadStatus(saveIdNum.value, true)
@@ -390,16 +404,23 @@ let collabWarningSet = false // 当前警告条是本模块设置的（clearWarn
 let ownerHeartbeatRetryTimer: number|undefined
 
 async function joinCollabRoom(){
+    if(await tryJoinCollabRoom())
+        return
+    // 加入失败（无权限/房间满/服务器不支持等）：回退仅浏览
+    console.error('[协作]加入房间失败，回退仅浏览')
+    viewOnly.value = true
+    preventLeavingDisabled.value = true
+    savingDisabledWarningStore.setWarning('加入协作房间失败，已转为仅浏览（刷新可重试）', true)
+    showPop('加入协作房间失败', 'failed')
+}
+
+/** 加入协作房间；失败返回 false（调用方决定回退策略） */
+async function tryJoinCollabRoom(): Promise<boolean>{
     try{
         await collabSession.join(saveIdNum.value)
     }catch(e){
-        // 加入失败（无权限/房间满/服务器不支持等）：回退仅浏览
-        console.error('[协作]加入房间失败，回退仅浏览', e)
-        viewOnly.value = true
-        preventLeavingDisabled.value = true
-        savingDisabledWarningStore.setWarning('加入协作房间失败，已转为仅浏览（刷新可重试）', true)
-        showPop('加入协作房间失败', 'failed')
-        return
+        console.error('[协作]加入房间失败', e)
+        return false
     }
     if(collabSession.isOwner){
         // 通常心跳已在 loadData(forEdit) 时持有；空房但心跳未过期被他人残留占用时走接管
@@ -411,7 +432,65 @@ async function joinCollabRoom(){
         api.save.heartbeatRelease(saveIdNum.value).catch(()=>{})
     }
     updateCollabWarning()
+    return true
 }
+
+// ---- 协作功能开关（CollabPanel 触发，存于 save.meta.collabEnabled）----
+let disablingCollabLocally = false // 本地开关触发的关闭（区别于远程 op 应用导致的关闭）
+
+async function enableCollab(){
+    const save = saveStore.save
+    if(!save)
+        return
+    save.meta.collabEnabled = true
+    preventLeaving()
+    if(!(await tryJoinCollabRoom())){
+        save.meta.collabEnabled = false
+        showPop('启动多人协作失败', 'failed')
+    }
+}
+
+async function disableCollab(){
+    if(!window.confirm('确认关闭多人协作？所有协作成员将被断开'))
+        return
+    const save = saveStore.save
+    if(!save || disablingCollabLocally)
+        return
+    disablingCollabLocally = true
+    const wasInSession = collabSession.isInSession
+    try{
+        save.meta.collabEnabled = false
+        preventLeaving()
+        // 先把开关变更作为 op 广播给房间内其他成员（他们据此断开并提示），再离房。
+        // meta 变更不触发画布渲染，须手动 capture；flush 设超时兜底，失败则其他成员随离房兜底
+        collabSession.captureLocalOp()
+        await Promise.race([collabSession.flushLocalOps(), new Promise(r => window.setTimeout(r, 5000))])
+        await collabSession.leave()
+        if(wasInSession)
+            collabPanel.value?.notifyCollabClosed()
+        // 持久化开关状态（尽力：无心跳时服务器拒绝，静默失败）
+        if(!(await saveData(false)))
+            showPop('关闭状态未能保存到云端，刷新后可能恢复为启用', 'warning')
+    }
+    finally{
+        disablingCollabLocally = false
+    }
+}
+
+/** 远程 op 应用导致开关被关（他端所有者关闭）：断开连接并弹窗提示 */
+async function handleCollabDisabledRemotely(){
+    if(disablingCollabLocally)
+        return // 本地开关触发的关闭走 disableCollab 的主动流程
+    if(!collabSession.isInSession)
+        return // 未在会话中（如启动失败回退），无需处理
+    await collabSession.leave()
+    collabPanel.value?.notifyCollabClosed()
+}
+
+watch(() => saveStore.save?.meta.collabEnabled, (now, was) => {
+    if(was === true && now === false)
+        void handleCollabDisabledRemotely()
+})
 
 /** 房主但没有心跳：等旧占用者心跳过期后借 loadData(forEdit) 的 Initialization 副作用接管（数据丢弃） */
 async function ensureOwnerHeartbeat(){
@@ -461,9 +540,21 @@ watch(() => collabSession.isOwner, () => {
     updateCollabWarning()
 })
 watch(() => collabSession.isInSession, (inSession, wasInSession) => {
+    if(inSession || !wasInSession)
+        return
+    if(collabWarningSet){
+        savingDisabledWarningStore.clearWarning()
+        collabWarningSet = false
+    }
+    // 所有者关闭协作导致的离房：不刷新（弹窗已提示）；非心跳持有者此后无法保存，给出警告
+    if(saveStore.save?.meta.collabEnabled === false){
+        if(!heartbeatActive && !viewOnly.value)
+            savingDisabledWarningStore.setWarning('多人协作已关闭，当前更改无法保存，请刷新页面', true)
+        return
+    }
     // 会话异常结束（同步兜底失败等，handleSyncExhausted 已弹窗提示）：
     // 本地存档已与房间脱节，继续编辑无意义，沿用项目惯例刷新页面重进
-    if(!inSession && wasInSession && !leavingEditor && loadComplete.value && !isDemo.value)
+    if(!leavingEditor && loadComplete.value && !isDemo.value)
         window.setTimeout(()=>window.location.reload(), 2000)
 })
 
@@ -561,7 +652,8 @@ onBeforeUnmount(()=>{
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
     <DontUseWeirdBrowser></DontUseWeirdBrowser>
     <div v-if="loadComplete && !isNaN(saveIdNum)" class="chatRoomWrap">
-        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :saveIdDisplay="saveId" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
+        <CollabPanel ref="collabPanel" :isOwner="isSaveOwner" :viewOnly="viewOnly" @enable="enableCollab" @disable="disableCollab" />
+        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :saveIdDisplay="saveId" :enabled="chatEnabled" :isOwner="isSaveOwner" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
     </div>
     <UserFileFavorites ref="userFileFavorites" />
 </template>
@@ -592,5 +684,8 @@ onBeforeUnmount(()=>{
     top: 10px;
     right: 10px;
     z-index: 499;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
 }
 </style>
