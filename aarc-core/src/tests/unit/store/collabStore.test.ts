@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
-import { useCollabStore, collabIdCounterCap, collabIdPrefixMax } from 'aarc-core/models/stores/collabStore'
+import { useCollabStore, collabIdCounterCap, collabIdPrefixMax, scanCollabIdSeed } from 'aarc-core/models/stores/collabStore'
 import { Save } from 'aarc-core/models/save'
 
 function createSave(idIncre = 100): Save {
@@ -100,5 +100,84 @@ describe('collabStore 会话前缀 id 分配', () => {
             collabStore.nextCollabId()
         }
         expect(() => collabStore.nextCollabId()).toThrow()
+    })
+
+    it('种子参数使计数器从指定值开始', () => {
+        const collabStore = useCollabStore()
+        collabStore.setIdPrefix(3, 5)
+        expect(collabStore.nextCollabId()).toBe(-(3 * collabIdCounterCap + 5))
+        expect(collabStore.nextCollabId()).toBe(-(3 * collabIdCounterCap + 6))
+    })
+
+    it('种子缺省为 0，更换前缀时未传种子也会归零', () => {
+        const collabStore = useCollabStore()
+        collabStore.setIdPrefix(1, 100)
+        collabStore.setIdPrefix(2)
+        expect(collabStore.nextCollabId()).toBe(-(2 * collabIdCounterCap))
+    })
+
+    it('非法种子抛错', () => {
+        const collabStore = useCollabStore()
+        expect(() => collabStore.setIdPrefix(1, -1)).toThrow()
+        expect(() => collabStore.setIdPrefix(1, 1.5)).toThrow()
+        expect(() => collabStore.setIdPrefix(1, collabIdCounterCap + 1)).toThrow()
+    })
+
+    it('种子等于区间容量时立即耗尽（前缀区间已满，需换前缀）', () => {
+        const collabStore = useCollabStore()
+        collabStore.setIdPrefix(1, collabIdCounterCap)
+        expect(() => collabStore.nextCollabId()).toThrow()
+    })
+})
+
+describe('scanCollabIdSeed 存档扫描设种子', () => {
+    const pid = (prefix: number, counter: number) => -(prefix * collabIdCounterCap + counter)
+
+    it('空存档返回 0', () => {
+        expect(scanCollabIdSeed(createSave(), 3)).toBe(0)
+    })
+
+    it('命中前缀区间时返回已用最大值 + 1', () => {
+        const save = createSave()
+        save.points = [
+            { id: pid(3, 0) },
+            { id: pid(3, 41) },
+            { id: pid(3, 7) },
+        ] as Save['points']
+        expect(scanCollabIdSeed(save, 3)).toBe(42)
+    })
+
+    it('扫描覆盖全部带 id 的实体数组', () => {
+        const save = createSave()
+        save.lines = [{ id: pid(2, 10) }] as Save['lines']
+        save.textTags = [{ id: pid(2, 20) }] as Save['textTags']
+        save.selectionGroups = [{ id: pid(2, 30) }] as Save['selectionGroups']
+        expect(scanCollabIdSeed(save, 2)).toBe(31)
+    })
+
+    it('忽略正数 id、其他前缀区间与落在所有区间之外的负 id', () => {
+        const save = createSave()
+        save.points = [
+            { id: 5 },                  // 存量正 id
+            { id: pid(4, 99) },         // 其他前缀区间
+            { id: -5 },                 // 不在任何合法前缀区间（-5 < collabIdCounterCap）
+        ] as Save['points']
+        expect(scanCollabIdSeed(save, 3)).toBe(0)
+    })
+
+    it('区间填满时返回区间容量', () => {
+        const save = createSave()
+        save.points = [{ id: pid(1, collabIdCounterCap - 1) }] as Save['points']
+        expect(scanCollabIdSeed(save, 1)).toBe(collabIdCounterCap)
+    })
+
+    it('扫描结果作为种子可避免与存档残留 id 撞号', () => {
+        const saveStore = useSaveStore()
+        const collabStore = useCollabStore()
+        const save = createSave()
+        save.points = [{ id: pid(3, 41) }] as Save['points']
+        saveStore.save = save
+        collabStore.setIdPrefix(3, scanCollabIdSeed(save, 3))
+        expect(saveStore.getNewId()).toBe(pid(3, 42))
     })
 })

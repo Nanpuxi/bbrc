@@ -32,7 +32,7 @@ namespace AARC.WebApi.Services.Collab
     public class JoinCollabRoomResult
     {
         public long LatestSeq { get; set; }                 // 当前房间最新序号（房间刚创建时为 0）
-        public int IdPrefix { get; set; }                   // 服务器分配的会话 id 前缀（房间生命周期内单调分发、离房不回收）
+        public int IdPrefix { get; set; }                   // 服务器分配的会话 id 前缀（租约制：在房期间唯一，离房回收；历史 id 撞号由客户端扫存档设种子兜底）
         public int OwnerUserId { get; set; }                // 房主 = 首个加入者，唯一保存责任人；房主离开时按 JoinedAt 最早的在房成员自动继任
         public List<CollabMemberDto> Members { get; set; } = [];
         public List<CollabLockDto> Locks { get; set; } = []; // 当前锁表快照（后进房者据此渲染他人锁）

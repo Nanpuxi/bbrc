@@ -48,7 +48,7 @@ namespace AARC.WebApi.Services.Collab
         }
 
         /// <summary>
-        /// 加入协作房间：校验存档编辑权限（与编辑器打开存档同一标准）；分配 id 前缀（单调不回收）；首个加入者即房主。
+        /// 加入协作房间：校验存档编辑权限（与编辑器打开存档同一标准）；分配 id 前缀（租约制，离房回收）；首个加入者即房主。
         /// 重复加入幂等（已加入时返回原前缀）。
         /// </summary>
         public async Task<JoinCollabRoomResult> JoinRoom(int saveId)

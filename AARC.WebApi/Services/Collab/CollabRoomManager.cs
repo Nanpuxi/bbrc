@@ -14,7 +14,7 @@ namespace AARC.WebApi.Services.Collab
         public int MaxPatchLength { get; set; } = 256 * 1024;
         /// 每房间成员上限
         public int MaxRoomMembers { get; set; } = 10;
-        /// id 前缀上限（前端 collabIdPrefixMax），耗尽拒绝加入
+        /// id 前缀上限（前端 collabIdPrefixMax）；租约制下前缀随离房回收，耗尽即无空闲前缀时拒绝加入
         public int MaxIdPrefix { get; set; } = 2047;
         /// 快照缓存 TTL（秒）
         public int SnapshotTtlSeconds { get; set; } = 60;
@@ -28,7 +28,7 @@ namespace AARC.WebApi.Services.Collab
 
     /// <summary>
     /// 协作房间状态管理器：持有全部房间状态，负责序号分配、入队、修剪、成员管理、
-    /// 空房回收、对象锁仲裁（first-write-wins）与 id 前缀单调分发、快照缓存。
+    /// 空房回收、对象锁仲裁（first-write-wins）与 id 前缀租约分发、快照缓存。
     /// 注册为 DI 单例；不使用 static 字段，测试可 new 新实例获得隔离。
     /// </summary>
     public class CollabRoomManager
@@ -47,7 +47,8 @@ namespace AARC.WebApi.Services.Collab
         }
 
         /// <summary>
-        /// 加入房间：登记成员与连接、分配 id 前缀（单调分发、离房不回收）。
+        /// 加入房间：登记成员与连接、分配 id 前缀（租约制：分配最小空闲前缀，离房回收）。
+        /// 历史 id 撞号由客户端进房时的存档扫描设种子兜底（id-allocation.md §7.1）。
         /// 重复加入幂等（已加入时返回原前缀，newMember 输出 null 表示无需广播 UserJoined）。
         /// </summary>
         public JoinCollabRoomResult JoinRoom(
@@ -68,9 +69,7 @@ namespace AARC.WebApi.Services.Collab
                     {
                         if (room.Members.Count >= _options.MaxRoomMembers)
                             throw new RqEx("协作房间人数已满");
-                        if (room.NextIdPrefix > _options.MaxIdPrefix)
-                            throw new RqEx("协作房间 id 前缀已耗尽，请稍后重试");
-                        prefix = room.NextIdPrefix++;
+                        prefix = AllocFreePrefix(room);
                         room.MemberIdPrefixes[userId] = prefix;
                     }
                     if (!room.Members.ContainsKey(userId))
@@ -158,6 +157,7 @@ namespace AARC.WebApi.Services.Collab
                 var ownerBeforeId = OwnerOf(room)?.UserId;
                 if (!room.Members.Remove(userId, out var member))
                     return res;
+                room.MemberIdPrefixes.Remove(userId);   // 前缀租约回收，后续加入者可复用
                 res.LeftMember = member;
                 if (room.Members.Count == 0)
                 {
@@ -344,6 +344,17 @@ namespace AARC.WebApi.Services.Collab
         private static CollabMemberDto? OwnerOf(CollabRoom room)
             => room.Members.Values.OrderBy(x => x.JoinedAt).ThenBy(x => x.UserId).FirstOrDefault();
 
+        // 租约制前缀分配：取 [1, MaxIdPrefix] 内未被持有的最小前缀；成员数上限远小于前缀数，耗尽仅为防御性分支
+        private int AllocFreePrefix(CollabRoom room)
+        {
+            for (int p = 1; p <= _options.MaxIdPrefix; p++)
+            {
+                if (!room.MemberIdPrefixes.ContainsValue(p))
+                    return p;
+            }
+            throw new RqEx("协作房间 id 前缀已耗尽，请稍后重试");
+        }
+
         // 双阈值修剪：条数超限或头部操作超出时间窗口即从头出队
         private void TrimOps(CollabRoom room)
         {
@@ -362,8 +373,7 @@ namespace AARC.WebApi.Services.Collab
             public readonly Dictionary<int, CollabMemberDto> Members = new();  // key = userId
             public readonly Dictionary<string, (string Holder, string ConnectionId)> Locks = new();  // 锁键 → 持有者
             public readonly Dictionary<string, int> ConnectionUsers = new();   // 房内连接 Id → userId（同一用户多连接时成员保留）
-            public readonly Dictionary<int, int> MemberIdPrefixes = new();     // userId → 已分发的前缀（离房不回收）
-            public int NextIdPrefix = 1;                 // 单调递增分发、离房不回收（id-allocation.md §7.1）
+            public readonly Dictionary<int, int> MemberIdPrefixes = new();     // userId → 持有的前缀租约（离房/断连回收）
             public DateTime LastActiveAt;
         }
 

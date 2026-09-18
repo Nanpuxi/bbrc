@@ -48,7 +48,7 @@ ChatHub 的局限（协作功能需要改进的点）：
 ```
 
 - `CollabHub`（`AARC.WebApi/Services/Collab/CollabHub.cs`）：只负责鉴权、参数校验、调用管理器、广播；无状态
-- `CollabRoomManager`（DI 单例，`AARC.WebApi/Services/Collab/CollabRoomManager.cs`）：持有全部房间状态，负责序号分配、入队、修剪、成员管理、空房回收、**对象锁仲裁（first-write-wins）与 id 前缀单调分发**。**用 DI 单例而非 ChatHub 式 static 字段**，便于后续加单元测试
+- `CollabRoomManager`（DI 单例，`AARC.WebApi/Services/Collab/CollabRoomManager.cs`）：持有全部房间状态，负责序号分配、入队、修剪、成员管理、空房回收、**对象锁仲裁（first-write-wins）与 id 前缀租约分发**。**用 DI 单例而非 ChatHub 式 static 字段**，便于后续加单元测试
 - patch 内容对服务器是**不透明负载**：服务器不解析、不应用、不合并，只做大小校验后原样转发
 
 ## 4. Patch 格式
@@ -108,7 +108,7 @@ public class CollabLockDto
 public class JoinCollabRoomResult
 {
     public long LatestSeq { get; set; }     // 当前房间最新序号（房间刚创建时为 0）
-    public int IdPrefix { get; set; }       // 服务器分配的会话 id 前缀（id-allocation.md 方案 C，房间生命周期内单调分发、离房不回收）
+    public int IdPrefix { get; set; }       // 服务器分配的会话 id 前缀（id-allocation.md 方案 C，租约制：在房期间唯一、离房回收）
     public int OwnerUserId { get; set; }    // 房主 = 首个加入者，唯一保存责任人（见第 8 节）；房主离开时按 JoinedAt 最早的在房成员自动继任
     public List<CollabMemberDto> Members { get; set; }
     public List<CollabLockDto> Locks { get; set; }  // 当前锁表快照（后进房者据此渲染他人锁）
@@ -137,7 +137,7 @@ internal class CollabRoom
     public readonly Queue<CollabOpDto> Ops = new();
     public readonly Dictionary<int, CollabMemberDto> Members = new();  // key = userId
     public readonly Dictionary<string, (string Holder, string ConnectionId)> Locks = new();  // 锁键 → 持有者
-    public int NextIdPrefix = 1;                 // 单调递增分发、离房不回收（id-allocation.md §7.1）
+    public readonly Dictionary<int, int> MemberIdPrefixes = new();  // userId → 持有的前缀租约（离房/断连回收）
     public DateTime LastActiveAt;
 }
 ```
@@ -147,7 +147,7 @@ internal class CollabRoom
 - **序号分配与入队必须原子**：在 `SyncRoot` 锁内完成 `Seq = ++LatestSeq` 和入队，保证队列顺序即 Seq 顺序。Hub 拿到 Seq 后再广播——广播在锁外进行（`Clients.OthersInGroup` 是异步 IO，持锁广播会阻塞同房间所有提交；顺序性由"入队先于广播、Seq 单调"保证，客户端若收到乱序到达的 op 可按 Seq 缓冲重排）
 - **对象锁仲裁**：`AcquireLock`/`ReleaseLock` 同样在 `SyncRoot` 锁内判定——锁键已被他人持有则拒绝（first-write-wins），同一持有者重复加锁幂等成功。锁表记录持有连接 Id，断连时只清该连接的锁，避免同一用户多标签页互相误清
 - **房主（保存责任人）**：房主 = `Members` 中 `JoinedAt` 最早者，不单独存字段；房主离房/断连时剩余成员自动按序继任（`Members.Values.MinBy(JoinedAt)`），Hub 在广播 `UserLeft` 后补一条 `OwnerChanged`。空房回收后房间销毁，下一个开房者即房主
-- **id 前缀单调分发**：加入房间时在 `SyncRoot` 锁内取 `NextIdPrefix++`，成员离房**不回收**（id-allocation.md §7.1：复用前缀会与存档中残留负 id 撞号）；前缀上限 2047（前端 `collabIdPrefixMax`），耗尽拒绝加入
+- **id 前缀租约分发**：加入房间时在 `SyncRoot` 锁内分配 `[1, MaxIdPrefix]` 内未被持有的最小前缀（默认上限 2047，即前端 `collabIdPrefixMax`），成员离房/断连时**回收**；历史负 id 撞号由客户端进房扫存档设种子兜底（id-allocation.md §7.1）。租约制下耗尽要求 2047 个成员同时在房，而成员上限 10 人，实际不可达
 - **容量修剪**：双阈值，超过任一即从头出队——
   - 条数上限：默认 500 条/房间（配置项）
   - 时间上限：默认 30 分钟，出队直到队列头部操作在窗口内
@@ -165,7 +165,7 @@ internal class CollabRoom
 
 | 方法 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `JoinRoom` | `int saveId` | `JoinCollabRoomResult` | 校验存档编辑权限（见第 8 节）；分配 id 前缀（单调不回收）；首个加入者即房主（唯一保存责任人）；加入 SignalR group、登记成员与连接映射；向其他人广播 `UserJoined`。重复加入幂等（已加入时返回原前缀） |
+| `JoinRoom` | `int saveId` | `JoinCollabRoomResult` | 校验存档编辑权限（见第 8 节）；分配 id 前缀（租约制：最小空闲前缀，离房回收）；首个加入者即房主（唯一保存责任人）；加入 SignalR group、登记成员与连接映射；向其他人广播 `UserJoined`。重复加入幂等（已加入时返回原前缀） |
 | `LeaveRoom` | `int saveId` | — | 移出成员与 group、释放该连接全部锁（广播 `LockReleased`），广播 `UserLeft`；房主离开时按 JoinedAt 最早继任并广播 `OwnerChanged`；空房触发回收 |
 | `SubmitOp` | `int saveId, string opId, string patch, long baseSeq` | `long`（分配的 Seq） | 校验成员身份、patch 大小（`patch.Length`）、提交频率；锁内分配 Seq + 入队；锁外 `OthersInGroup` 广播 `ReceiveOp`。返回值即 ack，发送方据此确认服务器已受理 |
 | `SyncOps` | `int saveId, long afterSeq` | `SyncCollabOpsResult` | 增量补齐。队列中最早 Seq > afterSeq 时正常返回；否则 `Gap = true`。不要求调用者是成员（重连竞态下允许先 Sync 后 Join） |
