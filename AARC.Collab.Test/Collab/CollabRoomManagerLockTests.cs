@@ -79,7 +79,7 @@ public class CollabRoomManagerLockTests
         mgr.TryAcquireLock(SaveId, 1, "user1", "conn-1", "line:3");
 
         // Act：u2 后进房
-        var result = mgr.JoinRoom(SaveId, 2, "user2", "conn-2", out _);
+        var result = mgr.JoinRoom(SaveId, 2, "user2", "conn-2", saveOwnerUserId: 1, out _);
 
         // Assert：锁表快照带给后进房者
         Assert.Equal(2, result.Locks.Count);

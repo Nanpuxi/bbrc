@@ -93,6 +93,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     /** 本地未 ack op 队列（断线期间累积，重连补齐后按原序重发） */
     const pendingLocalDiffs: SaveDiff[] = []
     let flushingLocal = false
+    /** 会话是否曾到达过稳态 synced（区分"进房失败"与"会话异常结束"，Editor 的 isInSession watcher 用） */
+    let everSynced = false
 
     function requireTransport(): CollabTransport {
         const t = getCollabTransport()
@@ -380,7 +382,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             applyLockSnapshot(res.locks)
             relockLocalHolds()
             applyIdPrefix(res.idPrefix)
-            state.value = 'synced'
+            markSynced()
             void flushLocalOps()  // 断线期间累积的本地 op 按原序重发（视作全新提交、获得新 Seq）
         }
         catch (e) {
@@ -391,7 +393,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 await snapshotFlow()
                 if (epoch !== sessionEpoch)
                     return
-                state.value = 'synced'
+                markSynced()
                 void flushLocalOps()
             }
             catch (e2) {
@@ -422,6 +424,12 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             void resyncAfterReconnect()
         },
         onDisconnected: () => { if (state.value !== 'off') connState.value = 'disconnected' },
+    }
+
+    /** 进入稳态：置 everSynced（本次会话真实建立过，Editor 据此区分"进房失败"与"会话异常结束"） */
+    function markSynced(): void {
+        everSynced = true
+        state.value = 'synced'
     }
 
     // ---- 会话入口 ----
@@ -469,7 +477,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             // 本地 diff 基线（快照路径已在 snapshotFlow 内设置）：以同步完成时的存档为底
             if (!opBaseline && useSaveStore().save)
                 opBaseline = cloneSaveData(useSaveStore().save!)
-            state.value = 'synced'
+            markSynced()
         }
         catch (e) {
             if (epoch === sessionEpoch) {
@@ -494,6 +502,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
 
     function cleanupLocal(): void {
         state.value = 'off'
+        everSynced = false
         connState.value = 'online'
         saveId.value = null
         ownerUserId.value = 0
@@ -603,6 +612,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     return {
         state, connState, saveId, ownerUserId, members, myUserId,
         isInSession, isOwner, canEdit,
+        hasEverSynced: () => everSynced,
         join, leave, submitOp, currentSeq,
         captureLocalOp, flushLocalOps, pendingLocalOpCount, notifySaved,
     }

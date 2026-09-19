@@ -316,6 +316,7 @@ namespace AARC.WebApi.Controllers.Saves
                 return res;
             }
             var status = saveRepo.LoadStatus(id);
+            res.CollabRoomActive = status.CollabEnabled;
             if (status.EditingByUserId > 0 && status.EditingByUserId != uid)
             {
                 saveDtoEnrichService.EnrichUserName([status]);
@@ -422,6 +423,10 @@ namespace AARC.WebApi.Controllers.Saves
         public string? OwnerName { get; set; }
         public int EditingByUserId { get; set; }
         public string? EditingByUserName { get; set; }
+        /// 当前是否存在活跃协作房间（Occupied 时才有意义： true = 持有心跳者在房内协作，
+        /// 可加入协作；false = 持有心跳者是独占编辑的 solo 用户，应按协作前的仅浏览处理）。
+        /// 协作房间只能由存档所有者开启（backend-plan §7.1），房间存在 ⟺ 房主持有心跳
+        public bool CollabRoomActive { get; set; }
     }
     public enum SavePreflightStatus
     {

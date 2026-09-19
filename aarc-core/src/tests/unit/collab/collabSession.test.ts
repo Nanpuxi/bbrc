@@ -429,4 +429,29 @@ describe('collabSessionStore 协作会话编排', () => {
         await flush()
         expect(mock.savedNotices).toEqual([])
     })
+
+    it('hasEverSynced：进房成功到达稳态后为 true，离房后复位', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        expect(session.hasEverSynced()).toBe(false)
+
+        await session.join(1)
+        expect(session.state).toBe('synced')
+        expect(session.hasEverSynced()).toBe(true)
+
+        await session.leave()
+        expect(session.state).toBe('off')
+        expect(session.hasEverSynced()).toBe(false)
+    })
+
+    it('hasEverSynced：进房被拒（从未到达稳态）保持 false，供 Editor 区分"会话异常结束"', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => { throw Error('仅存档所有者可开启协作') }
+
+        const session = useCollabSessionStore()
+        await expect(session.join(1)).rejects.toThrow('仅存档所有者可开启协作')
+
+        expect(session.state).toBe('off')
+        expect(session.hasEverSynced()).toBe(false)
+    })
 })

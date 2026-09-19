@@ -52,7 +52,7 @@ const status = computed<SaveAvatarStatus|undefined>(()=>{
         // 允许当前用户编辑（但实际让不让编辑由“是否他人在编辑”决定）
         if(s.collabEnabled)
             // 当前存在活跃协作房间：进入即加入协作（无论他人在房间内是否正在编辑）
-            res = { icon: iconCollab, text: '可协作', color: 'rgb(74, 144, 226)', clickBehavior: 'edit', iconFilter: 'brightness(1)' }
+            res = { icon: iconCollab, text: '可协作', color: 'rgb(74, 144, 226)', clickBehavior: 'edit', iconFilter: 'brightness(100)' }
         else if(s.editingByUserId && s.editingByUserId != userInfo.value.id)
             res = { icon: iconPen, text: '占用中', color: 'rgb(212, 160, 23)', clickBehavior: 'wait'}
         else

@@ -14,6 +14,10 @@ internal static class TestRooms
         return new CollabRoomManager(options);
     }
 
-    public static JoinCollabRoomResult Join(CollabRoomManager mgr, int saveId, int userId, string? connectionId = null)
-        => mgr.JoinRoom(saveId, userId, $"user{userId}", connectionId ?? $"conn-{userId}", out _);
+    /// <summary>
+    /// 加入房间。saveOwnerUserId 省略时以 userId 自身为存档所有者——既有用例都是
+    /// 首个进房者当房主；"非所有者不能开房"的用例显式传 saveOwnerUserId（见 CollabRoomManagerOwnerTests）
+    /// </summary>
+    public static JoinCollabRoomResult Join(CollabRoomManager mgr, int saveId, int userId, string? connectionId = null, int? saveOwnerUserId = null)
+        => mgr.JoinRoom(saveId, userId, $"user{userId}", connectionId ?? $"conn-{userId}", saveOwnerUserId ?? userId, out _);
 }

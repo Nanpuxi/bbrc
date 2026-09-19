@@ -13,17 +13,18 @@ public class CollabRoomManagerPrefixTests
     [Fact]
     public async Task JoinRoom_ConcurrentJoins_PrefixesNeverDoubleAllocated()
     {
-        // Arrange
+        // Arrange：存档所有者先进房开房（仅所有者可创建房间）
         var mgr = TestRooms.NewManager();
+        TestRooms.Join(mgr, SaveId, 1);
 
-        // Act：10 个用户（房间上限）并发首次进房
+        // Act：其余 9 个成员并发进房
         var prefixes = new ConcurrentBag<int>();
-        await Task.WhenAll(Enumerable.Range(1, 10).Select(u => Task.Run(() =>
-            prefixes.Add(TestRooms.Join(mgr, SaveId, u).IdPrefix))));
+        await Task.WhenAll(Enumerable.Range(2, 9).Select(u => Task.Run(() =>
+            prefixes.Add(TestRooms.Join(mgr, SaveId, u, saveOwnerUserId: 1).IdPrefix))));
 
         // Assert：前缀互不重复，且都在合法范围内
-        Assert.Equal(10, prefixes.Distinct().Count());
-        Assert.All(prefixes, p => Assert.InRange(p, 1, mgr.Options.MaxIdPrefix));
+        Assert.Equal(9, prefixes.Distinct().Count());
+        Assert.All(prefixes, p => Assert.InRange(p, 2, mgr.Options.MaxIdPrefix));
     }
 
     [Fact]
@@ -31,10 +32,10 @@ public class CollabRoomManagerPrefixTests
     {
         // Arrange
         var mgr = TestRooms.NewManager();
-        var first = mgr.JoinRoom(SaveId, 1, "user1", "conn-1a", out var firstMember);
+        var first = mgr.JoinRoom(SaveId, 1, "user1", "conn-1a", saveOwnerUserId: 1, out var firstMember);
 
         // Act：同一用户第二个连接进房
-        var second = mgr.JoinRoom(SaveId, 1, "user1", "conn-1b", out var secondMember);
+        var second = mgr.JoinRoom(SaveId, 1, "user1", "conn-1b", saveOwnerUserId: 1, out var secondMember);
 
         // Assert：前缀不变；首个连接广播 UserJoined，后续连接不广播
         Assert.Equal(first.IdPrefix, second.IdPrefix);

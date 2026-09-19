@@ -49,15 +49,32 @@ namespace AARC.WebApi.Services.Collab
         }
 
         /// <summary>
-        /// 加入协作房间：校验存档编辑权限（与编辑器打开存档同一标准）；分配 id 前缀（租约制，离房回收）；首个加入者即房主。
+        /// 加入协作房间：校验存档编辑权限（与编辑器打开存档同一标准）；分配 id 前缀（租约制，离房回收）。
         /// 重复加入幂等（已加入时返回原前缀）。
+        /// 仅存档所有者可创建房间（backend-plan.md §7.1）：房间不存在时非所有者被拒绝
+        /// （其他人进入不启动协作机制，按协作前的原有行为打开存档）；房间已存在时任何
+        /// 有编辑权限者可加入为协作者。CollabException 转 HubException——SignalR 默认不透传
+        /// 普通异常的消息，客户端需据此区分"预期拒绝（不启动协作）"与"真失败"。
         /// </summary>
         public async Task<JoinCollabRoomResult> JoinRoom(int saveId)
         {
             var user = GetCurrentUser();
             _authGrantCheckService.CheckFor(AuthGrantOn.Save, saveId, (byte)AuthGrantTypeOfSave.Edit, false,
                 user.Id, user.Type >= UserType.Admin, user.Type >= UserType.Member);
-            var result = _rooms.JoinRoom(saveId, user.Id, user.Name, Context.ConnectionId, out var newMember);
+            var saveOwnerId = _db.Saves
+                .Where(x => x.Id == saveId && !x.Deleted)
+                .Select(x => (int?)x.OwnerUserId)
+                .FirstOrDefault() ?? 0;
+            JoinCollabRoomResult result;
+            CollabMemberDto? newMember;
+            try
+            {
+                result = _rooms.JoinRoom(saveId, user.Id, user.Name, Context.ConnectionId, saveOwnerId, out newMember);
+            }
+            catch (CollabException e)
+            {
+                throw new HubException(e.Message);
+            }
             await Groups.AddToGroupAsync(Context.ConnectionId, RoomGroupName(saveId));
             if (newMember is not null)
                 await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("UserJoined", newMember);

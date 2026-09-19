@@ -146,8 +146,11 @@ async function load() {
             }
             savingDisabledWarningStore.setWarning('当前为仅浏览模式，无法保存更改', true)
         }
-        // Occupied（他人在编辑）：仅当存档启用了多人协作时才以协作者身份加入（见下方解析处的回退与 joinCollabRoom）；
-        // 未启用协作则回退仅浏览；房间加入失败时也回退仅浏览
+        // Occupied（他人在编辑）时的协作判定（backend-plan §7.1）：协作房间只能由存档所有者开启，
+        // 房间存在 ⟺ 持有心跳者在房内协作。开关开 + preflight 报告房间活跃 → 以协作者身份加入；
+        // 开关开但无房间 → 持有心跳者是独占编辑的 solo 用户（如非所有者先进入占用心跳），
+        // 此时开房/加入均无意义且会错误接管保存权 → 回退协作前的仅浏览；
+        // 开关关或未启用协作 → 仅浏览；房间加入失败时也回退仅浏览
 
         await checkLoginLeftTime(userInfo)
         
@@ -164,9 +167,10 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
-            // 协作未启用且存档被他人占用：回退协作功能出现前的行为——仅浏览。
+            // 协作开关开但无活跃房间：持有心跳者在独占编辑，按协作出现前的行为回退——仅浏览。
             // （collabEnabled 存在存档数据里，必须先解析才能判定；Occupied 时 loadData 已用 forEdit=false）
-            if(preRes.status == SavePreflightStatus.Occupied && obj?.meta?.collabEnabled !== true){
+            const collabJoinable = obj?.meta?.collabEnabled === true && preRes.collabRoomActive === true
+            if(preRes.status == SavePreflightStatus.Occupied && !collabJoinable){
                 if(!viewOnly.value){
                     console.log('他人编辑中且未启用多人协作，已设为viewOnly模式')
                     viewOnly.value = true
@@ -190,8 +194,11 @@ async function load() {
         else{
             if(preRes.status != SavePreflightStatus.Occupied)
                 startHeartbeat() // loadData(forEdit) 已完成 Initialization 心跳
-            // 仅当存档启用了多人协作功能时才加入协作房间（开关见 CollabPanel）
-            if(saveStore.save?.meta.collabEnabled === true)
+            // 仅当存档启用了多人协作功能时才加入协作房间（开关见 CollabPanel）；
+            // Occupied 时只有"开关开 + 房间活跃"才会走到这里（无房间已在上方回退仅浏览，不会误开房）；
+            // 非所有者在 preflight 报告无活跃房间时也不尝试进房：服务器必拒绝（仅存档所有者可开房），
+            // 徒增一次 SignalR 连接建立，且失败会误触发"会话异常结束"刷新
+            if(saveStore.save?.meta.collabEnabled === true && (!notOwner || preRes.collabRoomActive === true))
                 await joinCollabRoom()
         }
         // 加载完成后获取状态（warn/rule信息）
@@ -420,6 +427,17 @@ async function tryJoinCollabRoom(): Promise<boolean>{
     try{
         await collabSession.join(saveIdNum.value)
     }catch(e){
+        const msg = e instanceof Error ? e.message : String(e)
+        if(msg.includes('仅存档所有者可开启协作')){
+            // 预期拒绝（backend-plan §7.1）：协作开关开着但房间未启动（所有者不在线）。
+            // 非所有者不启动协作机制：已持心跳（非 Occupied 正常打开）按普通编辑继续；
+            // 未持心跳（如 Occupied 回退加载）维持下方"回退仅浏览"逻辑
+            if(heartbeatActive){
+                console.info('[协作]协作房间未启动（所有者不在线），以普通编辑模式继续')
+                updateCollabWarning()
+                return true
+            }
+        }
         console.error('[协作]加入房间失败', e)
         return false
     }
@@ -542,6 +560,10 @@ watch(() => collabSession.isOwner, () => {
 })
 watch(() => collabSession.isInSession, (inSession, wasInSession) => {
     if(inSession || !wasInSession)
+        return
+    // 进房从未到达过稳态（如被"仅存档所有者可开启协作"拒绝、房间已满）：不算"会话异常结束"，
+    // 不刷新页面，由调用方自己的回退逻辑处理
+    if(!collabSession.hasEverSynced())
         return
     if(collabWarningSet){
         savingDisabledWarningStore.clearWarning()

@@ -56,9 +56,12 @@ namespace AARC.Collab
         /// 加入房间：登记成员与连接、分配 id 前缀（租约制：分配最小空闲前缀，离房回收）。
         /// 历史 id 撞号由客户端进房时的存档扫描设种子兜底（id-allocation.md §7.1）。
         /// 重复加入幂等（已加入时返回原前缀，newMember 输出 null 表示无需广播 UserJoined）。
+        /// 仅存档所有者可创建房间（backend-plan.md §7.1）：房内无任何成员时拒绝非所有者——
+        /// 其他人进入不启动协作机制。判定在房间锁内进行并同步回收空房，杜绝竞态下
+        /// "非所有者创建空房残留"（空房残留会让 HasRoom 误报可协作状态）。
         /// </summary>
         public JoinCollabRoomResult JoinRoom(
-            int saveId, int userId, string userName, string connectionId,
+            int saveId, int userId, string userName, string connectionId, int saveOwnerUserId,
             out CollabMemberDto? newMember)
         {
             while (true)
@@ -69,6 +72,13 @@ namespace AARC.Collab
                     // 该房间实例刚被空房回收，重试拿新实例
                     if (!_rooms.TryGetValue(saveId, out var current) || !ReferenceEquals(current, room))
                         continue;
+
+                    // 房内无成员 = 本次加入即创建房间：仅存档所有者可开启协作
+                    if (room.Members.Count == 0 && userId != saveOwnerUserId)
+                    {
+                        _rooms.TryRemove(new KeyValuePair<int, CollabRoom>(saveId, room));
+                        throw new CollabException("仅存档所有者可开启协作");
+                    }
 
                     newMember = null;
                     if (!room.MemberIdPrefixes.TryGetValue(userId, out int prefix))
