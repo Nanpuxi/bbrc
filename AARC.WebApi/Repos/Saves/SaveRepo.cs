@@ -1,3 +1,4 @@
+using AARC.Collab;
 using AARC.WebApi.Models.Db.Context;
 using AARC.WebApi.Models.Db.Context.Specific;
 using AARC.WebApi.Models.DbModels.Enums;
@@ -24,7 +25,8 @@ namespace AARC.WebApi.Repos.Saves
         HttpUserInfoService httpUserInfoService,
         IMapper mapper,
         ILogger<SaveRepo> logger,
-        NewestSavesCacheService newestSavesCache
+        NewestSavesCacheService newestSavesCache,
+        CollabRoomManager collabRoomManager
         ) : Repo<Save>(context)
     {
         // 心跳有效期10分钟，超过10分钟允许其他人进来
@@ -65,7 +67,7 @@ namespace AARC.WebApi.Repos.Saves
                 .ProjectTo<SaveDto>(mapper.ConfigurationProvider)
                 .Take(NewestSavesCacheService.Capacity)
                 .ToList();
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return res;
         }
 
@@ -109,7 +111,7 @@ namespace AARC.WebApi.Repos.Saves
                     }
                 }
             }
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return res;
         }
         public SaveListPage GetMySaves(int uid = 0, int skip = 0, int take = 30)
@@ -145,7 +147,7 @@ namespace AARC.WebApi.Repos.Saves
             var hasMore = res.Count > take;
             if (hasMore)
                 res.RemoveAt(res.Count - 1);
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return new SaveListPage { Saves = res, HasMore = hasMore };
         }
 
@@ -157,7 +159,7 @@ namespace AARC.WebApi.Repos.Saves
                 .OrderByDescending(x => x.LastActive)
                 .ProjectTo<SaveDto>(mapper.ConfigurationProvider)
                 .ToList();
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return res;
         }
 
@@ -170,7 +172,7 @@ namespace AARC.WebApi.Repos.Saves
                 .ProjectTo<SaveDto>(mapper.ConfigurationProvider)
                 .ToList();
             res.OrderByKeyList(x => x.Id, ids);
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return res;
         }
         public List<SaveDto> Search(string search, string orderby, int pageIdx)
@@ -218,7 +220,7 @@ namespace AARC.WebApi.Repos.Saves
                 .Skip(skip)
                 .Take(take)
                 .ToList();
-            EnrichEditingBy(res);
+            EnrichRuntimeStatus(res);
             return res;
         }
         public int Create(SaveDto saveDto)
@@ -330,7 +332,7 @@ namespace AARC.WebApi.Repos.Saves
                 }).FirstOrDefault();
             if (res is null)
                 throw new RqEx("无法加载存档信息");
-            EnrichEditingBy([res]);
+            EnrichRuntimeStatus([res]);
             return res;
         }
         public string? LoadData(int id, bool forEdit)
@@ -505,13 +507,15 @@ namespace AARC.WebApi.Repos.Saves
             if (saveDto.Intro?.Length > Save.introMaxLength)
                 throw new RqEx($"简介长度必须小于{Save.introMaxLength}字符");
         }
-        private static void EnrichEditingBy(List<SaveDto> saveDtoList)
+        /// 运行时状态填充：心跳占用（EditingByUserId）+ 可协作状态（CollabEnabled = 当前存在活跃协作房间）
+        private void EnrichRuntimeStatus(List<SaveDto> saveDtoList)
         {
             foreach(var d in saveDtoList)
             {
                 var stillValid = (DateTime.Now - d.HeartbeatAt) < HeartbeatValidSpan;
                 if (stillValid)
                     d.EditingByUserId = d.HeartbeatUserId;
+                d.CollabEnabled = collabRoomManager.HasRoom(d.Id);
             }
         }
     }
@@ -535,6 +539,8 @@ namespace AARC.WebApi.Repos.Saves
         public bool AllowRequesterFork { get; set; }
         public int EditingByUserId { get; set; }
         public string? EditingByUserName { get; set; }
+        /// 当前是否存在活跃协作房间（至少一名成员在房；进入即加入协作）
+        public bool CollabEnabled { get; set; }
         public int CommentCount { get; set; }
         public string? LatestWarnContent { get; set; }
         public string? LatestWarnCreated { get; set; }

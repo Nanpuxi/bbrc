@@ -46,6 +46,13 @@ namespace AARC.Collab
         }
 
         /// <summary>
+        /// 某存档当前是否存在活跃协作房间（至少一名成员在房）。
+        /// 房间随最后一名成员离开自动回收，故返回值可直接作为"可协作"状态对外展示。
+        /// </summary>
+        public bool HasRoom(int saveId)
+            => _rooms.TryGetValue(saveId, out _);
+
+        /// <summary>
         /// 加入房间：登记成员与连接、分配 id 前缀（租约制：分配最小空闲前缀，离房回收）。
         /// 历史 id 撞号由客户端进房时的存档扫描设种子兜底（id-allocation.md §7.1）。
         /// 重复加入幂等（已加入时返回原前缀，newMember 输出 null 表示无需广播 UserJoined）。

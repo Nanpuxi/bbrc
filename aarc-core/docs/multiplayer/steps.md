@@ -15,6 +15,7 @@
 - [x] 步骤二：纯数据刷新路径 + 远程 op 应用管线（`remoteOpApplier.applyRemoteSaveDiff`）
 - [x] 步骤三：对象锁（`collabLockStore` + envStore/selectionStore 挂钩 + 败方降级 + 红叉渲染）
 - [x] 已保存广播：房主保存成功后广播 `Saved`，其他人弹窗"房主已保存"（`CollabHub.NotifySaved` 房主身份校验；core `collabSessionStore.notifySaved()` + `onSaved` → showPop；web Editor.vue 保存成功路径调用；mock 传输单测 2 例）
+- [x] 可协作状态：`SaveDto.CollabEnabled` 由 `EnrichRuntimeStatus` 直接取 `CollabRoomManager.HasRoom(saveId)`（当前是否存在活跃协作房间），列表/LoadStatus 全路径生效；房间随最后一人离开自动回收，"房主关闭存档后徽章残留"由服务器天然保证——徽章语义 = 当前有人在协作（进入即加入），无需任何客户端上报/内存缓存（曾实现的 `CollabAvailabilityCache` + 上报端点已移除）；存档列表 `SaveAvatar` 据此显示蓝色"可协作"状态（优先于"占用中/可编辑"）。已知语义：开关持久化打开但无人在线时徽章不亮（进入仍会按约定自动创建房间协作）
 
 ## 步骤一：undo 栈防污染（已完成）
 
