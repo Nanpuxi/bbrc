@@ -137,7 +137,14 @@ describe('collabSessionStore 协作会话编排', () => {
             mock.handlers.onOp(mkOp(4, ptAdd(901)))
             return { seq: 3, payload: JSON.stringify(snapSave), fromUserName: 'boss' }
         }
-        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+        // join 先试增量：首轮报 Gap（队列修剪）→ 快照兜底；快照重建后再 SyncOps 为稳态
+        let syncCalls = 0
+        mock.syncOpsImpl = async () => {
+            syncCalls++
+            return syncCalls === 1
+                ? { ops: [], latestSeq: 3, gap: true }
+                : { ops: [], latestSeq: 4, gap: false }
+        }
 
         const session = useCollabSessionStore()
         await session.join(1)
@@ -248,7 +255,14 @@ describe('collabSessionStore 协作会话编排', () => {
             const s = createSave()
             return { seq: 2, payload: JSON.stringify(s), fromUserName: 'boss' }
         }
-        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 2, gap: false })
+        // join 先试增量：首轮报 Gap（队列修剪）→ 快照兜底；快照重建后再 SyncOps 为稳态
+        let syncCalls = 0
+        mock.syncOpsImpl = async () => {
+            syncCalls++
+            return syncCalls === 1
+                ? { ops: [], latestSeq: 2, gap: true }
+                : { ops: [], latestSeq: 2, gap: false }
+        }
 
         const session = useCollabSessionStore()
         await session.join(1)
@@ -264,6 +278,8 @@ describe('collabSessionStore 协作会话编排', () => {
             members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }], locks: [],
         })
         collabSessionTiming.snapshotMaxAttempts = 2
+        // join 先试增量：Gap（队列修剪）→ 快照兜底；快照始终未就绪 → 彻底失败
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 2, gap: true })
 
         const session = useCollabSessionStore()
         await expect(session.join(1)).rejects.toThrow()
@@ -353,8 +369,9 @@ describe('collabSessionStore 协作会话编排', () => {
             members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
             locks: [],
         })
-        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(createSave()), fromUserName: 'boss' })
-        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+        mock.syncOpsImpl = async () => ({
+            ops: [mkOp(1, ptAdd(1)), mkOp(2, ptAdd(2)), mkOp(3, ptAdd(3))], latestSeq: 3, gap: false,
+        })
         await session.leave()
         await session.join(1)
         expect(session.isOwner).toBe(false)
@@ -389,6 +406,47 @@ describe('collabSessionStore 协作会话编排', () => {
         mock.handlers.onSnapshotRequested(1)
         await flush()
         expect(mock.uploads.length).toBe(1)
+    })
+
+    it('SnapshotRequested：同步中（等快照/追赶）但本地状态未被重建时可上传——破解双向互拒死锁', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.syncOpsImpl = async () => ({
+            ops: [mkOp(1, ptAdd(1)), mkOp(2, ptAdd(2)), mkOp(3, ptAdd(3))], latestSeq: 3, gap: false,
+        })
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.isOwner).toBe(false)
+
+        // 房主重连：成员处于 resyncAfterOwnerReconnect 的 syncing 窗口，
+        // 本地存档仍是房内完整副本（水位覆盖内容）→ 可提供快照，打破双方 syncing 互拒
+        session.state = 'syncing'
+        mock.handlers.onSnapshotRequested(1)
+        await flush()
+        expect(mock.uploads.length).toBe(1)
+        expect(mock.uploads[0].seq).toBe(3)
+    })
+
+    it('join：非独房且队列未修剪 → 增量补齐即完成，不请求快照（B 修复）', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 2, idPrefix: 5, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.syncOpsImpl = async () => ({ ops: [mkOp(1, ptAdd(801)), mkOp(2, ptAdd(802))], latestSeq: 2, gap: false })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.state).toBe('synced')
+        expect(mock.requestSnapshotCalls).toBe(0)  // 队列完整：根本不需要快照
+        expect(session.currentSeq()).toBe(2)
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual([801, 802])
     })
 
     it('submitOp 守卫：未同步完成或断线时拒绝提交', async () => {
@@ -764,7 +822,14 @@ describe('collabSessionStore 协作会话编排', () => {
         const snapSave = createSave()
         snapSave.points = [{ id: 900, pos: [0, 0], dir: 0, sta: 0 }] as Save['points']
         mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(snapSave), fromUserName: 'me' })
-        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+        // join 先试增量：首轮报 Gap（队列修剪）→ 快照兜底；快照重建后再 SyncOps 为稳态
+        let syncCalls = 0
+        mock.syncOpsImpl = async () => {
+            syncCalls++
+            return syncCalls === 1
+                ? { ops: [], latestSeq: 3, gap: true }
+                : { ops: [], latestSeq: 3, gap: false }
+        }
 
         const session = useCollabSessionStore()
         await session.join(1)

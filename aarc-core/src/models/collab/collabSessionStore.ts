@@ -135,6 +135,9 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     const opBuffer = new Map<number, CollabOpMsg>()
     let catchingUp = false
     let snapshotUploading = false
+    /** 快照整档重建进行中（reloadSaveFromSnapshot 之后、补齐重放完成之前）：
+     *  期间本地存档正在被覆盖，禁止作为快照提供方上传（水位与内容不一致） */
+    let snapshotRebuilding = false
     let sessionEpoch = 0
     /**
      * 本地 diff 基线（4.6）：始终等于"save 减去尚未捕获的本地编辑"。
@@ -279,26 +282,32 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 catch { continue }
                 if (!snap)
                     continue
-                reloadSaveFromSnapshot(JSON.parse(snap.payload))
-                lastSeq = snap.seq
-                pendingOwnSeqs.clear()
-                // 本地未 ack 编辑随整档替换丢失：按原序重放到快照底上，保持用户可见状态不变
-                // （之后 flush 会把它们作为全新 op 重提交拿到新 seq）；
-                // 重放属"非本地编辑动作"，undo 基线对齐以免误入 undo 栈
-                const reloaded = useSaveStore().save
-                if (reloaded && pendingLocalDiffs.length > 0) {
-                    for (const d of pendingLocalDiffs)
-                        applySaveDiff(reloaded, d)
-                    useUndoStore().syncBaseline(reloaded)
+                snapshotRebuilding = true   // 重建期间禁止作为快照提供方（水位与内容不一致）
+                try {
+                    reloadSaveFromSnapshot(JSON.parse(snap.payload))
+                    lastSeq = snap.seq
+                    pendingOwnSeqs.clear()
+                    // 本地未 ack 编辑随整档替换丢失：按原序重放到快照底上，保持用户可见状态不变
+                    // （之后 flush 会把它们作为全新 op 重提交拿到新 seq）；
+                    // 重放属"非本地编辑动作"，undo 基线对齐以免误入 undo 栈
+                    const reloaded = useSaveStore().save
+                    if (reloaded && pendingLocalDiffs.length > 0) {
+                        for (const d of pendingLocalDiffs)
+                            applySaveDiff(reloaded, d)
+                        useUndoStore().syncBaseline(reloaded)
+                    }
+                    opBaseline = reloaded ? cloneSaveData(reloaded) : null
+                    const sync = await t.syncOps(sid, lastSeq)
+                    if (sync.gap)
+                        break  // 水位之后又被修剪（极端）：外层重试拿更新快照
+                    await applyOrdered(sync.ops)
+                    await drainBuffer()
+                    void flushLocalOps()  // 稳态 Gap 重建路径：重放后的未 ack 本地 op 立即重发
+                    return
                 }
-                opBaseline = reloaded ? cloneSaveData(reloaded) : null
-                const sync = await t.syncOps(sid, lastSeq)
-                if (sync.gap)
-                    break  // 水位之后又被修剪（极端）：外层重试拿更新快照
-                await applyOrdered(sync.ops)
-                await drainBuffer()
-                void flushLocalOps()  // 稳态 Gap 重建路径：重放后的未 ack 本地 op 立即重发
-                return
+                finally {
+                    snapshotRebuilding = false
+                }
             }
             // 本轮轮询超时：房主可能已断连换人（OwnerChanged 已更新 ownerUserId），下轮重新请求
         }
@@ -439,11 +448,14 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     }
 
     /** 收到服务器的快照转发请求时上传本地存档（§7.1 ③：服务器优先转给房主，
-     *  房主无存活连接时转给任一成员兜底）。上传前提：稳态且不持有未 ack 本地编辑——
-     *  水位（lastSeq）必须覆盖快照内容，否则请求方按水位补齐时会把我已含在快照里的
-     *  编辑作为新 op 再应用一次；在途上传去重（缓存可被覆盖，后到者无害） */
+     *  房主无存活连接时转给任一成员兜底）。上传前提：本次会话建立过同步（everSynced）、
+     *  本地存档未被快照重建覆盖、且不持有未 ack 本地编辑——水位（lastSeq）必须覆盖
+     *  快照内容，否则请求方按水位补齐时会把我已含在快照里的编辑作为新 op 再应用一次。
+     *  同步中（追赶/等快照）但本地状态完整时也允许上传：这是房主重连时请求方与提供方
+     *  同处 syncing 相互拒绝、无人能供快照的死锁（A 修复）的破解点；
+     *  在途上传去重（缓存可被覆盖，后到者无害） */
     async function uploadSnapshotOnRequest(sid: number): Promise<void> {
-        if (sid !== saveId.value || state.value !== 'synced' || pendingLocalDiffs.length > 0 || snapshotUploading)
+        if (sid !== saveId.value || !everSynced || snapshotRebuilding || pendingLocalDiffs.length > 0 || snapshotUploading)
             return
         snapshotUploading = true
         try {
@@ -596,8 +608,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
 
     /**
      * 加入协作房间并完成同步（resolve 时 state === 'synced'）。
-     * 全新房间（我独自开的房）跳过快照直接可用；已有房间走快照初始化管线。
-     * 失败抛错并清理回 off。
+     * 全新房间（我独自开的房）跳过快照直接可用；已有房间先试增量补齐（队列被修剪
+     * 才走快照兜底）；独房重进按保存点水位从队列重建。失败抛错并清理回 off。
      */
     async function join(sid: number): Promise<void> {
         const t = requireTransport()
@@ -637,7 +649,9 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 if (alone)
                     await catchUpAloneJoin(res.latestSeq)
                 else
-                    await snapshotFlow()
+                    // 先试增量补齐（队列未修剪根本不需要快照）；Gap 时 catchUp 内部走快照兜底。
+                    // 也避免与成员侧的"房主重连重建"互发快照请求、双方 syncing 互拒无人提供
+                    await catchUp()
                 if (epoch !== sessionEpoch)
                     return
             }
@@ -683,6 +697,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         state.value = 'off'
         everSynced = false
         connState.value = 'online'
+        snapshotRebuilding = false   // 兜底：作废在途重建（epoch 失效后标志不得悬挂）
         saveId.value = null
         ownerUserId.value = 0
         ownerOffline.value = false
