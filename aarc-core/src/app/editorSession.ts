@@ -9,6 +9,8 @@ import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
 import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
+import { useCvsBlocksControlStore } from "aarc-core/models/cvs/common/cvs";
+import { nextTick } from "vue";
 
 /**
  * 编辑器会话入口（decoupling-step17.md 工作包 C）。
@@ -84,7 +86,11 @@ export function reloadSaveFromSnapshot(raw: unknown): void {
     undoStore.clear()
     undoStore.push(saveStore.save)
     // 快照整档重建必须立即呈现（蒙层期间用户在等），无视活跃期抑制
-    useRemoteRenderScheduler().renderNow()
+    // 先刷新画布 block 状态（否则画布不存在），下一个 tick 再进行渲染
+    useCvsBlocksControlStore().refreshBlocks()
+    nextTick(()=>{
+        useRemoteRenderScheduler().renderNow()
+    })
 }
 
 /**
