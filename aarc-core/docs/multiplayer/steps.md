@@ -15,7 +15,7 @@
 - [x] 步骤二：纯数据刷新路径 + 远程 op 应用管线（`remoteOpApplier.applyRemoteSaveDiff`）
 - [x] 步骤三：对象锁（`collabLockStore` + envStore/selectionStore 挂钩 + 败方降级 + 红叉渲染）
 - [x] 已保存广播：房主保存成功后广播 `Saved`，其他人弹窗"房主已保存"（`CollabHub.NotifySaved` 房主身份校验；core `collabSessionStore.notifySaved()` + `onSaved` → showPop；web Editor.vue 保存成功路径调用；mock 传输单测 2 例）
-- [x] 可协作状态：`SaveDto.CollabEnabled` 由 `EnrichRuntimeStatus` 直接取 `CollabRoomManager.HasRoom(saveId)`（当前是否存在活跃协作房间），列表/LoadStatus 全路径生效；房间随最后一人离开自动回收，"房主关闭存档后徽章残留"由服务器天然保证——徽章语义 = 当前有人在协作（进入即加入），无需任何客户端上报/内存缓存（曾实现的 `CollabAvailabilityCache` + 上报端点已移除）；存档列表 `SaveAvatar` 据此显示蓝色"可协作"状态（优先于"占用中/可编辑"）。已知语义：开关持久化打开但无人在线时徽章不亮（进入仍会按约定自动创建房间协作）
+- [x] 可协作状态：`SaveDto.CollabEnabled` 由 `EnrichRuntimeStatus` 直接取 `CollabRoomManager.HasRoom(saveId)`（当前是否存在活跃协作房间），列表/LoadStatus 全路径生效；房间随最后一人离开自动回收，"房主关闭存档后徽章残留"由服务器天然保证——徽章语义 = 当前有人在协作（进入即加入），无需任何客户端上报/内存缓存（曾实现的 `CollabAvailabilityCache` + 上报端点已移除）；存档列表 `SaveAvatar` 据此显示蓝色"可协作"状态（优先于"占用中/可编辑"）。已知语义：开关持久化打开但无人在线时徽章不亮；且按 §7.1 修订（待实施），仅存档所有者可创建房间——非 owner 进入时不会启动协作机制，owner 进入才开房（徽章亮）
 
 ## 步骤一：undo 栈防污染（已完成）
 
@@ -81,11 +81,23 @@
 - [ ] 4.7 **验证**：`pnpm --filter aarc-core type-check`、`pnpm --filter aarc-web type-check`、core 单测（mock 传输接口）、`dotnet test AARC.Collab.Test`
 - [x] 4.8 **协作功能开关**（`save.meta.collabEnabled`，旧存档 normalize 默认 false）：编辑器右上角新增 `CollabPanel.vue`（按钮在聊天按钮左侧），仅存档所有者可编辑开关、其他人仅见启用状态；未启用时打开存档不加入协作房间（Occupied 回退协作前的仅浏览行为）；所有者关闭时先把开关变更作为 op 广播（meta 变更不触发画布渲染，手动 `captureLocalOp` + 限时 `flushLocalOps`）再离房，所有成员（含所有者自己）经 Editor 的 meta watch 断开并弹窗"所有者已关闭协作"（`CollabPanel.notifyCollabClosed`）；关闭导致的离房不触发"会话异常结束"刷新，非心跳持有者改提示"无法保存请刷新"
 
-已定稿（原"待明确"）：**持久化责任人 = 房主制**——第一个打开/加入存档的人才能保存，协作者只能把编辑实时传递给房主；房主离开由最早加入者继任（`OwnerChanged`）。详见 `backend-plan.md` §8。
+已定稿（原"待明确"，**2026-09 已由 §7.1 修订取代，见文末"待实施"节**）：~~持久化责任人 = 房主制——第一个打开/加入存档的人才能保存，协作者只能把编辑实时传递给房主；房主离开由最早加入者继任（`OwnerChanged`）~~。详见 `backend-plan.md` §8 与 §7.1。
 
-待明确（不阻塞 4.1~4.4）：锁是否需心跳保活（当前设计锁随连接存活、断连即释放，大概率够用）
+待明确（不阻塞 4.1~4.4）：锁是否需心跳保活（当前设计锁随连接存活、断连即释放——房主断连宽限期为例外，见 backend-plan §7.1，大概率够用）
 
 执行顺序：4.1 → 4.2 →（4.3、4.4 与 4.5/4.6 可并行）→ 4.7
+
+## 待实施：房主生命周期修订（2026-09，仅文档已定稿，代码未实施）
+
+需求来源：协作中的用户切换 saveId/离开页面时房间清理不可靠（整页刷新不触发 `onBeforeUnmount`，只能靠断连兜底），且"房主离开=继任"语义与产品预期不符。完整协议见 `backend-plan.md` §7.1，此处列实施清单：
+
+- [ ] **仅存档所有者可启动协作**：`JoinRoom` 房间不存在时校验调用者是存档所有者（Hub 查存档归属），非 owner 拒绝（其他人进入不启动协作机制，回退协作前的原有打开行为）；房间已存在时协作者加入逻辑不变。已知取舍见 backend-plan §13（非 owner 无房进入占用心跳会挡住后来者）
+- [ ] **房主主动关房**：新增 `CloseRoom` RPC（仅房主、幂等）；房主离开编辑器路由/切换 saveId 时客户端先尽力 `await CloseRoom` 再离开；服务器回收房间并广播 `RoomClosed`。传输层 `CollabTransport` 加 `closeRoom`，core `collabSession` 的 leave 在 `isOwner` 时改发 `CloseRoom`
+- [ ] **两种弹窗规格**："所有者已关闭房间"（`RoomClosed`）与"所有者已关闭协作"（`collabEnabled=false` op 广播，现有 `CollabPanel` 弹窗）均要求 `bgClickClose=false`（只能按钮关闭，前者复用 `Prompt` 组件），**关闭后立即 `router.push('/')` 跳首页**（现有"已关闭协作"弹窗需补跳转）；同一会话两者都收到时不重复弹
+- [ ] **房主断网宽限期**：服务器区分主动关房信号与断连——房主断连未发 `CloseRoom` 时房间保留 `OwnerOfflineGraceSeconds`（默认建议 30s，`CollabOptions` 新增配置），广播 `OwnerOffline`；宽限期内房主重连（`JoinRoom` 幂等）→ 广播 `OwnerReconnected`，其他成员**全部重新走快照流程**（§10 整档重建）后解除蒙层；超时 → 视同关房广播 `RoomClosed`
+- [ ] **房主离线蒙层**：客户端收到 `OwnerOffline` 显示全屏蒙层（复用 `CollabStatusOverlay`，`canEdit=false`）阻止其他成员操作；`OwnerReconnected` 且快照重建完成后解除。整页刷新/关标签页场景 `onBeforeUnmount` 不执行，`CloseRoom` 发不出去——靠宽限期兜底（重进恢复，超时关房）
+- [ ] **继任功能保留但暂不使用**：`CollabLeaveResult.NewOwner`、`OwnerChanged`、`ensureOwnerHeartbeat` 接管路径不删除、不接线（新流程下房主离开即关房，不会触发）
+- [ ] 实施时同步更新 `AARC.Collab.Test` 并发语义用例（仅 owner 可开房、CloseRoom 关房广播、宽限期内重连恢复、超时关房）
 
 ## 步骤五：收尾验证
 
