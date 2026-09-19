@@ -40,14 +40,16 @@ export const useResetterStore = defineStore('resetter', ()=>{
     // 远程 op 的纯数据刷新只失效“由存档数据派生的缓存”；
     // 不触碰本地编辑/交互态（nameEdit/textTagEdit 的编辑中状态、pointLink 的连线创建、
     // discardArea 的拖删状态、namePosMemory 的站名位置记忆、envStore 的激活对象），
-    // 避免远程变更打断本地正在进行的输入或拖动
+    // 避免远程变更打断本地正在进行的输入或拖动。
+    // 注意不含 cvsBlocksControl：画布块几何只取决于视口框/分辨率比，不由存档数据派生，
+    // 而其 clearItems 会清空 blocksControl（canvas DOM 随之销毁）——每条远程 op 都重建
+    // 画布块是远程重渲染白闪的根源
     const remoteDataCacheStoreUses:(()=>{clearItems:()=>void})[] = [
         useFormalizedLineStore,
         useStaNameRectStore,
         useStaNameMainRectStore,
         useTextTagRectStore,
         useLineExtendStore,
-        useCvsBlocksControlStore,
         useIconStore
     ]
 
@@ -79,9 +81,17 @@ export const useResetterStore = defineStore('resetter', ()=>{
         useStaClusterStore().restoreWithPatch(diff ? saveDiffToSavePatch(diff) : undefined)
     }
 
-    async function relaunchDerivedStores(){
+    /**
+     * 重启派生 store（await 图标加载完成）。
+     * @param repairCanvasBlocks 是否重刷画布块。undo/stash 等整档重置会先 clearItems 掉
+     * 画布块（canvas DOM 随之销毁），须在此重建并借 reform handler 补绘；
+     * 远程 op 只失效数据缓存、不碰画布块，传 false——否则每条 op 都因重建 canvas DOM
+     * 产生空白帧（白闪），还可能与同步渲染竞争把内容画到已离屏的旧 canvas 上
+     */
+    async function relaunchDerivedStores(repairCanvasBlocks = true){
         await useIconStore().ensureAllLoaded()
-        useCvsBlocksControlStore().refreshBlocks()
+        if(repairCanvasBlocks)
+            useCvsBlocksControlStore().refreshBlocks()
     }
 
     return { resetDerivedStores, refreshDerivedStoresForRemote, relaunchDerivedStores }

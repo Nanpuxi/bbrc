@@ -45,7 +45,8 @@ export async function applyRemoteSaveDiff(diff: SaveDiff): Promise<void> {
     // 数据已就位（同步部分完成，不等异步的派生 store 重启）：通知宿主立即更新
     // 未保存标记等数据态 UI；随后再请求"同步驱动"渲染（用户活跃期会被抑制/合并）
     afterRemoteSaveApplied?.()
-    await resetterStore.relaunchDerivedStores()
+    // 远程路径不重建画布块（false）：画布块非存档派生缓存，重建 canvas DOM 是白闪根源
+    await resetterStore.relaunchDerivedStores(false)
     useRemoteRenderScheduler().requestRemoteRender()
 }
 
