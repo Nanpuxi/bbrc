@@ -9,24 +9,25 @@ public class CollabRoomManagerMemberTests
     [Fact]
     public void LeaveAllRooms_Disconnect_ReleasesAllLocksOfThatConnection()
     {
-        // Arrange：u1 持 k1/k2，u2 持 k3
+        // Arrange：u1 房主持 k3，u2 持 k1/k2
         var mgr = TestRooms.NewManager();
         TestRooms.Join(mgr, SaveId, 1);
         TestRooms.Join(mgr, SaveId, 2);
-        mgr.TryAcquireLock(SaveId, 1, "user1", "conn-1", "k1");
-        mgr.TryAcquireLock(SaveId, 1, "user1", "conn-1", "k2");
-        mgr.TryAcquireLock(SaveId, 2, "user2", "conn-2", "k3");
+        mgr.TryAcquireLock(SaveId, 1, "user1", "conn-1", "k3");
+        mgr.TryAcquireLock(SaveId, 2, "user2", "conn-2", "k1");
+        mgr.TryAcquireLock(SaveId, 2, "user2", "conn-2", "k2");
 
-        // Act：u1 断连
-        var leaves = mgr.LeaveAllRooms("conn-1");
+        // Act：u2（非房主）断连
+        var leaves = mgr.LeaveAllRooms("conn-2");
 
-        // Assert：k1/k2 释放并逐条出现在结果里；u1 成员移出
+        // Assert：k1/k2 释放并逐条出现在结果里；u2 成员移出；房主断连宽限期不影响非房主
         var res = Assert.Single(leaves).Value;
+        Assert.False(res.OwnerOffline);
         Assert.Equal(2, res.ReleasedLocks.Count);
         Assert.Contains(res.ReleasedLocks, x => x.Key == "k1");
         Assert.Contains(res.ReleasedLocks, x => x.Key == "k2");
-        Assert.Equal(1, res.LeftMember?.UserId);
-        // k1 现在可被他人获得；k3 仍被 u2 持有
+        Assert.Equal(2, res.LeftMember?.UserId);
+        // k1 现在可被他人获得；k3 仍被房主持有
         TestRooms.Join(mgr, SaveId, 3);
         Assert.True(mgr.TryAcquireLock(SaveId, 3, "user3", "conn-3", "k1"));
         Assert.False(mgr.TryAcquireLock(SaveId, 3, "user3", "conn-3", "k3"));
@@ -55,7 +56,7 @@ public class CollabRoomManagerMemberTests
     }
 
     [Fact]
-    public void LeaveRoom_OwnerLeaves_EarliestRemainingMemberSucceeds()
+    public void LeaveRoom_OwnerLeaves_RoomClosed()
     {
         // Arrange：u1 房主，u2、u3 随后加入
         var mgr = TestRooms.NewManager();
@@ -64,17 +65,12 @@ public class CollabRoomManagerMemberTests
         TestRooms.Join(mgr, SaveId, 3);
         Assert.Equal(1, first.OwnerUserId);
 
-        // Act：房主离开
+        // Act：房主主动离开（视为"主动关房信号"，backend-plan.md §7.1 ③）
         var res = mgr.LeaveRoom(SaveId, "conn-1");
 
-        // Assert：最早加入的剩余成员继任
-        Assert.Equal(2, res?.NewOwner?.UserId);
-
-        // Act：新房主再离开
-        var res2 = mgr.LeaveRoom(SaveId, "conn-2");
-
-        // Assert
-        Assert.Equal(3, res2?.NewOwner?.UserId);
+        // Assert：整个房间关闭（继任路径保留但暂不使用，不再有 NewOwner）
+        Assert.True(res?.RoomClosed);
+        Assert.False(mgr.HasRoom(SaveId));
     }
 
     [Fact]
@@ -95,19 +91,20 @@ public class CollabRoomManagerMemberTests
     }
 
     [Fact]
-    public void LeaveRoom_LastMember_RoomDestroyedAndStateForgotten()
+    public void LeaveRoom_LastMemberLeaves_RoomClosedAndStateForgotten()
     {
-        // Arrange：房内留有 op 与锁
+        // Arrange：房内留有 op 与锁（u1 是唯一成员即房主）
         var mgr = TestRooms.NewManager();
         TestRooms.Join(mgr, SaveId, 1);
         mgr.AppendOp(SaveId, 1, "user1", "op-0", "{}", 0);
         mgr.TryAcquireLock(SaveId, 1, "user1", "conn-1", "k1");
 
-        // Act：最后的成员离开
+        // Act：房主（最后成员）主动离开 → 关房（§7.1：房主离开即关房）
         var res = mgr.LeaveRoom(SaveId, "conn-1");
 
         // Assert：房间回收；之后 SyncOps 视为全新房间，AppendOp 找不到房间
-        Assert.True(res?.RoomDestroyed);
+        Assert.True(res?.RoomClosed);
+        Assert.False(mgr.HasRoom(SaveId));
         Assert.Equal(0, mgr.SyncOps(SaveId, 0).LatestSeq);
         Assert.Throws<CollabException>(() => mgr.AppendOp(SaveId, 1, "user1", "op-1", "{}", 0));
     }
@@ -123,6 +120,21 @@ public class CollabRoomManagerMemberTests
         Assert.Null(mgr.LeaveRoom(SaveId, "conn-unknown"));
         Assert.Null(mgr.LeaveRoom(999, "conn-1"));
         Assert.Empty(mgr.LeaveAllRooms("conn-unknown"));
+    }
+
+    [Fact]
+    public void JoinRoom_MyConnectionCount_TracksAllConnectionsOfUser()
+    {
+        // Arrange & Act：同一用户两个连接依次进房
+        var mgr = TestRooms.NewManager();
+        var first = TestRooms.Join(mgr, SaveId, 1, "conn-1a");
+        var second = TestRooms.Join(mgr, SaveId, 1, "conn-1b");
+
+        // Assert：计数含本次连接（客户端据此判定"独房"：同用户多连接/多设备不算独房）
+        Assert.Equal(1, first.MyConnectionCount);
+        Assert.Equal(2, second.MyConnectionCount);
+        // 其他用户的计数不受影响
+        Assert.Equal(1, TestRooms.Join(mgr, SaveId, 2).MyConnectionCount);
     }
 
     [Fact]

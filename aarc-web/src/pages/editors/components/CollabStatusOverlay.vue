@@ -2,13 +2,15 @@
 import { computed } from 'vue'
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore'
 
-// 协作断线/同步蒙层（步骤四 4.6）：会话进行中但不可安全编辑时盖住画布，
-// 阻止继续操作（补齐后 diff 基线变动、本地锁已被服务器释放，继续编辑意义不大）。
+// 协作断线/同步/房主离线蒙层（步骤四 4.6 + backend-plan.md §7.1 ③）：会话进行中但不可安全
+// 编辑时盖住画布，阻止继续操作（补齐后 diff 基线变动、本地锁已被服务器释放，继续编辑意义不大）。
 // SignalR 检测断连有延迟，蒙层出现前产生的编辑会落入会话层的未 ack 待发队列，不会丢失。
 const emit = defineEmits<{ leave: [] }>()
 const session = useCollabSessionStore()
 const show = computed(() => session.isInSession && !session.canEdit)
 const msg = computed(() => {
+    if (session.ownerOffline)
+        return '等待房主重新连接'
     if (session.state === 'syncing')
         return '正在同步协作内容…'
     if (session.connState === 'reconnecting')

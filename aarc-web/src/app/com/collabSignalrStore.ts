@@ -75,6 +75,9 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         conn.on("OwnerChanged", (m: CollabMemberWire) => handlers?.onOwnerChanged(m))
         conn.on("SnapshotRequested", (saveId: number) => handlers?.onSnapshotRequested(saveId))
         conn.on("Saved", (userName: string) => handlers?.onSaved(userName))
+        conn.on("RoomClosed", (saveId: number) => handlers?.onRoomClosed(saveId))
+        conn.on("OwnerOffline", (saveId: number) => handlers?.onOwnerOffline(saveId))
+        conn.on("OwnerReconnected", (saveId: number) => handlers?.onOwnerReconnected(saveId))
 
         conn.onreconnecting(err => {
             console.warn('[协作]正在重新连接', err?.message ?? '')
@@ -112,6 +115,18 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         }
         catch (e) {
             console.warn(`[协作]退出房间 ${saveId} 失败（由服务器断连清理兜底）`, e)
+        }
+    }
+
+    async function closeRoom(saveId: number): Promise<void> {
+        // 房主主动关房（backend-plan.md §7.1 ②）：尽力而为——失败（断线/整页刷新）由
+        // 服务器断网宽限期兜底（重进恢复，超时关房）
+        try {
+            if (connection?.state === HubConnectionState.Connected)
+                await connection.invoke("CloseRoom", saveId)
+        }
+        catch (e) {
+            console.warn(`[协作]关闭房间 ${saveId} 失败（由服务器宽限期兜底）`, e)
         }
     }
 
@@ -175,6 +190,7 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         setHandlers,
         join,
         leave,
+        closeRoom,
         submitOp,
         syncOps,
         acquireLock,

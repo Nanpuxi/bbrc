@@ -8,7 +8,7 @@ using System.Net;
 namespace AARC.WebApi.Controllers
 {
     /// <summary>
-    /// 协作房间的存档快照直传（新成员初始化）：房主上传、成员轮询下载。
+    /// 协作房间的存档快照直传（新成员初始化/重建兜底）：房主优先上传、任何在房成员可兜底上传，成员轮询下载。
     /// 快照可达 MB 级，不走 SignalR（MaximumReceiveMessageSize 限制），走 HTTP。
     /// </summary>
     [Authorize]
@@ -18,7 +18,8 @@ namespace AARC.WebApi.Controllers
         HttpUserIdProvider httpUserIdProvider
         ) : Controller
     {
-        /// 房主上传存档快照（仅现任房主；Payload 为 LZString 压缩后的 base64）
+        /// 上传存档快照（正常流程由现任房主上传；房主无存活连接时任何在房成员兜底，§7.1 ③。
+        /// Payload 为 LZString 压缩后的 base64；客户端保证水位覆盖快照内容后才上传）
         [HttpPost("/collab/snapshot")]
         [UserCheck]
         [RequestSizeLimit(8 * 1024 * 1024)]

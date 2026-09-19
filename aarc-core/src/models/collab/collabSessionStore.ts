@@ -43,6 +43,14 @@ import rfdc from "rfdc";
  * - flush 遇提交失败（断线/限流/权限）即停，op 留队，重连补齐后按原序重发
  *
  * 单房间假设：一个编辑器会话同时只在一个协作房间内（saveId 过滤所有事件）。
+ *
+ * 房主生命周期（backend-plan.md §7.1，2026-09 修订）：
+ * - 房主离开即关房：leave 在 isOwner 时改发 closeRoom（主动关房信号），服务器广播 RoomClosed
+ * - 收到 RoomClosed（含房主自己的其他连接）：清理本地会话并置 roomClosedNotice（web 弹窗+跳首页）
+ * - 房主断连宽限期：onOwnerOffline 置 ownerOffline（canEdit=false → 离线蒙层）；宽限期内
+ *   房主重连服务器广播 OwnerReconnected，其他成员以快照整档重建（而非增量补齐——离线期间
+ *   状态可能分叉）后解除蒙层
+ * - 继任路径（OwnerChanged/ensureOwnerHeartbeat）保留但暂不使用：新流程下不会触发
  */
 
 export type CollabSessionState = 'off' | 'syncing' | 'synced'
@@ -62,6 +70,45 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const genOpId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 const cloneSaveData = rfdc()
 
+// ---- 保存点水位标记（localStorage；§7.1 ③独房重进的重建基准）----
+// 语义：该存档"DB 已落库状态"对应的房间水位。仅两个已知准确点会写入——
+// 开房（fresh room，DB 即房间基线，水位 0）与 保存成功（DB=当前 lastSeq）。
+// 整页刷新/崩溃不触发清理，标记跨刷新存活；正常离房/关房（cleanupLocal）清除。
+// 客户端凭它在"仅自己一人的房间重进"时从保存点补齐队列（恢复未保存编辑，
+// 又避免把已落库的效果重复应用）；标记缺失（他端保存过等）时保守跳过历史 op。
+const savedSeqMarkerKey = (sid: number) => `aarc-collab-saved-seq:${sid}`
+
+function readSavedSeqMarker(sid: number): number | null {
+    try {
+        if (typeof localStorage === 'undefined')
+            return null
+        const raw = localStorage.getItem(savedSeqMarkerKey(sid))
+        if (raw === null)
+            return null
+        const v = Number(raw)
+        return Number.isFinite(v) && v >= 0 ? v : null
+    }
+    catch {
+        return null
+    }
+}
+
+function writeSavedSeqMarker(sid: number, seq: number): void {
+    try {
+        if (typeof localStorage !== 'undefined')
+            localStorage.setItem(savedSeqMarkerKey(sid), String(seq))
+    }
+    catch { /* 隐私模式等场景静默降级：退化为"标记缺失"的保守路径 */ }
+}
+
+function clearSavedSeqMarker(sid: number): void {
+    try {
+        if (typeof localStorage !== 'undefined')
+            localStorage.removeItem(savedSeqMarkerKey(sid))
+    }
+    catch { /* 同上升降级 */ }
+}
+
 export const useCollabSessionStore = defineStore('collabSession', () => {
     const state = ref<CollabSessionState>('off')
     const connState = ref<CollabConnState>('online')
@@ -72,8 +119,12 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
 
     const isInSession = computed(() => state.value !== 'off')
     const isOwner = computed(() => isInSession.value && ownerUserId.value !== 0 && ownerUserId.value === myUserId.value)
+    /** 房主处于断网宽限期（§7.1 ③）：成员显示离线蒙层，等待重连或超时关房 */
+    const ownerOffline = ref(false)
+    /** RoomClosed 通知计数（web watch 弹窗"所有者已关闭房间"并跳首页；与"已关闭协作"弹窗去重） */
+    const roomClosedNotice = ref(0)
     /** 可安全编辑 = 同步完成且连接在线（断线蒙层/禁止编辑的依据，见 4.6） */
-    const canEdit = computed(() => state.value === 'synced' && connState.value === 'online')
+    const canEdit = computed(() => state.value === 'synced' && connState.value === 'online' && !ownerOffline.value)
 
     // ---- 非响应式内部状态（无渲染依赖，避免包装开销）----
     let lastSeq = 0
@@ -182,6 +233,23 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         }
     }
 
+    /**
+     * 房内仅自己一人时的增量追赶（房主独房重连，backend-plan §7.1 ③配套）：
+     * 队列被修剪（Gap）时**跳过快照重建**——无人可提供快照，自己的本地状态就是房间内
+     * 最完整副本（缺口处的 op 已随修剪对所有人丢失）；未修剪则与常规追赶一致
+     */
+    async function catchUpWhenAlone(): Promise<void> {
+        const t = requireTransport()
+        const sync = await t.syncOps(saveId.value!, lastSeq)
+        if (sync.gap) {
+            console.warn('[协作]队列已修剪且房内仅自己一人，跳过快照重建（本地状态即最完整副本）')
+            opBuffer.clear()
+            return
+        }
+        await applyOrdered(sync.ops)
+        await drainBuffer()
+    }
+
     /** 快照整档重建：请求房主 → 轮询 → 以快照为底 → SyncOps(水位) → 缓冲重放 */
     async function snapshotFlow(): Promise<void> {
         const t = requireTransport()
@@ -234,6 +302,34 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             // 本轮轮询超时：房主可能已断连换人（OwnerChanged 已更新 ownerUserId），下轮重新请求
         }
         throw lastError
+    }
+
+    /**
+     * 独房重进（join 路径，§7.1 ③配套）：刷新/重开页面重进自己独守的房间（CloseRoom 未发出、
+     * 房间在宽限期中）时快照无人可提供。以保存点水位标记为基准从房间队列补齐——恢复未保存
+     * 编辑，又避免把已落库的效果重复应用；标记缺失（可能在他端保存过，DB 与队列对应关系
+     * 不可考）或被修剪时保守续用 DB 加载状态（缺口对所有人生效为丢失），都不请求快照
+     */
+    async function catchUpAloneJoin(latestSeq: number): Promise<void> {
+        const sid = saveId.value!
+        const t = requireTransport()
+        const marker = readSavedSeqMarker(sid)
+        if (marker === null) {
+            console.warn('[协作]独房重进：无保存点水位标记（可能在他端保存过），不应用历史 op，以最后保存状态为底继续')
+            lastSeq = latestSeq
+            opBuffer.clear()
+            return
+        }
+        lastSeq = Math.min(marker, latestSeq)
+        const sync = await t.syncOps(sid, lastSeq)
+        if (sync.gap) {
+            console.warn('[协作]独房重进：保存点之后的 op 已被修剪，未保存编辑丢失（对所有人生效为丢失）')
+            lastSeq = latestSeq
+            opBuffer.clear()
+            return
+        }
+        await applyOrdered(sync.ops)
+        await drainBuffer()
     }
 
     /** 前缀应用：换前缀则 setIdPrefix(seed)；同前缀（重连）则种子只增不减 */
@@ -341,9 +437,12 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             members.value = [...members.value, m]
     }
 
-    async function uploadSnapshotAsOwner(sid: number): Promise<void> {
-        // 服务器只转发给房主，这里仍防御；在途上传去重（服务器有 TTL 缓存，新请求者可复用）
-        if (sid !== saveId.value || state.value !== 'synced' || !isOwner.value || snapshotUploading)
+    /** 收到服务器的快照转发请求时上传本地存档（§7.1 ③：服务器优先转给房主，
+     *  房主无存活连接时转给任一成员兜底）。上传前提：稳态且不持有未 ack 本地编辑——
+     *  水位（lastSeq）必须覆盖快照内容，否则请求方按水位补齐时会把我已含在快照里的
+     *  编辑作为新 op 再应用一次；在途上传去重（缓存可被覆盖，后到者无害） */
+    async function uploadSnapshotOnRequest(sid: number): Promise<void> {
+        if (sid !== saveId.value || state.value !== 'synced' || pendingLocalDiffs.length > 0 || snapshotUploading)
             return
         snapshotUploading = true
         try {
@@ -367,14 +466,23 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         const sid = saveId.value
         const epoch = sessionEpoch
         state.value = 'syncing'
+        // 房内仅自己一人（无其他成员）时快照无人可提供：Gap/补齐失败跳过快照兜底，
+        // 本地状态即房间内最完整副本（catchUpWhenAlone / 下方 catch 分支）
+        let alone = false
         try {
             const res = await t.join(sid)  // 幂等：原前缀、最新锁表快照、现任房主
             if (epoch !== sessionEpoch)
                 return
             ownerUserId.value = res.ownerUserId
             members.value = res.members
-            if (res.latestSeq > lastSeq)
-                await catchUp()
+            ownerOffline.value = !isOwner.value && res.ownerOffline === true
+            alone = res.members.every(m => m.userId === myUserId.value)
+            if (res.latestSeq > lastSeq) {
+                if (alone)
+                    await catchUpWhenAlone()
+                else
+                    await catchUp()
+            }
             if (epoch !== sessionEpoch)
                 return
             // 锁快照须在数据同步之后应用：否则补齐期间 pruneOtherLocks 会把
@@ -390,11 +498,19 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             if (epoch !== sessionEpoch)
                 return
             try {
-                await snapshotFlow()
-                if (epoch !== sessionEpoch)
-                    return
-                markSynced()
-                void flushLocalOps()
+                if (alone) {
+                    // 独房：快照无人可提供，续用本地状态（缺口 op 已随修剪对所有人生效为丢失）
+                    console.warn('[协作]重连补齐失败且房内仅自己一人，跳过快照兜底')
+                    markSynced()
+                    void flushLocalOps()
+                }
+                else {
+                    await snapshotFlow()
+                    if (epoch !== sessionEpoch)
+                        return
+                    markSynced()
+                    void flushLocalOps()
+                }
             }
             catch (e2) {
                 console.error('[协作]重连快照兜底也失败，退出协作会话', e2)
@@ -404,6 +520,43 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         }
     }
 
+    /** 房主宽限期内重连（§7.1 ③）：其他成员以房主快照整档重建（离线期间状态可能分叉，
+     *  增量补齐不如重建稳），完成后解除离线蒙层；彻底失败退会话 */
+    async function resyncAfterOwnerReconnect(): Promise<void> {
+        if (state.value === 'off' || saveId.value === null || isOwner.value)
+            return
+        const epoch = sessionEpoch
+        state.value = 'syncing'
+        try {
+            await snapshotFlow()
+            if (epoch !== sessionEpoch)
+                return
+            ownerOffline.value = false
+            markSynced()
+            void flushLocalOps()
+        }
+        catch (e) {
+            console.error('[协作]房主重连后的快照重建失败', e)
+            await handleSyncExhausted(e)
+        }
+    }
+
+    /** 房间被房主关闭（CloseRoom/断网超宽限期，§7.1）：清理本地会话；
+     *  web watch roomClosedNotice 弹窗"所有者已关闭房间"并跳首页 */
+    function onRoomClosed(sid: number): void {
+        if (state.value === 'off' || sid !== saveId.value)
+            return
+        sessionEpoch++
+        cleanupLocal()
+        roomClosedNotice.value++
+    }
+
+    function onOwnerOffline(sid: number): void {
+        if (state.value === 'off' || sid !== saveId.value || isOwner.value)
+            return
+        ownerOffline.value = true
+    }
+
     const handlers: CollabTransportHandlers = {
         onOp,
         onLockAcquired: l => { if (state.value !== 'off') applyRemoteCollabLock(l.key, l.holder) },
@@ -411,7 +564,13 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         onUserJoined,
         onUserLeft,
         onOwnerChanged,
-        onSnapshotRequested: sid => { void uploadSnapshotAsOwner(sid) },
+        onSnapshotRequested: sid => { void uploadSnapshotOnRequest(sid) },
+        onRoomClosed,
+        onOwnerOffline,
+        onOwnerReconnected: sid => {
+            if (state.value !== 'off' && sid === saveId.value)
+                void resyncAfterOwnerReconnect()
+        },
         onSaved: () => {
             if (state.value !== 'off')
                 useUniqueComponentsStore().showPop('房主已保存', 'success')
@@ -455,6 +614,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         opBuffer.clear()
         members.value = []
         ownerUserId.value = 0
+        ownerOffline.value = false
         myUserId.value = t.myUserId()
         try {
             t.setHandlers(handlers)
@@ -463,10 +623,20 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 return
             ownerUserId.value = res.ownerUserId
             members.value = res.members
+            ownerOffline.value = !isOwner.value && res.ownerOffline === true
             wireLockHandlers(sid)
             const freshRoom = res.latestSeq === 0 && res.members.length <= 1 && res.ownerUserId === myUserId.value
+            if (freshRoom)
+                writeSavedSeqMarker(sid, 0)   // 开房：DB 即房间基线（水位 0）
             if (!freshRoom) {
-                await snapshotFlow()
+                // 房内仅自己一人（无其他成员、也无自己的其他连接——多标签页/多设备同账号
+                // 不算独房，其他连接可提供快照）：快照无人可提供，按保存点水位从队列重建
+                const alone = res.members.every(m => m.userId === myUserId.value)
+                    && (res.myConnectionCount ?? 1) <= 1
+                if (alone)
+                    await catchUpAloneJoin(res.latestSeq)
+                else
+                    await snapshotFlow()
                 if (epoch !== sessionEpoch)
                     return
             }
@@ -489,26 +659,37 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         }
     }
 
-    /** 离开协作会话：作废在途同步、清理本地状态、尽力通知服务器（断连时由服务器兜底） */
+    /** 离开协作会话：作废在途同步、清理本地状态、尽力通知服务器（断连时由服务器兜底）。
+     *  房主离开即关房（§7.1 ②）：先尽力发 closeRoom（主动关房信号）再走连接级离房——
+     *  整页刷新/关标签页发不出去时，由服务器断网宽限期兜底 */
     async function leave(): Promise<void> {
         if (state.value === 'off')
             return
         const sid = saveId.value
+        const wasOwner = isOwner.value
         sessionEpoch++
         cleanupLocal()
-        if (sid !== null)
-            await getCollabTransport()?.leave(sid).catch(() => { /* 服务器断连清理兜底 */ })
+        const t = getCollabTransport()
+        if (sid !== null && t) {
+            if (wasOwner)
+                await t.closeRoom(sid).catch(() => { /* 服务器断连/宽限期兜底 */ })
+            await t.leave(sid).catch(() => { /* 服务器断连清理兜底 */ })
+        }
     }
 
     function cleanupLocal(): void {
+        const sid = saveId.value
         state.value = 'off'
         everSynced = false
         connState.value = 'online'
         saveId.value = null
         ownerUserId.value = 0
+        ownerOffline.value = false
         members.value = []
         opBaseline = null
         pendingLocalDiffs.length = 0
+        if (sid !== null)
+            clearSavedSeqMarker(sid)   // 正常离房/关房：保存点标记随房间消亡（整页刷新不走这里，标记保留）
         useCollabStore().clearIdPrefix()
         const lockStore = useCollabLockStore()
         lockStore.lockRequestHandler = undefined
@@ -521,8 +702,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
      * 登记进 pendingOwnSeqs（不直接推进 lastSeq——序号更小的他人广播可能尚未到达）。
      */
     async function submitOp(diff: SaveDiff): Promise<number> {
-        if (state.value !== 'synced' || connState.value !== 'online' || saveId.value === null)
-            throw Error('协作会话未就绪（同步中或已断线），无法提交')
+        if (state.value !== 'synced' || connState.value !== 'online' || ownerOffline.value || saveId.value === null)
+            throw Error('协作会话未就绪（同步中/已断线/房主离线），无法提交')
         const t = requireTransport()
         const seq = await t.submitOp(saveId.value, genOpId(), JSON.stringify(diff), lastSeq)
         pendingOwnSeqs.add(seq)
@@ -543,7 +724,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
      * 同步期/断线期的捕获（蒙层生效前的在途渲染）也会入队，flush 自行等待时机。
      */
     function captureLocalOp(): void {
-        if (state.value === 'off')
+        if (state.value === 'off' || ownerOffline.value)
             return
         const save = useSaveStore().save
         if (!save)
@@ -605,13 +786,16 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
     function notifySaved(): void {
         if (state.value !== 'synced' || saveId.value === null || !isOwner.value)
             return
-        requireTransport().notifySaved(saveId.value)
+        const sid = saveId.value
+        // 保存点水位标记：DB 落库状态 = 当前水位（独房重进时据此从队列恢复未保存编辑）
+        writeSavedSeqMarker(sid, lastSeq)
+        requireTransport().notifySaved(sid)
             .catch(e => console.warn('[协作]保存通知发送失败', e))
     }
 
     return {
         state, connState, saveId, ownerUserId, members, myUserId,
-        isInSession, isOwner, canEdit,
+        isInSession, isOwner, canEdit, ownerOffline, roomClosedNotice,
         hasEverSynced: () => everSynced,
         join, leave, submitOp, currentSeq,
         captureLocalOp, flushLocalOps, pendingLocalOpCount, notifySaved,

@@ -48,11 +48,13 @@ class MockTransport implements CollabTransport {
         async () => ({ ops: [], latestSeq: 0, gap: false })
     getSnapshotImpl: (saveId: number) => Promise<CollabSnapshotInfo | null> = async () => null
     leaves: number[] = []
+    closes: number[] = []
 
     myUserId() { return this.myId }
     setHandlers(h: CollabTransportHandlers) { this.handlers = h }
     async join(saveId: number) { return this.joinImpl(saveId) }
     async leave(saveId: number) { this.leaves.push(saveId) }
+    async closeRoom(saveId: number) { this.closes.push(saveId) }
     async submitOp(saveId: number, opId: string, patch: string, baseSeq: number) {
         this.submitCalls.push({ opId, patch, baseSeq })
         return this.submitImpl(saveId, opId, patch, baseSeq)

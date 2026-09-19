@@ -46,18 +46,18 @@ public class CollabRoomManagerPrefixTests
     [Fact]
     public void LeaveRoom_PrefixRecycled_NewMemberReusesLowestFree()
     {
-        // Arrange：u1=前缀1，u2=前缀2
+        // Arrange：u1=前缀1（房主），u2=前缀2
         var mgr = TestRooms.NewManager();
         Assert.Equal(1, TestRooms.Join(mgr, SaveId, 1).IdPrefix);
         Assert.Equal(2, TestRooms.Join(mgr, SaveId, 2).IdPrefix);
 
-        // Act：u1 离房，u3 进房
-        var leave = mgr.LeaveRoom(SaveId, "conn-1");
+        // Act：u2（非房主）离房，u3 进房
+        var leave = mgr.LeaveRoom(SaveId, "conn-2");
         var rejoined = TestRooms.Join(mgr, SaveId, 3);
 
-        // Assert：前缀 1 被回收并复用
+        // Assert：前缀 2 被回收并复用
         Assert.NotNull(leave?.LeftMember);
-        Assert.Equal(1, rejoined.IdPrefix);
+        Assert.Equal(2, rejoined.IdPrefix);
     }
 
     [Fact]
@@ -77,12 +77,12 @@ public class CollabRoomManagerPrefixTests
         Assert.Null(partial?.LeftMember);
         Assert.Equal(3, whileKept.IdPrefix);
 
-        // Act：u1 最后一个连接离开，u4 进房
+        // Act：u1 最后一个连接离开，u4 进房（房主主动离开 = 关房，§7.1）
         var full = mgr.LeaveRoom(SaveId, "conn-1b");
         var afterRelease = TestRooms.Join(mgr, SaveId, 4);
 
-        // Assert：前缀 1 此刻才回收复用
-        Assert.NotNull(full?.LeftMember);
+        // Assert：房间已关，u4 作为新房主开新房，重新拿到前缀 1
+        Assert.True(full?.RoomClosed);
         Assert.Equal(1, afterRelease.IdPrefix);
     }
 
@@ -92,13 +92,14 @@ public class CollabRoomManagerPrefixTests
         // Arrange
         var mgr = TestRooms.NewManager();
         TestRooms.Join(mgr, SaveId, 1);
+        Assert.Equal(2, TestRooms.Join(mgr, SaveId, 2).IdPrefix);
 
-        // Act：断连
-        var leaves = mgr.LeaveAllRooms("conn-1");
+        // Act：u2（非房主）断连
+        var leaves = mgr.LeaveAllRooms("conn-2");
 
-        // Assert
+        // Assert：前缀 2 回收，u3 复用
         Assert.Single(leaves);
-        Assert.Equal(1, TestRooms.Join(mgr, SaveId, 2).IdPrefix);
+        Assert.Equal(2, TestRooms.Join(mgr, SaveId, 3).IdPrefix);
     }
 
     [Fact]

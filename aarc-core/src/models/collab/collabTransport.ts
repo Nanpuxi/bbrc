@@ -38,6 +38,12 @@ export interface JoinCollabRoomInfo {
     ownerUserId: number
     members: CollabMemberInfo[]
     locks: CollabLockInfo[]
+    /** 房主正处于断网宽限期（后进房者也须显示离线蒙层，backend-plan.md §7.1 ③） */
+    ownerOffline?: boolean
+    /** 本次加入恢复了离线房主（Hub 已向其他成员广播 OwnerReconnected） */
+    ownerReconnected?: boolean
+    /** 我在房的连接数（含本次）：据此判定"独房"（同用户多连接/多设备不算独房） */
+    myConnectionCount?: number
 }
 
 export interface SyncCollabOpsInfo {
@@ -64,6 +70,13 @@ export interface CollabTransportHandlers {
     onUserLeft(member: CollabMemberInfo): void
     onOwnerChanged(member: CollabMemberInfo): void
     onSnapshotRequested(saveId: number): void
+    /** 房间被房主关闭（CloseRoom 或断网超宽限期；§7.1）：所有成员清理本地会话，
+     *  非房主（含房主的其他连接）弹窗"所有者已关闭房间"后跳首页 */
+    onRoomClosed(saveId: number): void
+    /** 房主断连进入宽限期（§7.1 ③）：显示离线蒙层禁止编辑，等待重连或超时关房 */
+    onOwnerOffline(saveId: number): void
+    /** 房主宽限期内重连（§7.1 ③）：其他成员重走快照流程（整档重建）后解除蒙层 */
+    onOwnerReconnected(saveId: number): void
     /** 房主已保存（仅其他人会收到；userName 为房主名） */
     onSaved(userName: string): void
     /** 传输层自动重连中（此时不应编辑/提交） */
@@ -83,15 +96,19 @@ export interface CollabTransport {
     join(saveId: number): Promise<JoinCollabRoomInfo>
     /** 离开房间；断线等失败场景应静默（服务器断连兜底清理） */
     leave(saveId: number): Promise<void>
+    /** 房主主动关房（backend-plan.md §7.1 ②）：尽力而为，失败静默（服务器断连兜底宽限期） */
+    closeRoom(saveId: number): Promise<void>
     /** 提交 op；返回值即服务器分配的 seq（ack）；失败抛错 */
     submitOp(saveId: number, opId: string, patch: string, baseSeq: number): Promise<number>
     syncOps(saveId: number, afterSeq: number): Promise<SyncCollabOpsInfo>
     /** 返回值 = 是否获得（false = 被他人持有）；失败抛错 */
     acquireLock(saveId: number, key: string): Promise<boolean>
     releaseLock(saveId: number, key: string): Promise<void>
-    /** 让服务器转发快照请求给现任房主；房主不在线时抛错（调用方稍后重试） */
+    /** 让服务器转发快照请求给提供者（优先房主的其他连接，房主无存活连接时兜底转发给其他成员；
+     *  §7.1 ③）；无可用提供者时抛错（调用方稍后重试） */
     requestSnapshot(saveId: number): Promise<void>
-    /** 房主上传快照（payload 为存档 JSON 字符串，压缩由传输层负责） */
+    /** 上传快照（payload 为存档 JSON 字符串，压缩由传输层负责）。
+     *  正常流程由房主上传；房主无存活连接时任何成员可作兜底提供者（§7.1 ③） */
     uploadSnapshot(saveId: number, seq: number, payload: string): Promise<void>
     /** 成员下载快照；未就绪返回 null（调用方轮询） */
     getSnapshot(saveId: number): Promise<CollabSnapshotInfo | null>

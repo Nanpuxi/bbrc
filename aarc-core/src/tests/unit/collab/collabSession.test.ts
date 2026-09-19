@@ -49,6 +49,7 @@ class MockTransport implements CollabTransport {
     getSnapshotImpl: (saveId: number) => Promise<CollabSnapshotInfo | null> = async () => null
     uploads: { saveId: number, seq: number, payload: string }[] = []
     leaves: number[] = []
+    closes: number[] = []
     locksAcquired: string[] = []
     locksReleased: string[] = []
     savedNotices: number[] = []
@@ -57,6 +58,7 @@ class MockTransport implements CollabTransport {
     setHandlers(h: CollabTransportHandlers) { this.handlers = h }
     async join(saveId: number) { this.joinCalls.push(saveId); return this.joinImpl(saveId) }
     async leave(saveId: number) { this.leaves.push(saveId) }
+    async closeRoom(saveId: number) { this.closes.push(saveId) }
     async submitOp(saveId: number, opId: string, patch: string, baseSeq: number) {
         this.submitCalls.push({ opId, patch, baseSeq })
         return this.submitImpl(saveId, opId, patch, baseSeq)
@@ -97,6 +99,7 @@ describe('collabSessionStore 协作会话编排', () => {
     })
     afterEach(() => {
         Object.assign(collabSessionTiming, timingBackup)
+        vi.unstubAllGlobals()
     })
 
     it('全新房间（我是房主）跳过快照，前缀按本地存档扫描设种子', async () => {
@@ -328,7 +331,7 @@ describe('collabSessionStore 协作会话编排', () => {
         expect(session.ownerUserId).toBe(9)
     })
 
-    it('SnapshotRequested：房主上传（水位=已应用 seq），非房主/其他房间忽略', async () => {
+    it('SnapshotRequested：稳态且无未ack编辑的成员均可上传（房主优先由服务器转发）', async () => {
         const save = createSave()
         save.points = [{ id: 1, pos: [2, 3], dir: 0, sta: 0 }] as Save['points']
         useSaveStore().save = save
@@ -343,6 +346,49 @@ describe('collabSessionStore 协作会话编排', () => {
         expect(mock.uploads[0].seq).toBe(0)
         const payload = JSON.parse(mock.uploads[0].payload)
         expect(payload.points[0].id).toBe(1)
+
+        // 非房主（协作者）收到转发同样上传——房主无存活连接时成员兜底（§7.1 ③）
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(createSave()), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+        await session.leave()
+        await session.join(1)
+        expect(session.isOwner).toBe(false)
+        mock.handlers.onSnapshotRequested(1)
+        await flush()
+        expect(mock.uploads.length).toBe(2)
+        expect(mock.uploads[1].seq).toBe(3)   // 水位 = 已应用 seq
+    })
+
+    it('SnapshotRequested：持有未 ack 本地编辑时不上传（水位必须覆盖快照内容）', async () => {
+        const save = createSave()
+        useSaveStore().save = save
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.isOwner).toBe(true)
+
+        // 本地编辑入队但未 ack（submit 抛错即留在待发队列）
+        save.points = [{ id: 7, pos: [0, 0], dir: 0, sta: 0 }] as Save['points']
+        session.captureLocalOp()
+        expect(session.pendingLocalOpCount()).toBe(1)
+        mock.submitImpl = async () => { throw Error('断线') }
+        await session.flushLocalOps()
+
+        mock.handlers.onSnapshotRequested(1)
+        await flush()
+        expect(mock.uploads.length).toBe(0)   // 拒绝上传：快照会含未入水位的编辑
+
+        // ack 后队列出空 → 恢复可上传
+        mock.submitImpl = async () => 1
+        await session.flushLocalOps()
+        expect(session.pendingLocalOpCount()).toBe(0)
+        mock.handlers.onSnapshotRequested(1)
+        await flush()
+        expect(mock.uploads.length).toBe(1)
     })
 
     it('submitOp 守卫：未同步完成或断线时拒绝提交', async () => {
@@ -453,5 +499,278 @@ describe('collabSessionStore 协作会话编排', () => {
 
         expect(session.state).toBe('off')
         expect(session.hasEverSynced()).toBe(false)
+    })
+
+    // ---- 房主生命周期修订（backend-plan.md §7.1 ②③）----
+
+    it('leave：房主离开发 closeRoom（主动关房信号）再走连接级离房；非房主只发 leave', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.isOwner).toBe(true)
+
+        await session.leave()
+        expect(mock.closes).toEqual([1])
+        expect(mock.leaves).toEqual([1])
+
+        // 非房主：只 leave 不 closeRoom
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(createSave()), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+        await session.join(1)
+        expect(session.isOwner).toBe(false)
+
+        await session.leave()
+        expect(mock.closes).toEqual([1])   // 未再增加
+        expect(mock.leaves).toEqual([1, 1])
+    })
+
+    it('RoomClosed：清理本地会话并置 roomClosedNotice（web 据此弹窗+跳首页）', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)
+        const noticeBefore = session.roomClosedNotice
+
+        mock.handlers.onRoomClosed(1)
+
+        expect(session.state).toBe('off')
+        expect(session.isInSession).toBe(false)
+        expect(session.saveId).toBe(null)
+        expect(session.roomClosedNotice).toBe(noticeBefore + 1)
+        // 清理幂等：重复事件不再计数
+        mock.handlers.onRoomClosed(1)
+        expect(session.roomClosedNotice).toBe(noticeBefore + 1)
+        // 其他存档的房间关闭不影响本会话（单房间假设下仅防御）
+        await session.join(1)
+        const n2 = session.roomClosedNotice
+        mock.handlers.onRoomClosed(2)
+        expect(session.state).toBe('synced')
+        expect(session.roomClosedNotice).toBe(n2)
+    })
+
+    it('OwnerOffline/OwnerReconnected：离线禁编辑，重连后整档重建再解除蒙层', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(createSave()), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.canEdit).toBe(true)
+
+        mock.handlers.onOwnerOffline(1)
+        expect(session.ownerOffline).toBe(true)
+        expect(session.canEdit).toBe(false)
+        // 离线期间拒绝提交
+        await expect(session.submitOp(ptAdd(1))).rejects.toThrow()
+
+        // 房主重连：快照整档重建（走 getSnapshot），完成后解除蒙层
+        const snapSave = createSave()
+        snapSave.points = [{ id: 950, pos: [2, 2], dir: 0, sta: 0 }] as Save['points']
+        mock.getSnapshotImpl = async () => ({ seq: 7, payload: JSON.stringify(snapSave), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 7, gap: false })
+        mock.handlers.onOwnerReconnected(1)
+        await waitFor(() => session.ownerOffline === false)
+
+        expect(session.state).toBe('synced')
+        expect(session.canEdit).toBe(true)
+        expect(session.currentSeq()).toBe(7)
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual([950])
+    })
+
+    it('join：进房时服务器报告房主处于宽限期（ownerOffline）→ 非房主显示离线蒙层', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+            ownerOffline: true,
+        })
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(createSave()), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.isOwner).toBe(false)
+        expect(session.ownerOffline).toBe(true)
+        expect(session.canEdit).toBe(false)
+    })
+
+    it('重连：房内仅自己一人且队列修剪（Gap）→ 不请求快照，直接续用本地状态', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)  // 房主独房
+        mock.handlers.onDisconnected()
+
+        // 重连：队列已被修剪（Gap），房内仍只有自己
+        mock.joinImpl = async () => ({
+            latestSeq: 5, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 5, gap: true })
+
+        mock.handlers.onReconnected()
+        await waitFor(() => session.state === 'synced')
+
+        expect(session.isInSession).toBe(true)
+        expect(mock.requestSnapshotCalls).toBe(0)  // 未走快照流程（无人可提供）
+    })
+
+    it('重连：房内仅自己一人且补齐失败 → 跳过快照兜底，直接续用本地状态', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)  // 房主独房
+        mock.handlers.onDisconnected()
+
+        mock.joinImpl = async () => ({
+            latestSeq: 5, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        mock.syncOpsImpl = async () => { throw Error('网络抖动') }
+
+        mock.handlers.onReconnected()
+        await waitFor(() => session.state === 'synced')
+
+        expect(session.isInSession).toBe(true)
+        expect(mock.requestSnapshotCalls).toBe(0)
+        // 恢复稳态后本地 op 队列照常重发
+        mock.submitImpl = async () => 6
+        const save = useSaveStore().save!
+        save.points = [{ id: 7, pos: [0, 0], dir: 0, sta: 0 }] as Save['points']
+        session.captureLocalOp()
+        await waitFor(() => session.pendingLocalOpCount() === 0)
+    })
+
+    // ---- 独房重进（刷新页面，§7.1 ③配套）：不请求快照，按保存点水位从队列重建 ----
+
+    function stubLocalStorage(initial: Record<string, string> = {}) {
+        const data = new Map(Object.entries(initial))
+        vi.stubGlobal('localStorage', {
+            getItem: (k: string) => data.has(k) ? data.get(k)! : null,
+            setItem: (k: string, v: string) => { data.set(k, v) },
+            removeItem: (k: string) => { data.delete(k) },
+        })
+    }
+
+    it('join：独房刷新重进 + 保存点标记（未保存过=0）→ 从队列恢复全部编辑，不请求快照', async () => {
+        stubLocalStorage({ 'aarc-collab-saved-seq:1': '0' })  // 开房时写入的标记，刷新后仍在
+        useSaveStore().save = createSave()  // DB 加载底（=房间基线，未保存过）
+        mock.joinImpl = async () => ({
+            latestSeq: 2, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 1,
+        })
+        const afterSeqs: number[] = []
+        mock.syncOpsImpl = async (_s, afterSeq) => {
+            afterSeqs.push(afterSeq)
+            return { ops: [mkOp(1, ptAdd(801)), mkOp(2, ptAdd(802))], latestSeq: 2, gap: false }
+        }
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.state).toBe('synced')
+        expect(mock.requestSnapshotCalls).toBe(0)      // 不请求快照（无人可提供）
+        expect(afterSeqs).toEqual([0])                 // 从保存点（0）补齐
+        expect(session.currentSeq()).toBe(2)
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual([801, 802])  // 未保存编辑全部恢复
+    })
+
+    it('join：独房刷新重进 + 保存点标记 m → 只补保存点之后的 op（已落库的不重复应用）', async () => {
+        stubLocalStorage({ 'aarc-collab-saved-seq:1': '2' })  // 保存发生在水位 2
+        const save = createSave()
+        save.points = [{ id: 801, pos: [0, 0], dir: 0, sta: 0 }] as Save['points']  // DB 已含 op1 的效果
+        useSaveStore().save = save
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 1,
+        })
+        const afterSeqs: number[] = []
+        mock.syncOpsImpl = async (_s, afterSeq) => {
+            afterSeqs.push(afterSeq)
+            return { ops: [mkOp(3, ptAdd(802))], latestSeq: 3, gap: false }
+        }
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(mock.requestSnapshotCalls).toBe(0)
+        expect(afterSeqs).toEqual([2])                 // 从保存点补齐，不重放已落库的 op1
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual([801, 802])
+    })
+
+    it('join：独房刷新重进但无标记（他端保存过）→ 保守跳过历史 op，不请求快照', async () => {
+        stubLocalStorage()  // 空：无标记
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 5, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 1,
+        })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.state).toBe('synced')
+        expect(mock.requestSnapshotCalls).toBe(0)
+        expect(mock.syncOpsCalls).toEqual([])          // 不补队列（DB 与队列对应关系不可考）
+        expect(session.currentSeq()).toBe(5)           // 采纳房间水位，以 DB 状态为底继续
+        expect(useSaveStore().save!.points).toEqual([])
+    })
+
+    it('join：独房刷新重进但保存点之后的 op 被修剪（Gap）→ 保守续用 DB 状态', async () => {
+        stubLocalStorage({ 'aarc-collab-saved-seq:1': '2' })
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 9, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 1,
+        })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 9, gap: true })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.state).toBe('synced')
+        expect(mock.requestSnapshotCalls).toBe(0)
+        expect(session.currentSeq()).toBe(9)
+        expect(useSaveStore().save!.points).toEqual([])
+    })
+
+    it('join：同用户其他连接在房（多标签页/多设备）不算独房 → 走正常快照流程', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 2,   // 另一连接在房（服务器规则①可转给它供快照）
+        })
+        const snapSave = createSave()
+        snapSave.points = [{ id: 900, pos: [0, 0], dir: 0, sta: 0 }] as Save['points']
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(snapSave), fromUserName: 'me' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+
+        expect(session.state).toBe('synced')
+        expect(mock.requestSnapshotCalls).toBe(1)      // 非独房：请求快照（由自己的另一连接提供）
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual([900])
     })
 })

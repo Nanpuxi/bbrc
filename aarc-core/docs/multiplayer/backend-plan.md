@@ -172,7 +172,7 @@ internal class CollabRoom
 | `SyncOps` | `int saveId, long afterSeq` | `SyncCollabOpsResult` | 增量补齐。队列中最早 Seq > afterSeq 时正常返回；否则 `Gap = true`。不要求调用者是成员（重连竞态下允许先 Sync 后 Join） |
 | `AcquireLock` | `int saveId, string key` | `bool` | 对象锁仲裁（first-write-wins）：锁键未被他人持有则获得、向其他人广播 `LockAcquired` 并返回 true；被他人持有返回 false（不广播）。同一持有者重复加锁幂等返回 true |
 | `ReleaseLock` | `int saveId, string key` | — | 释放本连接持有的锁并广播 `LockReleased`；不持有该锁时静默忽略 |
-| `RequestSnapshot` | `int saveId` | — | 请求现任房主生成存档快照（新成员初始化，第 10 节）；服务器向房主连接转发 `SnapshotRequested`。房主不在线时抛 `RqEx`（调用方稍后重试） |
+| `RequestSnapshot` | `int saveId` | — | 请求存档快照（新成员初始化/重建兜底，第 10 节）；服务器把 `SnapshotRequested` 转发给提供者：优先现任房主的其他连接（排除请求者自己），房主无存活连接（宽限期）时兜底转发给其他成员（§7.1 ③）。无可用提供者时抛 `RqEx`（调用方稍后重试） |
 | `NotifySaved` | `int saveId` | — | 房主宣布已保存：校验房主身份（非房主抛 `RqEx`）后向房间内其他人广播 `Saved`。轻量通知，服务器不落库、不校验存档、不参与限流（仅房主可调用，客户端保存路径本身有节流） |
 
 ### 服务器推送的事件
@@ -220,7 +220,7 @@ internal class CollabRoom
 
 - 判定依据：服务器**是否收到房主的主动关房信号**（`CloseRoom` 或房主连接上正常的 `LeaveRoom`）。收到 = 主动关房，立即广播 `RoomClosed`；未收到而连接断开 = 网络波动，进入宽限期
 - 宽限期内：房间保留（不回收、不清房主成员的锁/前缀），向其他成员广播 `OwnerOffline`；客户端收到后显示**全屏蒙层**（复用 `CollabStatusOverlay` 样式，文案如"所有者已离线，暂时无法编辑"），`canEdit=false` 阻止继续操作。服务器不强制拒绝此期间的 `SubmitOp`（客户端蒙层已禁止编辑，服务端校验保持现状即可）
-- 宽限期内房主重连：`withAutomaticReconnect` 恢复连接后按第 9 节重连流程重新 `JoinRoom`（幂等，同 userId 拿回房主身份，前缀租约不变）→ 服务器清离线标记、广播 `OwnerReconnected` → **其他成员全部重新走第 10 节快照流程**（`RequestSnapshot` → 轮询 → 整档重建），完成后解除蒙层。选快照重建而非增量补齐：房主断线期间状态相对其他成员可能大幅落后/分叉，整档重建最稳
+- 宽限期内房主重连：`withAutomaticReconnect` 恢复连接后按第 9 节重连流程重新 `JoinRoom`（幂等，同 userId 拿回房主身份，前缀租约不变）→ 服务器清离线标记、广播 `OwnerReconnected` → **其他成员全部重新走第 10 节快照流程**（`RequestSnapshot` → 轮询 → 整档重建），完成后解除蒙层。选快照重建而非增量补齐：房主断线期间状态相对其他成员可能大幅落后/分叉，整档重建最稳。快照提供者按第 10 节"提供者"规则选取——房主此时已在线，通常仍由房主供快照；房主自己若在重建兜底中请求（规则排除自身）则由兜底成员供
 - 宽限期超时（`CollabOptions.OwnerOfflineGraceSeconds`，建议默认 30 秒）：视同主动关房——回收房间、向仍在房的成员广播 `RoomClosed`（弹窗"所有者已关闭房间"→ 跳 `/`）
 - 房主自己的断线蒙层沿用现有 `connState` 机制（与协作者一致），重连后按第 9 节恢复
 
@@ -284,19 +284,20 @@ if (!string.IsNullOrEmpty(accessToken) &&
 
 1. `JoinRoom(saveId)`（HTTP `LoadData` 的 DB 版本仅作加载占位，也可直接显示加载中）
 2. JoinRoom 成功后开始**缓冲**全部 `ReceiveOp`（此时已在 group 内，不会漏收）；同步完成前禁止本地编辑
-3. 调用 `RequestSnapshot(saveId)`，服务器把 `SnapshotRequested` 转发给现任房主连接
-4. 房主序列化本地存档（LZString 压缩，同 `SaveDiffService` 落库方案），记录自己已应用的最大 Seq 作为**水位**，POST `/collab/snapshot` 上传；服务器按房间缓存（TTL 约 60 秒，可被更新的快照覆盖）
+3. 调用 `RequestSnapshot(saveId)`，服务器把 `SnapshotRequested` 转发给**快照提供者**（选择规则见下方"提供者"节）
+4. 提供者序列化本地存档（LZString 压缩，同 `SaveDiffService` 落库方案），记录自己已应用的最大 Seq 作为**水位**，POST `/collab/snapshot` 上传；服务器按房间缓存（TTL 约 60 秒，可被更新的快照覆盖）
 5. 新客轮询 GET `/collab/snapshot?saveId=`（约 1s 间隔，15s 超时）拿到 `{ seq, payload }`
 6. 以快照为底：应用快照 → `SyncOps(saveId, seq)` 补齐水位之后的 ops → 与缓冲的广播 ops 按 Seq 去重、升序应用 → 进入正常协作态
 
 快照 DTO：
 
 ```csharp
-/// 房主上传的存档快照（POST /collab/snapshot；Payload 为 LZString 压缩后的 base64）
+/// 房间成员上传的存档快照（POST /collab/snapshot；正常流程由现任房主上传，
+/// 房主无存活连接时任何在房成员可兜底，§7.1 ③；Payload 为 LZString 压缩后的 base64）
 public class CollabSnapshotUpload
 {
     public int SaveId { get; set; }
-    public long Seq { get; set; }       // 房主已应用的最大 op 序号（水位）
+    public long Seq { get; set; }       // 提供者已应用的最大 op 序号（水位）
     public string Payload { get; set; }
 }
 
@@ -309,14 +310,19 @@ public class CollabSnapshotResult
 }
 ```
 
-权限：上传仅现任房主（`CollabRoomManager` 校验），下载仅房间成员。
+权限：上传为任何在房成员（房主优先，见下），下载仅房间成员。
+
+**快照提供者**（2026-09 修订，§7.1 ③的配套）：`RequestSnapshot` 的转发目标按以下规则选取——① 优先现任房主**的其他**连接（排除请求者自己的连接：请求者从不需要"自己传给自己"）；② 房主无存活连接（断网宽限期）时回退为房间内其他成员的连接；③ 都没有则抛 `RqEx`（调用方稍后重试）。任意成员的快照都能作为重建底：**蒙层锁定中的成员没有未 ack 的本地编辑**（房主离线时 `canEdit=false`，提交管线停摆），其状态即房间水位内的最新状态；新客/重建者拿到快照后仍按第 6 步 `SyncOps(水位)` 补齐，不丢不重。上传端守卫（客户端）：仅稳态且不持有未 ack 本地编辑时上传——**水位必须覆盖快照内容**，否则请求方按水位补齐会把快照内已有的编辑作为新 op 再应用一次（此守卫对房主同样生效）。房主重连后自己走重建兜底（第 9 节 `Gap`/补齐失败的快照回退）时，因规则①排除自身，请求会转给兜底成员——这正是"房主重连瞬间无人能传快照"问题的解法。**独房例外**：房内仅自己一人（`members` 无其他用户**且无自己的其他连接**——`JoinCollabRoomResult.MyConnectionCount` 供客户端判定，同用户多标签页/多设备不算独房）时规则①②均无提供者，不再请求快照：
+
+- **重连**（`resyncAfterReconnect`，本地状态连续）：Gap/补齐失败直接续用本地状态（`catchUpWhenAlone`），本地即房间内最完整副本（缺口 op 已随修剪对所有人生效为丢失）
+- **刷新重进**（`join`，本地状态退回 DB 加载态）：用 **localStorage 保存点水位标记**（开房写 0、保存成功写当时水位、`cleanupLocal` 清除——整页刷新不触发清理故标记跨刷新存活）从房间队列补齐：DB 即保存点状态，`SyncOps(保存点)` 起补即可**恢复未保存编辑**且不重复应用已落库的效果；标记缺失（他端保存过、对应关系不可考）或保存点之后被修剪时，保守采纳房间水位、以 DB 状态为底继续。两种情形都不请求快照
 
 **同步期间发生编辑的安全性**（本方案的关键性质）：
 
 - **房主/其他成员在快照生成与传输期间的编辑**：全部经 `SubmitOp` 获得比快照水位更大的 Seq，新客在第 6 步按序应用，不丢不重（Seq 去重）
 - **水位必须由房主自报**（其已应用的最大 Seq），不能由服务器在收到上传时盖戳——序列化到上传之间到达的 op 不在快照内，服务器盖戳会错误吞掉它们
 - **新客自己的编辑**：同步完成前一律禁止（loading 态），因为其 diff 基线尚未建立
-- **快照请求在途时房主断连**：宽限期（§7.1）内房主连接恢复，`SnapshotRequested` 转发照常完成；宽限期超时房间已关，新客会随 `RoomClosed` 离开，不存在"房间在但无房主可传快照"的中间态（继任路径保留但暂不使用）。已知损失只有旧房主未 ack 的半截编辑（第 8 节已述）
+- **快照请求在途时房主断连**：宽限期（§7.1）内房主连接恢复，`SnapshotRequested` 照常完成（按"提供者"节的规则转发——若请求来自房主自己的重建兜底则转给兜底成员）；宽限期超时房间已关，新客会随 `RoomClosed` 离开。已知损失只有旧房主未 ack 的半截编辑（第 8 节已述）
 
 **为什么不走 SignalR 传快照**：存档 JSON 可达 MB 级，而 ASP.NET Core SignalR 默认 `MaximumReceiveMessageSize = 32KB`；快照走 HTTP 上传/下载，SignalR 只传控制消息。注意 `SubmitOp` 计划的 256KB 上限也超过该默认值，需调 `MaximumReceiveMessageSize`（见第 11 节）。
 

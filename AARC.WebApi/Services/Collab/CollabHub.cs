@@ -78,12 +78,16 @@ namespace AARC.WebApi.Services.Collab
             await Groups.AddToGroupAsync(Context.ConnectionId, RoomGroupName(saveId));
             if (newMember is not null)
                 await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("UserJoined", newMember);
+            // 房主宽限期内重连（§7.1 ③）：通知其他成员重走快照流程
+            if (result.OwnerReconnected)
+                await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("OwnerReconnected", saveId);
             _logger.LogInformation("[CollabHub] 加入房间 saveId={SaveId}, user={UserName}, prefix={IdPrefix}", saveId, user.Name, result.IdPrefix);
             return result;
         }
 
         /// <summary>
-        /// 离开协作房间：移出成员与 group、释放该连接全部锁；房主离开时按 JoinedAt 最早继任
+        /// 离开协作房间：移出成员与 group、释放该连接全部锁。房主走本方法视为"主动关房信号"
+        /// （backend-plan.md §7.1 ③ 判定依据）：关闭整个房间并广播 RoomClosed（继任路径保留但暂不使用）
         /// </summary>
         public async Task LeaveRoom(int saveId)
         {
@@ -91,6 +95,27 @@ namespace AARC.WebApi.Services.Collab
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, RoomGroupName(saveId));
             if (res is not null)
                 await BroadcastLeave(saveId, res);
+        }
+
+        /// <summary>
+        /// 房主主动关房（backend-plan.md §7.1 ②）：仅房主可调用，幂等（房间不存在时静默成功）。
+        /// 回收房间与快照缓存，向全房间广播 RoomClosed（含房主自己的其他连接）。
+        /// </summary>
+        public async Task CloseRoom(int saveId)
+        {
+            var user = GetCurrentUser();
+            bool closed;
+            try
+            {
+                closed = _rooms.CloseRoom(saveId, user.Id);
+            }
+            catch (CollabException e)
+            {
+                throw new HubException(e.Message);
+            }
+            if (closed)
+                await Clients.Group(RoomGroupName(saveId)).SendAsync("RoomClosed", saveId);
+            _logger.LogInformation("[CollabHub] 关闭协作房间 saveId={SaveId}, user={UserName}", saveId, user.Name);
         }
 
         /// <summary>
@@ -154,16 +179,18 @@ namespace AARC.WebApi.Services.Collab
         }
 
         /// <summary>
-        /// 请求现任房主生成存档快照（新成员初始化）；服务器向房主连接转发 SnapshotRequested
+        /// 请求存档快照（新成员初始化/重建兜底）：优先转发给现任房主的其他连接；
+        /// 房主无存活连接（断网宽限期）时转发给房间内其他成员兜底（§7.1 ③）；
+        /// 请求者自己从不接收转发（自举无意义，房主重建兜底靠其他成员）
         /// </summary>
         public async Task RequestSnapshot(int saveId)
         {
             var user = GetCurrentUser();
-            var ownerConnections = _rooms.GetOwnerConnectionIds(saveId, user.Id);
-            if (ownerConnections.Count == 0)
-                throw new RqEx("房主不在线，请稍后重试");
+            var providerConnections = _rooms.GetSnapshotProviderConnectionIds(saveId, user.Id, Context.ConnectionId);
+            if (providerConnections.Count == 0)
+                throw new RqEx("暂无可提供快照的成员，请稍后重试");
             _logger.LogInformation("[CollabHub] 转发快照请求 saveId={SaveId}, from={UserName}", saveId, user.Name);
-            await Clients.Clients(ownerConnections).SendAsync("SnapshotRequested", saveId);
+            await Clients.Clients(providerConnections).SendAsync("SnapshotRequested", saveId);
         }
 
         /// <summary>
@@ -179,10 +206,21 @@ namespace AARC.WebApi.Services.Collab
             await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("Saved", user.Name);
         }
 
-        // 断连/离房后的锁外广播：清锁逐条 LockReleased → UserLeft → 房主变更 OwnerChanged
+        // 断连/离房后的锁外广播：清锁逐条 LockReleased → UserLeft → 房主变更 OwnerChanged。
+        // §7.1：房主断连宽限期广播 OwnerOffline；房主主动离开/宽限超时关房广播 RoomClosed（后两者互斥）
         private async Task BroadcastLeave(int saveId, CollabLeaveResult res)
         {
             var group = RoomGroupName(saveId);
+            if (res.RoomClosed)
+            {
+                await Clients.Group(group).SendAsync("RoomClosed", saveId);
+                return;
+            }
+            if (res.OwnerOffline)
+            {
+                await Clients.Group(group).SendAsync("OwnerOffline", saveId);
+                return;
+            }
             foreach (var l in res.ReleasedLocks)
                 await Clients.Group(group).SendAsync("LockReleased", l.Key);
             if (res.LeftMember is not null)

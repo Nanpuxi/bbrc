@@ -511,6 +511,17 @@ watch(() => saveStore.save?.meta.collabEnabled, (now, was) => {
         void handleCollabDisabledRemotely()
 })
 
+// 房间被关闭（backend-plan.md §7.1 ②③：房主关房或断网超宽限期）：弹窗并跳首页。
+// 同一会话先收到"已关闭协作"时（meta op 先行应用，collabEnabled 已 false）以前者为准，不重复弹
+watch(() => collabSession.roomClosedNotice, () => {
+    if(collabSession.roomClosedNotice === 0)
+        return
+    if(saveStore.save?.meta.collabEnabled === false)
+        collabPanel.value?.notifyCollabClosed()
+    else
+        collabPanel.value?.notifyRoomClosed()
+})
+
 /** 房主但没有心跳：等旧占用者心跳过期后借 loadData(forEdit) 的 Initialization 副作用接管（数据丢弃） */
 async function ensureOwnerHeartbeat(){
     window.clearTimeout(ownerHeartbeatRetryTimer)
@@ -569,6 +580,9 @@ watch(() => collabSession.isInSession, (inSession, wasInSession) => {
         savingDisabledWarningStore.clearWarning()
         collabWarningSet = false
     }
+    // 房间被房主关闭（含断网超宽限期）：弹窗+跳首页由 roomClosedNotice watch 编排，不刷新
+    if(collabSession.roomClosedNotice > 0)
+        return
     // 所有者关闭协作导致的离房：不刷新（弹窗已提示）；非心跳持有者此后无法保存，给出警告
     if(saveStore.save?.meta.collabEnabled === false){
         if(!heartbeatActive && !viewOnly.value)
