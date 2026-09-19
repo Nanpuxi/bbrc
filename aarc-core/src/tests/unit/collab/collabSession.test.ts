@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { ensureDomStub } from '../../helpers/domStub'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 import { useCollabStore, collabIdCounterCap } from 'aarc-core/models/stores/collabStore'
 import { useCollabLockStore } from 'aarc-core/models/stores/collabLockStore'
 import { useCollabSessionStore, collabSessionTiming } from 'aarc-core/models/collab/collabSessionStore'
@@ -50,6 +51,7 @@ class MockTransport implements CollabTransport {
     leaves: number[] = []
     locksAcquired: string[] = []
     locksReleased: string[] = []
+    savedNotices: number[] = []
 
     myUserId() { return this.myId }
     setHandlers(h: CollabTransportHandlers) { this.handlers = h }
@@ -65,6 +67,7 @@ class MockTransport implements CollabTransport {
     async requestSnapshot() { this.requestSnapshotCalls++ }
     async uploadSnapshot(saveId: number, seq: number, payload: string) { this.uploads.push({ saveId, seq, payload }) }
     async getSnapshot() { return this.getSnapshotImpl(0) }
+    async notifySaved(saveId: number) { this.savedNotices.push(saveId) }
 }
 
 const flush = async (n = 3) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0)) }
@@ -388,5 +391,42 @@ describe('collabSessionStore 协作会话编排', () => {
         const ids = useSaveStore().save!.points.map(p => p.id)
         expect(ids).toEqual(expect.arrayContaining([801, 803]))
         expect(ids).not.toContain(802)  // 本人 op 被跳过
+    })
+
+    it('已保存通知：房主保存后广播，其他人收到后弹窗', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.isOwner).toBe(true)
+
+        // 房主保存成功 → 广播"已保存"
+        session.notifySaved()
+        await flush()
+        expect(mock.savedNotices).toEqual([1])
+
+        // 其他人视角：收到 Saved 事件 → 弹窗"房主已保存"
+        const popSpy = vi.spyOn(useUniqueComponentsStore(), 'showPop')
+        mock.handlers.onSaved('me')
+        expect(popSpy).toHaveBeenCalledWith('房主已保存', 'success')
+    })
+
+    it('已保存通知：非房主不发送', async () => {
+        useSaveStore().save = createSave()
+        mock.joinImpl = async () => ({
+            latestSeq: 3, idPrefix: 2, ownerUserId: 9,
+            members: [{ userId: 9, userName: 'boss' }, { userId: 1, userName: 'me' }],
+            locks: [],
+        })
+        const snapSave = createSave()
+        mock.getSnapshotImpl = async () => ({ seq: 3, payload: JSON.stringify(snapSave), fromUserName: 'boss' })
+        mock.syncOpsImpl = async () => ({ ops: [], latestSeq: 3, gap: false })
+
+        const session = useCollabSessionStore()
+        await session.join(1)
+        expect(session.isOwner).toBe(false)
+
+        session.notifySaved()
+        await flush()
+        expect(mock.savedNotices).toEqual([])
     })
 })

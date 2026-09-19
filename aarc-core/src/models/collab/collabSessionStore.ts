@@ -410,6 +410,10 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         onUserLeft,
         onOwnerChanged,
         onSnapshotRequested: sid => { void uploadSnapshotAsOwner(sid) },
+        onSaved: () => {
+            if (state.value !== 'off')
+                useUniqueComponentsStore().showPop('房主已保存', 'success')
+        },
         onReconnecting: () => { if (state.value !== 'off') connState.value = 'reconnecting' },
         onReconnected: () => {
             if (state.value === 'off')
@@ -585,10 +589,21 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         return pendingLocalDiffs.length
     }
 
+    /**
+     * 房主保存成功后调用：向房间广播"已保存"通知，其他人弹窗提示。
+     * 非房主/未入会静默忽略；发送失败仅告警（通知丢了不影响数据正确性）
+     */
+    function notifySaved(): void {
+        if (state.value !== 'synced' || saveId.value === null || !isOwner.value)
+            return
+        requireTransport().notifySaved(saveId.value)
+            .catch(e => console.warn('[协作]保存通知发送失败', e))
+    }
+
     return {
         state, connState, saveId, ownerUserId, members, myUserId,
         isInSession, isOwner, canEdit,
         join, leave, submitOp, currentSeq,
-        captureLocalOp, flushLocalOps, pendingLocalOpCount,
+        captureLocalOp, flushLocalOps, pendingLocalOpCount, notifySaved,
     }
 })

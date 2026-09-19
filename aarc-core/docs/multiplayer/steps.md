@@ -14,6 +14,7 @@
 - [x] 步骤一：undo 栈防污染（au-undo-redo@1.1.0 `syncBaseline`）
 - [x] 步骤二：纯数据刷新路径 + 远程 op 应用管线（`remoteOpApplier.applyRemoteSaveDiff`）
 - [x] 步骤三：对象锁（`collabLockStore` + envStore/selectionStore 挂钩 + 败方降级 + 红叉渲染）
+- [x] 已保存广播：房主保存成功后广播 `Saved`，其他人弹窗"房主已保存"（`CollabHub.NotifySaved` 房主身份校验；core `collabSessionStore.notifySaved()` + `onSaved` → showPop；web Editor.vue 保存成功路径调用；mock 传输单测 2 例）
 
 ## 步骤一：undo 栈防污染（已完成）
 

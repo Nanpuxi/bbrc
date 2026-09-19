@@ -63,6 +63,7 @@ class MockTransport implements CollabTransport {
     async requestSnapshot() { /* 无需记录 */ }
     async uploadSnapshot() { /* 无需记录 */ }
     async getSnapshot(saveId: number) { return this.getSnapshotImpl(saveId) }
+    async notifySaved() { /* 无需记录 */ }
 }
 
 const flush = async (n = 5) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0)) }

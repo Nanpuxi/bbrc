@@ -149,6 +149,19 @@ namespace AARC.WebApi.Services.Collab
             await Clients.Clients(ownerConnections).SendAsync("SnapshotRequested", saveId);
         }
 
+        /// <summary>
+        /// 房主宣布已保存：校验房主身份后向房间内其他人广播 Saved（轻量通知，服务器不落库、不校验存档）。
+        /// 绕过节流：仅房主可调用且客户端保存路径已有 1 秒节流，通知被限流误伤只会白丢
+        /// </summary>
+        public async Task NotifySaved(int saveId)
+        {
+            var user = GetCurrentUser();
+            if (_rooms.GetOwnerConnectionIds(saveId, user.Id).Count == 0)
+                throw new RqEx("仅房主可宣布保存");
+            _logger.LogInformation("[CollabHub] 房主宣布已保存 saveId={SaveId}, user={UserName}", saveId, user.Name);
+            await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("Saved", user.Name);
+        }
+
         // 断连/离房后的锁外广播：清锁逐条 LockReleased → UserLeft → 房主变更 OwnerChanged
         private async Task BroadcastLeave(int saveId, CollabLeaveResult res)
         {

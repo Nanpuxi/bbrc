@@ -74,6 +74,7 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         conn.on("UserLeft", (m: CollabMemberWire) => handlers?.onUserLeft(m))
         conn.on("OwnerChanged", (m: CollabMemberWire) => handlers?.onOwnerChanged(m))
         conn.on("SnapshotRequested", (saveId: number) => handlers?.onSnapshotRequested(saveId))
+        conn.on("Saved", (userName: string) => handlers?.onSaved(userName))
 
         conn.onreconnecting(err => {
             console.warn('[协作]正在重新连接', err?.message ?? '')
@@ -164,6 +165,11 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         }
     }
 
+    async function notifySaved(saveId: number): Promise<void> {
+        const conn = await ensureConnected()
+        await conn.invoke("NotifySaved", saveId)
+    }
+
     return {
         myUserId: () => userInfoStore.userInfo?.id ?? 0,
         setHandlers,
@@ -176,6 +182,7 @@ export const useCollabSignalrStore = defineStore('collabSignalr', () => {
         requestSnapshot,
         uploadSnapshot,
         getSnapshot,
+        notifySaved,
     }
 })
 

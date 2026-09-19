@@ -281,6 +281,7 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
         releasePreventLeaving()
         chatRoom.value?.resetSaveReminderTimer()
         showPop('保存成功', 'success')
+        collabSession.notifySaved() // 协作中我是房主：广播"已保存"，其他人弹窗
 
         //次要任务：更新缩略图，无论是否成功都不影响主流程
         const miniCvs = miniatureCvsDispatcher.renderMiniatureCvs({sideLength: 256, lineWidth: 2})

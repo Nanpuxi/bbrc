@@ -172,6 +172,7 @@ internal class CollabRoom
 | `AcquireLock` | `int saveId, string key` | `bool` | 对象锁仲裁（first-write-wins）：锁键未被他人持有则获得、向其他人广播 `LockAcquired` 并返回 true；被他人持有返回 false（不广播）。同一持有者重复加锁幂等返回 true |
 | `ReleaseLock` | `int saveId, string key` | — | 释放本连接持有的锁并广播 `LockReleased`；不持有该锁时静默忽略 |
 | `RequestSnapshot` | `int saveId` | — | 请求现任房主生成存档快照（新成员初始化，第 10 节）；服务器向房主连接转发 `SnapshotRequested`。房主不在线时抛 `RqEx`（调用方稍后重试） |
+| `NotifySaved` | `int saveId` | — | 房主宣布已保存：校验房主身份（非房主抛 `RqEx`）后向房间内其他人广播 `Saved`。轻量通知，服务器不落库、不校验存档、不参与限流（仅房主可调用，客户端保存路径本身有节流） |
 
 ### 服务器推送的事件
 
@@ -184,6 +185,7 @@ internal class CollabRoom
 | `UserLeft` | `CollabMemberDto` | 有成员离开或断连（其锁已全部释放并逐条广播 `LockReleased`，此事件作兜底） |
 | `OwnerChanged` | `CollabMemberDto` | 房主离开/断连，在房最早加入者继任为新房主（获得保存权） |
 | `SnapshotRequested` | `int saveId` | 有新成员请求存档快照（仅发给现任房主连接；房主序列化后走 HTTP 上传，第 10 节） |
+| `Saved` | `string userName`（房主名） | 房主宣布已保存（`NotifySaved`，仅发给房间内其他人；客户端弹窗"房主已保存"） |
 
 设计决策说明：
 

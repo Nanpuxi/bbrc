@@ -64,6 +64,8 @@ export interface CollabTransportHandlers {
     onUserLeft(member: CollabMemberInfo): void
     onOwnerChanged(member: CollabMemberInfo): void
     onSnapshotRequested(saveId: number): void
+    /** 房主已保存（仅其他人会收到；userName 为房主名） */
+    onSaved(userName: string): void
     /** 传输层自动重连中（此时不应编辑/提交） */
     onReconnecting(): void
     /** 重连成功（会话层须 rejoin + 增量补齐） */
@@ -93,6 +95,8 @@ export interface CollabTransport {
     uploadSnapshot(saveId: number, seq: number, payload: string): Promise<void>
     /** 成员下载快照；未就绪返回 null（调用方轮询） */
     getSnapshot(saveId: number): Promise<CollabSnapshotInfo | null>
+    /** 房主宣布已保存（服务器校验房主身份后向其他人广播 Saved；失败抛错） */
+    notifySaved(saveId: number): Promise<void>
 }
 
 let transport: CollabTransport | undefined
