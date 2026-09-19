@@ -28,10 +28,9 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --urls "http://localhost:5250"
 
 对 cs 文件或 csproj 文件进行任何改动后，运行 `dotnet build` 确保没有构建问题
 
-如果 `dotnet build` 因 dll/exe 被正在运行的 WebApi 进程或 Visual Studio 锁定而失败，可改为输出到临时目录验证，验证完成后清理：
+输出到临时目录验证，该目录已 ignore，验证完成后无需清理：
 ```bash
 dotnet build AARC.WebApi/AARC.WebApi.csproj -o temp-build
-rm -rf temp-build
 ```
 
 如果发生了 api 变动：需要运行`gen-ts-client.ps1`或`gen-ts-client.sh`，以重新生成ts客户端代码
