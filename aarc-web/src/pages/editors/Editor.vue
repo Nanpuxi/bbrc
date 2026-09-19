@@ -39,6 +39,7 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useSignalrStore } from '@/app/com/signalrStore';
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore';
 import { initAfterRemoteSaveApplied } from 'aarc-core/models/collab/remoteOpApplier';
+import { hasUnsavedSaveDataRevision, markSaveDataSaved } from 'aarc-core/models/collab/saveDataRevision';
 import CollabStatusOverlay from './components/CollabStatusOverlay.vue';
 import CollabPanel from './components/CollabPanel.vue';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
@@ -185,6 +186,8 @@ async function load() {
                 onDataSourceEvent: dataSourceEventLoggers
             })
             loadComplete.value = true
+            // 数据版本基线：此刻加载的数据即云端状态；其后协作追赶应用的 op 才算未保存改动
+            markSaveDataSaved()
         }catch{
             showPop('存档损坏，请联系管理员', 'failed')
             return
@@ -287,6 +290,7 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
     }
     if(resp){
         releasePreventLeaving()
+        markSaveDataSaved() // 数据版本基线：当前数据已落库，之后的版本递增才算未保存
         chatRoom.value?.resetSaveReminderTimer()
         showPop('保存成功', 'success')
         collabSession.notifySaved() // 协作中我是房主：广播"已保存"，其他人弹窗
@@ -338,11 +342,18 @@ function setLeavingPreventing(){
         if(!collabSession.isInSession || collabSession.isOwner)
             preventLeaving()
     }
+    // 协作会话内"渲染 ≠ 改动"：补渲染迟到（远程 op 的渲染被节流推迟到保存之后）、
+    // 图标/参考图加载完成等都会触发无关渲染，须以数据版本为准，避免未保存标记被重新置位
+    const preventLeavingIfUnsavedAndResponsible = () => {
+        if(collabSession.isInSession && !hasUnsavedSaveDataRevision())
+            return
+        preventLeavingIfSaveResponsible()
+    }
     mainCvsDispatcher.initAfterMainCvsRendered(() =>{
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
-        preventLeavingIfSaveResponsible()
+        preventLeavingIfUnsavedAndResponsible()
         heartbeatOnEdit?.()
     })
     // 远程 op 数据应用即时、渲染被 remoteRenderScheduler 节流（≤idleMs/交互结束才补渲染）——
@@ -351,7 +362,7 @@ function setLeavingPreventing(){
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
-        preventLeavingIfSaveResponsible()
+        preventLeavingIfSaveResponsible() // 远程 op 应用即真实数据变化（版本号已递增）
     })
 }
 

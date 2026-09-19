@@ -9,6 +9,7 @@ import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
 import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 import { initAfterRemoteSaveApplied } from "aarc-core/models/collab/remoteOpApplier";
+import { bumpSaveDataRevision } from "aarc-core/models/collab/saveDataRevision";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 import { useCvsBlocksControlStore } from "aarc-core/models/cvs/common/cvs";
 import { nextTick } from "vue";
@@ -82,6 +83,7 @@ export function reloadSaveFromSnapshot(raw: unknown): void {
     const resetterStore = useResetterStore()
     const undoStore = useUndoStore()
     saveStore.save = normalizeSave(raw)
+    bumpSaveDataRevision()  // 整档替换属真实数据变化：递增数据版本（未保存判据）
     resetterStore.resetDerivedStores()
     saveStore.ensureLinesOrdered()
     // undo 基线：整档替换后历史不可信，重建基线

@@ -7,6 +7,7 @@ import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
 import { useCollabLockStore } from "aarc-core/models/stores/collabLockStore";
 import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
+import { bumpSaveDataRevision } from "aarc-core/models/collab/saveDataRevision";
 
 /**
  * 把一条远程协作 op（SaveDiff）应用到本地存档，顺序：
@@ -36,6 +37,7 @@ export async function applyRemoteSaveDiff(diff: SaveDiff): Promise<void> {
     if (!save)
         return
     applySaveDiff(save, diff)
+    bumpSaveDataRevision()  // 远程 op 属真实数据变化：递增数据版本（未保存判据）
     dropStaleLocalHolds(save)
     useUndoStore().syncBaseline(save)
     const resetterStore = useResetterStore()

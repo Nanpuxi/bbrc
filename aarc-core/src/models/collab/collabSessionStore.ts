@@ -11,6 +11,7 @@ import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 import { applyRemoteSaveDiff } from "aarc-core/models/collab/remoteOpApplier";
+import { bumpSaveDataRevision } from "aarc-core/models/collab/saveDataRevision";
 import { applyRemoteCollabLock } from "aarc-core/models/collab/lockApplier";
 import { prepareSavePayload, reloadSaveFromSnapshot } from "aarc-core/app/editorSession";
 import { SaveDiff, applySaveDiff, diffSave } from "aarc-core/models/save/saveDiff";
@@ -738,6 +739,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         if (!diff)
             return
         applySaveDiff(opBaseline, diff)  // 基线推进到当前状态（apply 内部 clone，与 save 无引用共享）
+        bumpSaveDataRevision()           // 本地编辑检出变化：递增数据版本（未保存判据，与渲染来源无关）
         pendingLocalDiffs.push(diff)
         if (pendingLocalDiffs.length > collabSessionTiming.maxPendingLocalOps) {
             // 队列溢出：通常是提交被永久拒绝（权限/版本不兼容），同步状态已不可信
