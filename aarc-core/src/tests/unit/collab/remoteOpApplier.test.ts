@@ -12,6 +12,9 @@ import { ensureDomStub } from '../../helpers/domStub'
 import { useEnvStore } from 'aarc-core/models/stores/envStore'
 import { useSelectionStore } from 'aarc-core/models/stores/selectionStore'
 import { useCollabLockStore } from 'aarc-core/models/stores/collabLockStore'
+import rfdc from 'rfdc'
+
+const deepClone = rfdc()
 
 // selectionStore（undoStore/envStore 的依赖）在 setup 时注册全局键盘监听，需 document 桩
 ensureDomStub()
@@ -74,7 +77,7 @@ describe('applyRemoteSaveDiff', () => {
         const pointsArrRef = save.points
         const pt1Ref = save.points[0]
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points[1].pos = [200, 200]
         const diff = diffSave(save, next)!
         await applyRemoteSaveDiff(diff)
@@ -97,7 +100,7 @@ describe('applyRemoteSaveDiff', () => {
         expect(staClusterStore.getStaClusters()).toHaveLength(0)
 
         // 远程把点 2 移到点 1 旁边
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points[1].pos = [0.5, 0]
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -115,7 +118,7 @@ describe('applyRemoteSaveDiff', () => {
         const staClusterStore = useStaClusterStore()
         staClusterStore.getStaClusters()
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points.push({ ...createPoint(2), pos: [0.5, 0] })
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -134,7 +137,7 @@ describe('applyRemoteSaveDiff', () => {
         undoStore.push(save) // 初始化 undo 基线
 
         // 远程把点 2 移到 (200, 200)
-        const remote = structuredClone(save)
+        const remote = deepClone(save)
         remote.points[1].pos = [200, 200]
         await applyRemoteSaveDiff(diffSave(save, remote)!)
         expect(undoStore.canUndo).toBe(false) // 远程变更不产生 undo 记录
@@ -160,7 +163,7 @@ describe('applyRemoteSaveDiff', () => {
         namePosMemoryStore.write({ ...createPoint(1), nameP: [5, 5] })
         expect(namePosMemoryStore.hasMem).toBe(true)
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points.push(createPoint(2))
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -182,7 +185,7 @@ describe('applyRemoteSaveDiff', () => {
         const envStore = useEnvStore()
         envStore.activePt = save.points[1]
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points = next.points.filter(p => p.id !== 2)
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -199,7 +202,7 @@ describe('applyRemoteSaveDiff', () => {
         selectionStore.selected.add(save.points[0])
         selectionStore.selected.add(save.points[1])
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points = next.points.filter(p => p.id !== 2)
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -215,7 +218,7 @@ describe('applyRemoteSaveDiff', () => {
         const lockStore = useCollabLockStore()
         lockStore.applyRemoteLock('pt:2', 'userB')
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points = next.points.filter(p => p.id !== 2)
         await applyRemoteSaveDiff(diffSave(save, next)!)
 
@@ -230,7 +233,7 @@ describe('applyRemoteSaveDiff', () => {
         const envStore = useEnvStore()
         envStore.activePt = save.points[1]
 
-        const next = structuredClone(save)
+        const next = deepClone(save)
         next.points[1].pos = [300, 300]
         await applyRemoteSaveDiff(diffSave(save, next)!)
 

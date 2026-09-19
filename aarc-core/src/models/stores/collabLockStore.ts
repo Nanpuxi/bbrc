@@ -1,6 +1,9 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
+import rfdc from "rfdc";
 import { ControlPoint, Line, TextTag } from "../save";
+
+const deepClone = rfdc()
 
 /**
  * 协作对象锁（软锁/advisory lock，见 docs/multiplayer/object-locking.md §2）
@@ -74,12 +77,12 @@ export const useCollabLockStore = defineStore('collabLock', () => {
         if (!myLocks.value.has(key)) {
             myLocks.value.add(key)
             if (snapshotOf)
-                myLockSnapshots.set(key, structuredClone(snapshotOf))
+                myLockSnapshots.set(key, deepClone(snapshotOf))
             lockRequestHandler.value?.(key)
         }
         return true
     }
-    /** 读取某锁的登记快照（只读用途用 structuredClone 防改写由调用方负责，这里直接返回引用） */
+    /** 读取某锁的登记快照（只读用途用 deepClone 防改写由调用方负责，这里直接返回引用） */
     function peekSnapshot(key: string): ControlPoint | Line | TextTag | undefined {
         return myLockSnapshots.get(key)
     }

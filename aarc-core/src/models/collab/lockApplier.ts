@@ -2,6 +2,9 @@ import { parseCollabLockKey, useCollabLockStore } from "aarc-core/models/stores/
 import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
+import rfdc from "rfdc";
+
+const deepClone = rfdc()
 
 /**
  * 他人获得锁时的本地处理（传输层在收到 lock 广播时调用）。
@@ -32,7 +35,7 @@ function restoreLockSnapshot(key: string): void {
     const target = arr?.find(x => x.id === parsed.id) as unknown as Record<string, unknown> | undefined
     if (!target)
         return
-    const src = structuredClone(snap) as unknown as Record<string, unknown>
+    const src = deepClone(snap) as unknown as Record<string, unknown>
     for (const k of Object.keys(target)) {
         if (!(k in src))
             delete target[k]

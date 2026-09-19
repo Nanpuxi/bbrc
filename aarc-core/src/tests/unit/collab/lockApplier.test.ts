@@ -9,6 +9,9 @@ import { useCollabLockStore } from 'aarc-core/models/stores/collabLockStore'
 import { applyRemoteCollabLock } from 'aarc-core/models/collab/lockApplier'
 import { diffSave } from 'aarc-core/models/save/saveDiff'
 import { ControlPointDir, TextTag } from 'aarc-core/models/save'
+import rfdc from 'rfdc'
+
+const deepClone = rfdc()
 
 ensureDomStub()
 
@@ -88,7 +91,7 @@ describe('applyRemoteCollabLock 败方快照恢复', () => {
     useSaveStore().save = save
     const envStore = useEnvStore()
     const lockStore = useCollabLockStore()
-    const baseline = structuredClone(save)
+    const baseline = deepClone(save)
 
     const pt = save.points[0]
     envStore.activePt = pt
