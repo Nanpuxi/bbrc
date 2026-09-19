@@ -13,7 +13,8 @@ import collabIcon from '@/assets/ui/collab.svg'
 // 两种关闭提示（backend-plan.md §7.1 ②）：
 // - "所有者已关闭协作"：房主在面板里关协作开关（collabEnabled=false 经 op 广播），Editor 调 notifyCollabClosed
 // - "所有者已关闭房间"：房主关房/断网超宽限期（RoomClosed），Editor 调 notifyRoomClosed
-// 均只能按钮关闭（bgClickClose=false），关闭后立即跳首页；同一会话两者都收到时不重复弹（以前者为准）。
+// 均只能按钮关闭（bgClickClose=false）；非房主关闭后立即跳首页，
+// 房主不被强制踢出（仍可继续编辑/保存），仅关闭弹窗
 const props = defineProps<{
     /** 当前用户是否存档所有者（仅所有者可编辑开关） */
     isOwner: boolean
@@ -72,10 +73,11 @@ function showClosedNotice(kind: 'collab' | 'room') {
     closedNoticeShown = true
     closedNoticeKind.value = kind
 }
-/** 关闭弹窗后立即跳转首页（两种提示同规格） */
+/** 关闭弹窗：非房主跳转首页（协作已无从保存，留在页面无意义）；房主仅关闭弹窗，不被强制踢出 */
 function onClosedNoticeClose() {
     closedNoticeKind.value = null
-    void router.push('/')
+    if (!props.isOwner)
+        void router.push('/')
 }
 defineExpose({ notifyCollabClosed, notifyRoomClosed })
 </script>

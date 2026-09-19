@@ -494,6 +494,17 @@ async function enableCollab(){
         return
     save.meta.collabEnabled = true
     preventLeaving()
+    // 先持久化开关、成功后再开房：他人加载存档靠存档内的 collabEnabled 判定能否协作，
+    // 若先开房后保存，期间加载的人看到旧值会回退仅浏览。
+    // saveData 有 1 秒节流，刚保存过则稍候，避免节流误伤导致开房被拦
+    const throttleWaitMs = lastSavedTime + 1000 - Date.now()
+    if(throttleWaitMs > 0)
+        await new Promise(r => window.setTimeout(r, throttleWaitMs))
+    if(!(await saveData(false))){
+        save.meta.collabEnabled = false
+        showPop('保存失败，无法启用多人协作', 'failed')
+        return
+    }
     if(!(await tryJoinCollabRoom())){
         save.meta.collabEnabled = false
         showPop('启动多人协作失败', 'failed')
@@ -527,6 +538,17 @@ async function disableCollab(){
     }
 }
 
+/** 协作被所有者关闭/房间被关后即将强跳首页：解除未保存离开拦截并禁止重新置位——
+ * 离房后 isInSession 转 false，渲染回调会把拦截按普通编辑重新置位（回归默认行为），
+ * 导致协作者点"我知道了"跳转被路由守卫拦下。仅对无法再保存的用户（协作者等未持心跳者）生效；
+ * 房主仍保留拦截，以免丢失自己可保存的改动 */
+function releaseLeavingBeforeForcedLeave(){
+    if(heartbeatActive)
+        return
+    releasePreventLeaving()
+    preventLeavingDisabled.value = true
+}
+
 /** 远程 op 应用导致开关被关（他端所有者关闭）：断开连接并弹窗提示 */
 async function handleCollabDisabledRemotely(){
     if(disablingCollabLocally)
@@ -534,6 +556,7 @@ async function handleCollabDisabledRemotely(){
     if(!collabSession.isInSession)
         return // 未在会话中（如启动失败回退），无需处理
     await collabSession.leave()
+    releaseLeavingBeforeForcedLeave()
     collabPanel.value?.notifyCollabClosed()
 }
 
@@ -547,6 +570,7 @@ watch(() => saveStore.save?.meta.collabEnabled, (now, was) => {
 watch(() => collabSession.roomClosedNotice, () => {
     if(collabSession.roomClosedNotice === 0)
         return
+    releaseLeavingBeforeForcedLeave()
     if(saveStore.save?.meta.collabEnabled === false)
         collabPanel.value?.notifyCollabClosed()
     else
