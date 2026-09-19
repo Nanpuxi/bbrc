@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { resetIdCounter, createPoint, createEmptySave } from '../../helpers/saveFactory'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
@@ -6,7 +6,7 @@ import { useStaClusterStore } from 'aarc-core/models/stores/saveDerived/staClust
 import { saveDiffToSavePatch } from 'aarc-core/models/stores/saveDerived/staClusterStore.pure'
 import { useUndoStore } from 'aarc-core/models/stores/utils/undoStore'
 import { useNamePosMemoryStore } from 'aarc-core/models/stores/utils/namePosMemoryStore'
-import { applyRemoteSaveDiff } from 'aarc-core/models/collab/remoteOpApplier'
+import { applyRemoteSaveDiff, initAfterRemoteSaveApplied } from 'aarc-core/models/collab/remoteOpApplier'
 import { diffSave, SaveDiff } from 'aarc-core/models/save/saveDiff'
 import { ensureDomStub } from '../../helpers/domStub'
 import { useEnvStore } from 'aarc-core/models/stores/envStore'
@@ -67,6 +67,37 @@ describe('applyRemoteSaveDiff', () => {
     beforeEach(() => {
         resetIdCounter()
         createTestPinia()
+    })
+
+    afterEach(() => {
+        initAfterRemoteSaveApplied(undefined)
+    })
+
+    it('数据应用回调即时触发：不等渲染调度', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1)]
+        })
+        useSaveStore().save = save
+        const cb = vi.fn()
+        initAfterRemoteSaveApplied(cb)
+
+        const next = deepClone(save)
+        next.points.push(createPoint(2))
+        await applyRemoteSaveDiff(diffSave(save, next)!)
+
+        expect(cb).toHaveBeenCalledTimes(1)
+        expect(save.points).toHaveLength(2)
+    })
+
+    it('未注册回调时静默跳过', async () => {
+        const save = createEmptySave({
+            points: [createPoint(1)]
+        })
+        useSaveStore().save = save
+
+        const next = deepClone(save)
+        next.points.push(createPoint(2))
+        await expect(applyRemoteSaveDiff(diffSave(save, next)!)).resolves.toBeUndefined()
     })
 
     it('原地应用 diff：未变更元素的对象引用保持不变', async () => {

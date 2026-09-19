@@ -8,6 +8,7 @@ import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
 import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
+import { initAfterRemoteSaveApplied } from "aarc-core/models/collab/remoteOpApplier";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
 import { useCvsBlocksControlStore } from "aarc-core/models/cvs/common/cvs";
 import { nextTick } from "vue";
@@ -66,6 +67,7 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
 /** 卸载编辑器会话：注销“主画布渲染完成”回调等 core 侧清理 */
 export function disposeEditor(): void {
     useMainCvsDispatcher().initAfterMainCvsRendered(undefined)
+    initAfterRemoteSaveApplied(undefined)
 }
 
 /**

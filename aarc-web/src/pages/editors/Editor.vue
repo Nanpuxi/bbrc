@@ -38,6 +38,7 @@ import { useSavesRoutesJump } from '../saves/routes/routesJump';
 import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom';
 import { useSignalrStore } from '@/app/com/signalrStore';
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore';
+import { initAfterRemoteSaveApplied } from 'aarc-core/models/collab/remoteOpApplier';
 import CollabStatusOverlay from './components/CollabStatusOverlay.vue';
 import CollabPanel from './components/CollabPanel.vue';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
@@ -331,12 +332,26 @@ async function checkLoginLeftTime(userInfo:HttpUserInfo){
 function setLeavingPreventing(){
     //将“主画布重新渲染”当成“存档信息变化”，当主画布重新渲染时，阻止用户离开/刷新页面/关闭页面
     //（undo 入栈已由 core 在 notifyMainCvsRendered 内处理）
+    // 保存责任人 = 房主（见下方协作接线）：协作中的非房主既不显示保存按钮也不阻止离开，
+    // 未保存标记仅由房主承担（协作者的更改经 op 同步给房主保存）
+    const preventLeavingIfSaveResponsible = () => {
+        if(!collabSession.isInSession || collabSession.isOwner)
+            preventLeaving()
+    }
     mainCvsDispatcher.initAfterMainCvsRendered(() =>{
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
-        preventLeaving()
+        preventLeavingIfSaveResponsible()
         heartbeatOnEdit?.()
+    })
+    // 远程 op 数据应用即时、渲染被 remoteRenderScheduler 节流（≤idleMs/交互结束才补渲染）——
+    // 未保存标记直接跟随数据应用（保存按钮/红点即时出现），不等被推迟的那次渲染
+    initAfterRemoteSaveApplied(() => {
+        if(savingDisabledWarningStore.needToWarn){
+            savingDisabledWarningStore.onFirstEdit()
+        }
+        preventLeavingIfSaveResponsible()
     })
 }
 
@@ -449,6 +464,11 @@ async function tryJoinCollabRoom(): Promise<boolean>{
         // 防御：协作者不持有心跳（如 loadData 意外给了心跳），释放让房主接管
         endHeartbeat()
         api.save.heartbeatRelease(saveIdNum.value).catch(()=>{})
+    }
+    if(!collabSession.isOwner){
+        // 以协作者身份进房：保存责任在房主，清掉进房前可能残留的未保存标记
+        // （不显示保存按钮、不阻止离开；房主侧不受此影响）
+        releasePreventLeaving()
     }
     updateCollabWarning()
     return true
@@ -566,6 +586,11 @@ watch(() => collabSession.isOwner, () => {
     if(!collabSession.isInSession)
         return
     // OwnerChanged：我继任房主 → 接管心跳与保存权；房主换成他人 → 更新提示
+    if(!collabSession.isOwner){
+        // 保存责任已移交他人：解除未保存标记（保存按钮回"离开"、不阻止离开），
+        // 继任侧由后续编辑/远程 op 按需重新置位
+        releasePreventLeaving()
+    }
     void ensureOwnerHeartbeat()
     updateCollabWarning()
 })

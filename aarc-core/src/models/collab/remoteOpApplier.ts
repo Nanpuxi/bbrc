@@ -19,6 +19,17 @@ import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderSc
  *
  * 不放在 collabStore 中是为了避免模块循环依赖（saveStore 已引用 collabStore）
  */
+
+/**
+ * 宿主注入的"远程 op 数据已应用"回调（web：Editor.vue 据此立即置未保存标记——
+ * 数据应用是即时的，而渲染被 remoteRenderScheduler 节流（≤idleMs/交互结束），
+ * 未保存标记不应跟随渲染延迟）。重复调用以最后一次为准；undefined 注销
+ */
+let afterRemoteSaveApplied: (() => void) | undefined
+export function initAfterRemoteSaveApplied(cb?: () => void): void {
+    afterRemoteSaveApplied = cb
+}
+
 export async function applyRemoteSaveDiff(diff: SaveDiff): Promise<void> {
     const saveStore = useSaveStore()
     const save = saveStore.save
@@ -29,8 +40,10 @@ export async function applyRemoteSaveDiff(diff: SaveDiff): Promise<void> {
     useUndoStore().syncBaseline(save)
     const resetterStore = useResetterStore()
     resetterStore.refreshDerivedStoresForRemote(diff)
+    // 数据已就位（同步部分完成，不等异步的派生 store 重启）：通知宿主立即更新
+    // 未保存标记等数据态 UI；随后再请求"同步驱动"渲染（用户活跃期会被抑制/合并）
+    afterRemoteSaveApplied?.()
     await resetterStore.relaunchDerivedStores()
-    // 数据已就位，请求一次"同步驱动"渲染（用户活跃期会被抑制/合并，见 remoteRenderScheduler）
     useRemoteRenderScheduler().requestRemoteRender()
 }
 
