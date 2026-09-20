@@ -2,7 +2,7 @@
 // 生成全部平台图标：macOS（squircle icns + 各档 png）、Windows（ico + Store 磁贴）、
 // Android（adaptive icon 双层 + legacy）、iOS（AppIcon 全套，不透明满幅）。
 // 用法：pnpm --filter aarc-tauri gen:icons
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
@@ -76,7 +76,9 @@ ${lambda()}
 const render = (svg, size) => sharp(Buffer.from(svg(size))).png().toBuffer()
 const written = []
 const write = (rel, buf) => {
-  writeFileSync(path.join(iconsDir, rel), buf)
+  const dest = path.join(iconsDir, rel)
+  mkdirSync(path.dirname(dest), { recursive: true })
+  writeFileSync(dest, buf)
   written.push(rel)
 }
 
