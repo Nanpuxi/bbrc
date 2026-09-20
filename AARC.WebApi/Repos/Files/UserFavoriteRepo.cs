@@ -92,13 +92,16 @@ namespace AARC.WebApi.Repos.Files
                     && x.ObjectId > 0);
             if (!string.IsNullOrEmpty(group))
                 q = q.Where(x => x.Group == group);
-            var ids = q
+            var objectIds = q
                 .GroupBy(x => x.ObjectId)
-                .Select(g => new { ObjectId = g.Key, LastActive = g.Max(x => x.LastActive) })
-                .OrderByDescending(x => x.LastActive)
+                .Select(g => g.Key);
+            var ids = (
+                from objectId in objectIds
+                join save in Context.Saves.Existing() on objectId equals save.Id
+                orderby save.LastActive descending
+                select objectId)
                 .Skip(skip)
                 .Take(take + 1)
-                .Select(x => x.ObjectId)
                 .ToList();
             var hasMore = ids.Count > take;
             if (hasMore)

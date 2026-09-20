@@ -3,19 +3,26 @@ import { useApiStore } from '@/app/com/apiStore';
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
 import type { CSSProperties } from 'vue';
 import { useSavesRoutesJump } from '../saves/routes/routesJump';
-import { SaveDto } from '@/app/com/apiGenerated';
+import { SaveDto, UserFavoriteType } from '@/app/com/apiGenerated';
 import SaveAvatar from './SaveAvatar.vue';
 import Loading from '@/components/common/Loading.vue';
 import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig';
+import { useUserInfoStore } from '@/app/globalStores/userInfo';
+import { loginName } from '../identities/routes/routesNames';
 
 const props = defineProps<{
     forAuditor?: boolean
 }>()
 const api = useApiStore()
+const userInfoStore = useUserInfoStore()
 const { someonesSavesRoute } = useSavesRoutesJump()
 const saveListLocalConfig = useSaveListLocalConfigStore()
 const ITEM_WIDTH = 120
 const ITEM_GAP = 15
+const FAVORITE_TAKE = 30
+
+const isFavoriteMode = computed(() => !props.forAuditor && saveListLocalConfig.newestSavesSource === 'favorite')
+const needLogin = ref(false)
 
 const list = ref<SaveDto[]>([])
 const firstItemMargin = ref(0)
@@ -38,9 +45,27 @@ function shouldAutoRefresh(): boolean {
     return isAutoRefreshingNow.value
 }
 
+const allowAutoRefresh = computed(()=>{
+    let source = saveListLocalConfig.newestSavesSource
+    return !source || saveListLocalConfig.newestSavesSource == 'newest'
+})
+
+async function loadFavorites(): Promise<SaveDto[] | undefined> {
+    await userInfoStore.getIdentityInfo()
+    if(!userInfoStore.isLogined){
+        needLogin.value = true
+        return []
+    }
+    needLogin.value = false
+    const res = await api.userFavorite.getSaves(UserFavoriteType.Save, null, 0, FAVORITE_TAKE)
+    return res?.saves
+}
+
 async function load(){
     let resp:SaveDto[]|undefined
-    if(props.forAuditor)
+    if(isFavoriteMode.value)
+        resp = await loadFavorites()
+    else if(props.forAuditor)
         resp = await api.save.getNewestSavesAudit()
     else
         resp = await api.save.getNewestSaves()
@@ -111,7 +136,11 @@ onMounted(async()=>{
     timer = setInterval(() => {
         now.value = Date.now()
     }, 1000)
+    updateAutoRefreshStatus()
     loadTimer = setInterval(() => {
+        if(!allowAutoRefresh.value){
+            return
+        }
         if(shouldAutoRefresh()){
             load()
         }
@@ -120,6 +149,15 @@ onMounted(async()=>{
 
 watch(() => saveListLocalConfig.autoRefreshNewest, () => {
     updateAutoRefreshStatus()
+})
+
+watch(isFavoriteMode, () => {
+    list.value = []
+    needLogin.value = false
+    firstItemMargin.value = 0
+    firstItemTransition.value = 'none'
+    loaded.value = false
+    load()
 })
 
 onUnmounted(()=>{
@@ -138,16 +176,28 @@ onUnmounted(()=>{
 <template>
 <div v-if="loaded">
     <div class="autoRefreshRow">
-        <div class="statusDot" :class="{ active: isAutoRefreshingNow }"></div>
-        <label>
-            <select v-model="saveListLocalConfig.autoRefreshNewest">
-                <option :value="true">更新常开</option>
-                <option :value="false">更新常关</option>
-                <option value="auto">自动更新</option>
+        <template v-if="allowAutoRefresh">
+            <div class="statusDot" :class="{ active: isAutoRefreshingNow }"></div>
+            <label>
+                <select v-model="saveListLocalConfig.autoRefreshNewest">
+                    <option :value="true">更新常开</option>
+                    <option :value="false">更新常关</option>
+                    <option value="auto">自动更新</option>
+                </select>
+            </label>
+        </template>
+        <label v-if="!forAuditor">
+            <select v-model="saveListLocalConfig.newestSavesSource">
+                <option value="newest">全站最新</option>
+                <option value="favorite">我的收藏</option>
             </select>
         </label>
     </div>
-    <div ref="newestSavesRef" class="newestSaves" :style="{ gap: ITEM_GAP + 'px' }" @scroll="updateAutoRefreshStatus">
+    <div v-if="needLogin" class="favoriteTip">
+        登录后可查看收藏的存档，<RouterLink :to="{ name: loginName }">去登录</RouterLink>
+    </div>
+    <div v-else-if="isFavoriteMode && list.length === 0" class="favoriteTip">还没有收藏的存档</div>
+    <div v-else ref="newestSavesRef" class="newestSaves" :style="{ gap: ITEM_GAP + 'px' }" @scroll="updateAutoRefreshStatus">
     <div v-for="item in listWithStyle" :key="item.s.id"
         :style="item.style">
         <SaveAvatar :s="item.s" :size="120"></SaveAvatar>
@@ -164,6 +214,15 @@ onUnmounted(()=>{
 </template>
 
 <style scoped lang="scss">
+.favoriteTip{
+    text-align: center;
+    color: #666;
+    padding: 20px 0px;
+    a{
+        color: inherit;
+        text-decoration: underline;
+    }
+}
 .autoRefreshRow{
     display: flex;
     justify-content: flex-end;
