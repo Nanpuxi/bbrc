@@ -6,12 +6,17 @@ import { onMounted, watch } from 'vue';
 import { PinyinCaseType, PinyinVariantType } from 'aarc-core/models/types/apiShapes';
 import { useEditorLocalConfigStore } from 'aarc-core/app/localConfig/editorLocalConfig';
 import { usePreventLeavingUnsavedStore } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
+import { hasPinyinConvertProvider } from 'aarc-core/components/composables/usePinyinConvert';
+
+const pinyinConvertEnabled = hasPinyinConvertProvider()
 
 const { config } = storeToRefs(useConfigStore())
 const { tabForPinyinConvert } = storeToRefs(useEditorLocalConfigStore())
 const { preventLeaving } = usePreventLeavingUnsavedStore()
 
 onMounted(()=>{
+    if(!pinyinConvertEnabled)
+        return
     const ori = config.value.pinyinConvert
     if(!ori || !Object.keys(ori).length){
         config.value.pinyinConvert = {
@@ -28,7 +33,7 @@ watch(()=>config.value.pinyinConvert, ()=>{
 </script>
 
 <template>
-<ConfigSection :title="'站名拼音转换'">
+<ConfigSection :title="'站名拼音转换'" v-if="pinyinConvertEnabled">
 <table v-if="config.pinyinConvert">
     <tbody>
         <tr>

@@ -413,8 +413,12 @@ export const useEnvStore = defineStore('env', ()=>{
                 btnWay: [...lineExtend.way],
                 from: activePt.value
             }
+            //lineExtendSta 未设置时，跟随被延长端原有末端点的类型
+            const extendSta = editorLocalConfigStore.lineExtendSta
+                ?? activePt.value?.sta
+                ?? ControlPointSta.sta
             const newPtId = saveStore.insertNewPtToLine(
-                lineExtend.lineId, lineExtend.at, lineExtend.btnPos, lineExtend.btnDir, ControlPointSta.sta)
+                lineExtend.lineId, lineExtend.at, lineExtend.btnPos, lineExtend.btnDir, extendSta)
             if (newPtId) {
                 if(nameEditStore.edited)
                     rerender.value([], [activePt.value.id])

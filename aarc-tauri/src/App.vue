@@ -3,6 +3,7 @@ import { onMounted, useTemplateRef } from 'vue';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import Pop from './components/Pop.vue';
 import Wait from './components/Wait.vue';
+import Editor from './components/Editor.vue';
 
 const pop = useTemplateRef('pop')
 const wait = useTemplateRef('wait')
@@ -22,17 +23,10 @@ onMounted(()=>{
 </script>
 
 <template>
-    <div class="placeholder">
-        aarc-tauri minimal host（占位：编辑器宿主组件待实现）
-    </div>
+    <Editor/>
     <Pop ref="pop"/>
     <Wait ref="wait"/>
 </template>
 
 <style scoped lang="scss">
-.placeholder{
-    padding: 20px;
-    text-align: center;
-    color: #666;
-}
 </style>

@@ -4,9 +4,10 @@ import ConfigSection from './shared/ConfigSection.vue';
 import PerformanceConfig from './PerformanceConfig.vue';
 import { storeToRefs } from 'pinia';
 import { onMounted } from 'vue';
+import { ControlPointSta } from 'aarc-core/models/save.ts';
 
 const configStore = useEditorLocalConfigStore()
-const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize } = storeToRefs(configStore)
+const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize, lineExtendSta } = storeToRefs(configStore)
 
 onMounted(()=>{
     configStore.backCompat()
@@ -14,9 +15,22 @@ onMounted(()=>{
 </script>
 
 <template>
-<ConfigSection :title="'编辑器'">
+<ConfigSection :title="'编辑器【新】'">
     <table><tbody>
-        <tr><th>重复站名检测</th></tr>
+        <tr><th>线路延长站点类型</th></tr>
+        <tr>
+            <td>
+                <select v-model="lineExtendSta">
+                    <option :value="undefined">跟随末端</option>
+                    <option :value="ControlPointSta.plain">固定（控制点）</option>
+                    <option :value="ControlPointSta.sta">固定（车站点）</option>
+                </select>
+                <div class="explain">
+                    <p>拖动线路延长手柄形成的站点类型</p>
+                </div>
+            </td>
+        </tr>
+        <tr><th>站名重复距离判定</th></tr>
         <tr>
             <td>
                 <input v-model="duplicateNameDistThrs" placeholder="0-1000"/>
@@ -77,7 +91,14 @@ onMounted(()=>{
                 </div>
             </td>
         </tr>
-    </tbody></table>        
+        <tr>
+            <td>
+                <div class="explain">
+                    此处所有设置都存储在浏览器内（不随存档存储）
+                </div>
+            </td>
+        </tr>
+    </tbody></table>
 </ConfigSection>
 <PerformanceConfig />
 </template>

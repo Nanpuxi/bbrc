@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, watch, type Ref } from "vue";
 import { localConfigKeyPrefix } from "./common/keyPrefix";
 import { useBrowserInfoStore } from "aarc-core/app/globalStores/browserInfo";
+import { ControlPointSta } from "aarc-core/models/save";
 
 export const cvsRenderResolutionRatioLimits = { min: 0.5, max: 2 }
 export const selectionSizeLimits = { min: 0.3, max: 2 }
@@ -21,6 +22,8 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const selectionSize = ref<number>(useBrowserInfoStore().isMobile ? 1 : 0.8)
     const blankClickBehavior = ref<BlankClickBehavior>('exitWhenGrouped')
     const cvsRenderResolutionRatio = ref<number>(2)
+    const lineExtendSta = ref<ControlPointSta|undefined>(undefined)
+
     watch(cvsRenderResolutionRatio as Ref<number | string>, (v)=>{
         if(v === '' || v == null || typeof v !== 'number' || isNaN(v))
             return
@@ -62,6 +65,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         selectionSize,
         blankClickBehavior,
         cvsRenderResolutionRatio,
+        lineExtendSta,
         backCompat
     }
 },

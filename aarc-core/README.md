@@ -29,19 +29,24 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 
 ### 二、回调注入接口（`init*` 注册）
 
-> 聚合入口：`initCoreHostServices(services: CoreHostServices)`（`app/hostServices.ts`）一次性注册下表中"应用启动期"的服务（弹窗/等待、云上传、拼音转换、存档信息、站点链接、路由守卫），内部依次调用各 `init*`；新增宿主时实现 `CoreHostServices` 即得到完整装配 checklist。下表各低层入口保留，可单独调用。
+> 聚合入口：`initCoreHostServices(services: CoreHostServices)`（`app/hostServices.ts`）一次性注册下表中"应用启动期"的服务（弹窗/等待、云上传、拼音转换、存档信息、文件保存、站点链接、路由守卫），内部依次调用各 `init*`；新增宿主时实现 `CoreHostServices` 即得到完整装配 checklist。下表各低层入口保留，可单独调用。
 
 | 功能 | core 入口 | web 实现 |
 |---|---|---|
 | 全局弹窗 / 等待遮罩 | `uniqueComponents.initCallbacks({ popCallback, waitCallback })`（`app/globalStores/uniqueComponents.ts:11`） | `App.vue:23-40` 聚合注册（pop/wait 字段），用 web 自有的 `Pop.vue` / `Wait.vue` 实现 UI |
-| 存档缩略 SVG 云上传 | `initCloudSvgUploader(uploader)`（`models/save/cloudSvgOps.ts:8`）；未注入时调用仅报错不崩溃 | `App.vue:23-40` 聚合注册（cloudSvgUploader 字段），`api.saveSvg.upload` |
-| 拼音转换 | `initPinyinConvertProvider(provider)`（`components/composables/usePinyinConvert.ts:11`） | `App.vue:23-40` 聚合注册（pinyinConvert 字段），`api.saveUtils.pinyinConvert` |
-| 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`） | `App.vue:23-40` 聚合注册（saveInfo 字段），`api.save.loadInfo` |
+| 存档缩略 SVG 云上传 | `initCloudSvgUploader(uploader)`（`models/save/cloudSvgOps.ts:8`）；未注入则"云端SVG"配置区整体隐藏 | `App.vue:23-40` 聚合注册（cloudSvgUploader 字段），`api.saveSvg.upload` |
+| 拼音转换 | `initPinyinConvertProvider(provider)`（`components/composables/usePinyinConvert.ts:11`）；未注入则站名/文本标签编辑器内的转换按钮及"站名拼音转换"配置区隐藏 | `App.vue:23-40` 聚合注册（pinyinConvert 字段），`api.saveUtils.pinyinConvert` |
+| 存档信息读取（导出图片用） | `initSaveInfoProvider(provider)`（`components/sidebars/export/composables/useImageExport.ts:15`）；未注入则导出文件名退化为存档 id，不阻断导出 | `App.vue:23-40` 聚合注册（saveInfo 字段），`api.save.loadInfo` |
+| 文件保存（导出落盘） | `initFileSaver(saver)`（`components/sidebars/export/composables/useImageExport.ts`）；未注入则 `triggerDownload` 使用浏览器 `<a download>` 下载兜底（webview 下载不可靠的宿主如 tauri 应注入原生实现） | web 不注入，走 core 默认浏览器下载；tauri：`src/fileSaver.ts`（dialog `save` + fs `writeFile`） |
 | 站点内链接（关于页 / 私服案例） | `initSiteLinks({ about, forkAarc })`（`app/siteLinks.ts:9`）；不注入则对应链接隐藏 | `App.vue:23-40` 聚合注册（siteLinks 字段），`router.resolve({ name }).href` |
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
+<<<<<<< HEAD
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入被调用时 `console.warn`）；消费方可用 `openFavoritesSidebar(intent)` 传入一次性 `onSelected` 回调与 `fileType` 过滤；宿主在用户选中文件时调 `notifyFileSelected(file)`——优先消费一次性回调，否则回退到全局 `onFavoriteFileSelected`（由 core 的 `iconStore.ts:168` 赋值） | `components/common/userFile/UserFileFavorites.vue`（`open`/`select`） |
 | UserFile 资源上传（线路样式分享） | `initUserFileUploader(uploader)`（`models/save/lineStyleResourceOps.ts:27`，经 `CoreHostServices.userFileResourceUploader` 可选注入）；返回 `'ok'/'canceled'/'failed'` 三态；同名资源的 preflight 与覆盖确认由宿主实现负责；未注入则编辑器内隐藏"上传为资源"入口 | `App.vue` 聚合注册（userFileResourceUploader 字段），经 `app/com/userFileUploadGuard.ts` 调 `api.userFile.upload`（type 固定 `UserFileType.LineStyle`，附带正方形预览 webp 缩略图；同名时弹 `components/common/userFile/OverwriteConfirmPrompt.vue` 确认后覆盖） |
+=======
+| 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入则"添加资源"按钮隐藏，被调用时仅 `console.warn`）；`onFavoriteFileSelected` 由 core 的 `iconStore.ts:168` 赋值，宿主在用户选中文件时调用它 | `components/common/userFile/UserFileFavorites.vue:36` / `:45` |
+>>>>>>> master
 
 **弹窗 / 等待遮罩的行为约定**（任何宿主的 pop/wait 实现都必须遵循）：
 
@@ -61,3 +66,4 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 - **core 会直接发网络请求**：`utils/urlUtils/checkUrl.ts:3`（`fetch` HEAD 探测 URL 可用性）、`models/save/dataSourceOps.ts:19`（`fetch` 拉取数据源）——core 并非零出站请求，宿主环境须允许这些请求发出（未来计划随注入模式 provider 化，见 `aarc-web/docs/decoupling.md` 第 19 步）。
 - **同源假设**：`utils/urlUtils/proxyUrl.ts:15`、`models/stores/iconStore.ts:40,174`、`components/sidebars/configs/CloudSvgConfig.vue:38` 用 `window.location.origin` 拼接 API/图标 URL，隐式要求后端与静态资源同源于页面；不同源时必须正确配置 `VITE_ApiUrlBase`。
 - **硬编码静态路径**：`models/save/upgrade/textTagIcons.ts:9-10` 的默认文本标签图标引用 `/icons/a/airport.svg`、`/icons/a/train.svg`，依赖宿主 `public/icons/` 目录提供。web：`aarc-web/public/icons/`。
+- **构建信息 `/gitInfo.json`**：`components/sidebars/configs/EtcConfig.vue` 底部显示分支/提交/构建时间（`utils/gitInfo/gitInfoGet.ts` 懒加载 fetch，失败则该行隐藏）。宿主应在 dev/build 前把 `gitInfo.json` 生成到自身 `public/` 下。web：`build.ts` 内调用 `src/utils/gitInfo/gitInfoGen.ts`；tauri：`scripts/gen-git-info.mjs`（已挂进 `dev`/`build` 脚本前置）。

@@ -35,7 +35,7 @@ function onRatioInputChange(){
 </script>
 
 <template>
-<ConfigSection :title="'性能优化【新】'">
+<ConfigSection :title="'性能优化'">
     <table><tbody>
         <tr><th>画布渲染分辨率</th></tr>
         <tr>
