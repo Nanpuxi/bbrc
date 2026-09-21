@@ -7,6 +7,7 @@ import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueCompo
 import { LineStyle } from 'aarc-core/models/save';
 import { upgradeLineStyle } from 'aarc-core/models/save/upgrade/lineStyles';
 import { hasUserFileUploader, uploadLineStylesAsResource } from 'aarc-core/models/save/lineStyleResourceOps';
+import SwitchingTabs from 'aarc-core/components/common/SwitchingTabs.vue';
 import rfdc from 'rfdc';
 
 const saveStore = useSaveStore()
@@ -82,6 +83,8 @@ function exportToFile() {
 // 宿主（web）在应用启动时注入上传实现，编辑器打开时必定已就绪
 const uploaderAvailable = hasUserFileUploader()
 
+const tabTexts = [...(uploaderAvailable ? ['上传资源'] : []), '文件', '剪切板']
+
 // 上传的样式会被导入到任意存档，pattern id 在目标存档中无意义，须把引用的 pattern 整体嵌入
 function embedReferencedPatterns(styles: LineStyle[]) {
     const patterns = save.value?.patterns
@@ -104,7 +107,7 @@ async function uploadAsResource() {
     embedReferencedPatterns(data)
     const res = await uploadLineStylesAsResource(data)
     if (res === 'ok')
-        showPop('上传成功，可前往"文件"页收藏这些资源', 'success')
+        showPop('上传成功', 'success')
     else if (res === 'canceled')
         showPop('已取消上传', 'info')
     else
@@ -224,32 +227,50 @@ function mergeLineStyles(importedStyles: unknown[]) {
     </div>
     <div v-else class="noStyles">当前没有线路样式</div>
 
-    <div class="btnGroup">
-        <button @click="exportToClipboard" class="ok">导出到剪切板</button>
-        <button @click="exportToFile" class="ok">导出到json文件</button>
+    <div class="reuseActions">
+        <SwitchingTabs class="reuseTabs" :texts="tabTexts">
+            <div class="tabPane" v-if="uploaderAvailable">
+                <p class="smallNote">上传为资源后（每条选中的样式各成为一个资源），可在"我的资源"页收藏它们，并在任意存档的"数据源"中添加，实现跨存档共享</p>
+                <p class="smallNote">如果重复上传同名的样式，资源将被更新，任何存档若使用了“自动更新”和“覆盖同名”的数据源，将会同步更新同名的线路样式（更新一次即为同步更新所有）</p>
+                <div class="btnGroup">
+                    <button @click="uploadAsResource" class="ok">上传为资源</button>
+                </div>
+            </div>
+            <div class="tabPane">
+                <p class="smallNote">文件方式适合备份与发送：导出为一个 json 文件，在别的存档打开本菜单即可导入</p>
+                <div class="btnGroup">
+                    <button @click="exportToFile" class="ok">导出到json文件</button>
+                </div>
+                <div class="btnGroup">
+                    <button @click="importFromFile">从文件导入</button>
+                </div>
+                <input
+                    ref="fileInputRef"
+                    type="file"
+                    accept=".txt,.json"
+                    style="display: none"
+                    @change="handleFileChange"
+                />
+                <p class="smallNote">
+                    导入时，新样式会追加到样式列表尾部，不会覆盖同名的样式
+                </p>
+            </div>
+            <div class="tabPane">
+                <p class="smallNote">剪切板方式适合快速搬运：在别的存档打开本菜单即可导入</p>
+                <div class="btnGroup">
+                    <button @click="exportToClipboard" class="ok">导出到剪切板</button>
+                </div>
+                <div class="btnGroup">
+                    <button @click="importFromClipboard">从剪切板导入</button>
+                </div>
+                <input v-if="wantToImport" v-model="importedJson" placeholder="请粘贴在此"
+                    @change="handleInputChange"/>
+                <p class="smallNote">
+                    导入时，新样式会追加到样式列表尾部，不会覆盖同名的样式
+                </p>
+            </div>
+        </SwitchingTabs>
     </div>
-    <div class="btnGroup" v-if="uploaderAvailable">
-        <button @click="uploadAsResource" class="ok">上传为资源</button>
-    </div>
-    <p class="smallNote" v-if="uploaderAvailable">
-        上传为资源后（每条选中的样式各成为一个资源），可在"文件"页收藏它们，并在任意存档的"数据源"中引入，实现跨存档共享
-    </p>
-    <p class="smallNote">
-        导入时，新样式会追加到样式列表尾部，不会覆盖同名的样式
-    </p>
-    <div class="btnGroup">
-        <button @click="importFromClipboard">从剪切板导入</button>
-        <button @click="importFromFile">从文件导入</button>
-    </div>
-    <input v-if="wantToImport" v-model="importedJson" placeholder="请粘贴在此"
-        @change="handleInputChange"/>
-    <input
-        ref="fileInputRef"
-        type="file"
-        accept=".txt,.json"
-        style="display: none"
-        @change="handleFileChange"
-    />
 </div>
 </template>
 
@@ -324,5 +345,24 @@ function mergeLineStyles(importedStyles: unknown[]) {
 }
 .btnGroup button{
     flex: 1;
+}
+.reuseActions{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.reuseTabs{
+    width: 100%;
+}
+.tabPane{
+    padding: 8px 10px 10px;
+}
+.tabPane>*+*{
+    margin-top: 8px;
+}
+.tabPane input:not([type="file"]){
+    width: 100%;
+    box-sizing: border-box;
 }
 </style>

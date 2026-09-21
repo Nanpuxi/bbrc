@@ -166,7 +166,7 @@ onUnmounted(()=>{
         </div>
         <div v-if="showDetail[s.id]" class="detail">
             <div v-if="hostDsOf(s)" class="dsNote">
-                由开启“覆盖同名”的数据源加载而来，编辑内容将在下次加载/自动更新时被覆盖。改名、关闭数据源“覆盖同名”、重新上传样式（覆盖资源）均可脱离这种状态
+                由开启“覆盖同名”的数据源加载而来，编辑内容将在下次加载/自动更新时被覆盖。改名、关闭数据源“覆盖同名”、重新上传样式（覆盖资源）均可避免改动被覆盖
             </div>
             <div class="name">
                 <h3>样式名</h3><input v-model="s.name" placeholder="必填"
@@ -260,7 +260,7 @@ onUnmounted(()=>{
         <button class="ok" @click="addStyle()">+新建样式</button>
     </div>
     <div class="reuseStyle">
-        <button @click="openReuseSidebar()">导入/导出样式</button>
+        <button @click="openReuseSidebar()">导入/导出/上传样式</button>
     </div>
 </div>
 </ConfigSection>
