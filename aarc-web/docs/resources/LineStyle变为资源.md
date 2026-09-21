@@ -1,8 +1,9 @@
 # LineStyle 变为资源（上传为 UserFile 并作 dataSource 引入）实现路线分析
 
-> 本文是**尚未实施**的改造方案。前端已拆分为 `aarc-core`（编辑器核心）与 `aarc-web`（站点），
-> 本文已按新架构更新路径与机制描述：编辑器内的样式预览/导入导出/数据源逻辑都在 core，
-> userFile 上传/收藏 UI 在 web，core 通过注入回调与窄投影 DTO 与宿主交互
+> 本文所述改造已**全部实施**（下文各步骤均标注 ✅ 并记录实际做法），保留作实现路线与
+> 现状机制的记录。前端已拆分为 `aarc-core`（编辑器核心）与 `aarc-web`（站点）：
+> 编辑器内的样式预览/导入导出/数据源逻辑都在 core，userFile 上传/收藏 UI 在 web，
+> core 通过注入回调与窄投影 DTO 与宿主交互
 > （见 `aarc-core/README.md` 与 `aarc-web/docs/decoupling.md`）。
 
 ## 目标
@@ -14,7 +15,7 @@
 
 ## 现状盘点（可复用的零件）
 
-### UserFile 上传/存储（后端零改动即可支持）
+### UserFile 上传/存储（最初评估后端零改动即可支持；后续为同名覆盖与按 id 固定链接增加了端点，见第 2.5/4 步）
 
 - `POST /api/UserFile/Upload` 已接受 `.json`（`UserFileRepo.cs:29-30` 的 `extAllowed`），
   且 `thumb` 参数对任意类型都有效：`UserFileService.Write` 把缩略图存为
@@ -32,8 +33,9 @@
 
 - `UserFileUpload.vue`：按 `type` 分派到 `ImageUpload`（Icon，:16）或
   `GenericFileUpload`（其余类型，:24）。
-- `GenericFileUpload.vue`：目前只接受 `application/json`（:131），上传时**不传缩略图**
-  （:89 `userFileThumb` 传 `undefined`）。需要扩展：允许调用方附带一个预览图 Blob。
+- `GenericFileUpload.vue`：只接受 `application/json`。曾计划扩展"携带预览图 Blob 上传"，
+  最终未采用该路线（LineStyle 上传改走 core 注入口，见第 2 步）；现已接入同名覆盖
+  预检（`uploadUserFileGuarded`，见第 2.5 步）。
 
 ### 收藏与"取用"流程（UserFileFavorites）
 
@@ -56,8 +58,8 @@
   附带预览图的原因**：否则 JSON 文件在收藏夹里没有可视缩略图。
 - 收藏入口在 `aarc-web/src/pages/components/UserFavoriteStar.vue`（文件列表页
   `aarc-web/src/pages/files/component/UserFiles.vue:101` 使用）。
-- 注意：`onFavoriteFileSelected` 仍是**单一回调**，当前 iconStore 无条件注册。新增
-  LineStyle 消费方时不能直接再注册一个（会互相覆盖），需要改造 store（见下文第 3 步）。
+- 注意：`onFavoriteFileSelected` 曾是**单一回调**（iconStore 无条件注册），直接新增
+  LineStyle 消费方会互相覆盖——已按第 3 步改造为一次性取用意图，图标流程不受影响。
 
 ### 数据源机制（`aarc-core/src/models/save/dataSourceOps.ts`）
 
@@ -71,20 +73,30 @@
   `getCoreConfig().apiUrlBase` 或 `window.location.origin` 拼接（参考
   `iconStore.ts:40,174` 的做法）。
 - 样式导入的格式兼容已解决：`aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue`
-  的导出格式就是 `LineStyle[]` JSON（`exportToFile` :66），导入侧有 `upgradeLineStyle`
-  升级旧版格式——上传内容直接复用这套序列化即可。
+  的导出格式就是 `LineStyle[]` JSON（`exportToFile`），导入侧有 `upgradeLineStyle`
+  升级旧版格式——上传内容直接复用这套序列化。
+- **pattern 跨存档问题**：`LineStyle.layers[].pattern` 只存本存档的 pattern id，跨存档
+  导入后无意义甚至撞 id。上传路径已在打包前把各层引用的完整 pattern 深拷贝嵌入
+  `layers[].patternEmbedded`（`LineStylesConfigReuse.vue` 的 `embedReferencedPatterns`，
+  仅上传时做，导出到剪切板/文件不嵌入）。渲染（`strokeStyledLine`）优先使用嵌入
+  pattern（经 `patternStore.getRenderedOf` 直接渲染 Pattern 对象），配置 UI 在图层
+  带嵌入 pattern 时显示"已使用嵌入pattern"，并提供"移除嵌入"按钮（移除时连同
+  源存档的 pattern id 一并清除，回到普通 id 选择）。
 
 ### 预览渲染逻辑（已抽离为公共模块）
 
 - 公共模块 `aarc-core/src/models/cvs/common/lineStylePreview.ts`（第 1 步已实施）：
-  - `drawLineStylePreview(ctx, lineStyle, dynaColor)`：在 400×60 内容条带上白底 +
-    居中水平线，复用 `strokeStyledLine`；画布尺寸由常量 `lineStylePreviewCvsWidth` /
-    `lineStylePreviewCvsHeight` 导出。
+  - `drawLineStylePreview(ctx, lineStyle, dynaColor, bgColor?)`：在 400×60 内容条带上
+    背景填充 + 居中水平线，复用 `strokeStyledLine`；画布尺寸由常量
+    `lineStylePreviewCvsWidth` / `lineStylePreviewCvsHeight` 导出。`bgColor` 同时用作
+    背景填充与 `colorMode==='bg'`（跟随背景色）层的颜色来源，缺省白色。
   - `renderLineStylePreviewBlob(lineStyle): Promise<Blob|null>`：静态渲染一次，输出
     **正方形**（400×400）webp Blob 作资源缩略图——内容条带垂直居中，上下多出的部分
-    白色填充；动态色固定为 `#3399FF`，保证同一样式产出相同 md5。
-- 配置页组件 `LineStylesConfig.vue` 的 `renderPreviewCvsOf` 已改为调用
-  `drawLineStylePreview`，动态色仍由时间戳 hue 计算（每 100ms 重绘产生流动效果）。
+    白色填充；动态色固定 `#3399FF`、背景**固定白色**（不传 bgColor），保证同一样式
+    产出相同 md5。
+- 配置页组件 `LineStylesConfig.vue` 的 `renderPreviewCvsOf` 调用 `drawLineStylePreview`
+  并传入实际 `configStore.config.bgColor` 作背景（"跟随背景色"的层在预览中可见），
+  动态色仍由时间戳 hue 计算（每 100ms 重绘产生流动效果）。
 
 ## 实现路线
 
@@ -93,15 +105,15 @@
 已新建 `aarc-core/src/models/cvs/common/lineStylePreview.ts`：
 
 ```ts
-export function drawLineStylePreview(ctx, lineStyle, dynaColor): void
+export function drawLineStylePreview(ctx, lineStyle, dynaColor, bgColor?): void
 export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob | null>
 ```
 
 - `renderLineStylePreviewBlob` 输出**正方形**（400×400）webp：内容条带（400×60）
-  垂直居中，上下多出的部分白色填充；动态色固定 `#3399FF`，避免每次生成不同图
-  导致 md5 抖动。
-- `LineStylesConfig.vue` 的 `renderPreviewCvsOf` 已改为调用 `drawLineStylePreview`，
-  两处绘制逻辑不会漂移。
+  垂直居中，上下多出的部分白色填充；动态色固定 `#3399FF`、背景固定白色，
+  避免每次生成不同图导致 md5 抖动。
+- `LineStylesConfig.vue` 的 `renderPreviewCvsOf` 调用 `drawLineStylePreview`（配置页
+  预览传实际背景色），两处绘制逻辑不会漂移。
 
 ### 第 2 步：添加快捷上传入口（core 发起，web 执行）✅ 已完成
 
@@ -121,6 +133,9 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
     即中止后续上传。
 - core 的 `LineStylesConfigReuse.vue` 导出按钮组下方新增"上传为资源"按钮
   （仅 `hasUserFileUploader()` 为真时显示）；成功后提示用户前往"文件"页收藏。
+  上传前对深拷贝出的样式执行 `embedReferencedPatterns`，把各层引用的 pattern 嵌入
+  `patternEmbedded`（因此上传的 JSON 可能比导出到剪切板/文件的多出该字段，
+  保证样式在任意存档中纹理不丢失）。
 - web 侧在 `App.vue` 的 `initCoreHostServices` 聚合注册中实现
   `userFileResourceUploader`：`api.userFile.upload`，type 固定 `UserFileType.LineStyle`，
   缩略图以 `thumb.webp` 上传。
@@ -200,6 +215,13 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 - **预览图颜色固定**：必须用固定 dynaColor 渲染预览，否则同一样式每次上传缩略图
   md5 不同、产生垃圾文件；服务端目前不清理失去引用的文件（`UserFileRepo.cs` 内有
   TODO）。
+- **缩略图不跟随背景色**：`colorMode==='bg'`（跟随背景色）的层在上传缩略图中按
+  白色渲染（缩略图固定白底），若存档背景也是白色，该层在缩略图中不可见——为保持
+  缩略图 md5 稳定，这是有意取舍；配置页内的预览则用实际背景色，所见即所得。
+- **嵌入 pattern 的 id 跨存档无意义**：`patternEmbedded` 随样式携带的 `pattern` id
+  来自源存档，渲染时优先使用嵌入对象、不按 id 查找；"移除嵌入"会连同该 id 一并
+  清除，避免撞上目标存档中同 id 的其他 pattern。嵌入是确定性的（同样式+同 pattern
+  产出相同 JSON），不影响内容寻址稳定性。
 - **收藏回调全局唯一**：第 3 步不做的话，LineStyle 的取用回调会覆盖 iconStore 注册
   的回调，导致图标"取用"功能串线。
 - **跨包边界**：上传调 API 必须经注入口由 web 执行，core 不能 import web 的 apiStore
@@ -213,9 +235,11 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 
 | 文件 | 改动 |
 |---|---|
-| `aarc-core/src/models/cvs/common/lineStylePreview.ts` ✅ | 已新建：`drawLineStylePreview` + `renderLineStylePreviewBlob`（正方形 webp） |
-| `aarc-core/src/components/sidebars/configs/LineStylesConfig.vue` | ✅ 已改为复用 `drawLineStylePreview`；待做：可选单条上传按钮 |
-| `aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue` | ✅ 已加"上传为资源"按钮（仅宿主注入上传器时显示） |
+| `aarc-core/src/models/cvs/common/lineStylePreview.ts` ✅ | 已新建：`drawLineStylePreview`（含可选 `bgColor`）+ `renderLineStylePreviewBlob`（正方形 webp，固定白底） |
+| `aarc-core/src/components/sidebars/configs/LineStylesConfig.vue` | ✅ 已改为复用 `drawLineStylePreview`（传实际背景色）；待做：可选单条上传按钮 |
+| `aarc-core/src/components/sidebars/configs/LineStylesConfigReuse.vue` | ✅ 已加"上传为资源"按钮（仅宿主注入上传器时显示）；上传前 `embedReferencedPatterns` 嵌入引用的 pattern |
+| `aarc-core/src/models/save.ts` ✅ | LineStyle 层新增 `patternEmbedded`（嵌入完整 pattern）与 `colorMode:'bg'`（跟随背景色） |
+| `aarc-core/src/models/cvs/common/strokeStyledLine.ts` + `patternStore.ts` ✅ | 渲染支持 `bgColor` 选项与嵌入 pattern（`getRenderedOf` 直接渲染 Pattern 对象） |
 | `aarc-core/src/models/save/lineStyleResourceOps.ts` + `aarc-web/src/App.vue` ✅ | 已新建 `initUserFileUploader`/`uploadLineStylesAsResource` 注入口，web 经 `initCoreHostServices` 用 `api.userFile.upload` 实现 |
 | `aarc-core/src/models/stores/utils/userFileFavoriteStore.ts` ✅ | 已支持一次性取用意图（`openFavoritesSidebar(intent)` + `notifyFileSelected`） |
 | `aarc-web/src/components/common/userFile/UserFileFavorites.vue` ✅ | 选中时调 `notifyFileSelected`（一次性回调优先）；按 `pickFileType` 过滤列表 |

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { drawLineStylePreview, lineStylePreviewCvsWidth, lineStylePreviewCvsHeight } from 'aarc-core/models/cvs/common/lineStylePreview';
 import { LineStyle } from 'aarc-core/models/save';
+import { findLineStyleHostDataSource } from 'aarc-core/models/save/dataSourceOps';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { moveUpInArray } from 'aarc-core/utils/lang/moveUpInArray';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { storeToRefs } from 'pinia';
@@ -20,6 +22,7 @@ const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const envStore = useEnvStore()
 const configStore = useConfigStore()
+const { showPop } = useUniqueComponentsStore()
 const showDetail = ref<Record<number, boolean|undefined>>({})
 const colorPicker = useTemplateRef('colorPicker')
 const reuseSidebar = useTemplateRef('reuseSidebar')
@@ -49,13 +52,35 @@ function onColorModeChange(layer:LineStyle['layers'][number], e:Event){
 function addLayer(lineStyle:LineStyle){
     lineStyle.layers.unshift(getDefaultLayer())
 }
+// 样式是否被数据源托管：与某个开启"覆盖同名"的 lineStyles 数据源同名（动态判断，随数据源增删改名即时生效）
+function hostDsOf(s:LineStyle){
+    return save.value ? findLineStyleHostDataSource(save.value, s) : undefined
+}
 function delStyle(lineStyle:LineStyle){
-    if(window.confirm(`确认删除样式 ${lineStyle.name || ''}`)){
+    const hostDs = hostDsOf(lineStyle)
+    const dsHint = hostDs
+        ? `\n该样式由数据源加载而来，删除后下次加载/自动更新会重新引入`
+        : ''
+    if(window.confirm(`确认删除样式 ${lineStyle.name || ''}？${dsHint}`)){
         const idx = save.value?.lineStyles?.findIndex(x=>x.id === lineStyle.id)
         if(idx!==undefined && idx>=0){
             save.value?.lineStyles?.splice(idx, 1)
         }
     }
+}
+// 记录样式名输入框聚焦时的原名，用于改名后"进入/脱离数据源托管"的提示
+const nameBeforeEdit: Record<number, string|undefined> = {}
+function onStyleNameBlur(s:LineStyle){
+    checkStyleName(s)
+    if (s.name === nameBeforeEdit[s.id]) return
+    const before = save.value
+        ? findLineStyleHostDataSource(save.value, { ...s, name: nameBeforeEdit[s.id] })
+        : undefined
+    const after = hostDsOf(s)
+    if (before && !after)
+        showPop(`不再有同名数据源\n不再会被覆盖`, 'info')
+    else if (!before && after)
+        showPop(`请注意同名数据源\n加载会覆盖`, 'warning')
 }
 function addStyle(){
     if(!save.value) return
@@ -140,8 +165,12 @@ onUnmounted(()=>{
             </div>
         </div>
         <div v-if="showDetail[s.id]" class="detail">
+            <div v-if="hostDsOf(s)" class="dsNote">
+                由开启“覆盖同名”的数据源加载而来，编辑内容将在下次加载/自动更新时被覆盖。改名、关闭数据源“覆盖同名”、重新上传样式（覆盖资源）均可脱离这种状态
+            </div>
             <div class="name">
-                <h3>样式名</h3><input v-model="s.name" placeholder="必填" @blur="checkStyleName(s)"/>
+                <h3>样式名</h3><input v-model="s.name" placeholder="必填"
+                    @focus="nameBeforeEdit[s.id] = s.name" @blur="onStyleNameBlur(s)"/>
             </div>
             <div class="noBase">
                 <label><input type="checkbox" v-model="s.noBase"/> 隐藏线路本体</label>
@@ -289,6 +318,14 @@ onUnmounted(()=>{
             background-color: white;
             padding: 8px;
             border-radius: 0px 0px 8px 8px; // 外层容器的radius - 边框宽度
+            .dsNote{
+                font-size: 12px;
+                color: #a70;
+                background: #fff8e1;
+                border-radius: 4px;
+                padding: 4px 6px;
+                margin-bottom: 6px;
+            }
             h3{
                 font-size: 16px;
                 font-weight: normal;

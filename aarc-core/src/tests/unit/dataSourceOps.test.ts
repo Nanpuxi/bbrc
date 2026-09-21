@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, autoUpdateDataSources } from 'aarc-core/models/save/dataSourceOps'
+import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, autoUpdateDataSources, findLineStyleHostDataSource } from 'aarc-core/models/save/dataSourceOps'
 import { DataSource, Save } from 'aarc-core/models/save'
 import type { ExternalColorSetEntry, ExternalColorSetGroup } from 'aarc-core/app/localConfig/externalColorSets'
 
@@ -406,5 +406,50 @@ describe('mergeColorSourceItems', () => {
     expect(report.overwritten).toBe(1)
     const items = (report as typeof report & { _items?: unknown[] })._items
     expect(items?.length).toBe(1)
+  })
+})
+
+describe('findLineStyleHostDataSource', () => {
+  function makeSave(dataSources: DataSource[]): Save {
+    return {
+      idIncre: 10,
+      points: [],
+      lines: [],
+      textTags: [],
+      cvsSize: [1000, 1000],
+      config: {},
+      meta: {},
+      lineStyles: [{ id: 1, name: 'demo', layers: [] }],
+      dataSources,
+    }
+  }
+
+  it('同名且开启覆盖同名的 lineStyles 数据源应命中', () => {
+    const save = makeSave([
+      { id: 9, name: 'demo', url: '', type: 'lineStyles', overwriteSameName: true },
+    ])
+    const host = findLineStyleHostDataSource(save, save.lineStyles![0])
+    expect(host?.id).toBe(9)
+  })
+
+  it('未开覆盖同名、类型不符或不同名均不命中', () => {
+    const save = makeSave([
+      { id: 9, name: 'demo', url: '', type: 'lineStyles' },
+      { id: 10, name: 'demo', url: '', type: 'textTagIcons', overwriteSameName: true },
+      { id: 11, name: 'other', url: '', type: 'lineStyles', overwriteSameName: true },
+    ])
+    expect(findLineStyleHostDataSource(save, save.lineStyles![0])).toBeUndefined()
+  })
+
+  it('无名样式不命中', () => {
+    const save = makeSave([
+      { id: 9, name: 'demo', url: '', type: 'lineStyles', overwriteSameName: true },
+    ])
+    expect(findLineStyleHostDataSource(save, { id: 2, layers: [] })).toBeUndefined()
+  })
+
+  it('无数据源时不命中', () => {
+    const save = makeSave([])
+    expect(findLineStyleHostDataSource(save, save.lineStyles![0])).toBeUndefined()
   })
 })

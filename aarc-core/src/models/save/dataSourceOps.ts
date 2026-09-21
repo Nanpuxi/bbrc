@@ -190,6 +190,17 @@ export function applyColorSourceMerges(url: string, items: ExternalColorSetEntry
     store.upsertColorSetGroup(url, items)
 }
 
+/**
+ * 动态判断样式是否被数据源托管：存在同名（lineStyles 类型）且开启"覆盖同名"的数据源。
+ * 托管样式在数据源加载/自动更新时会被 fetch 到的同名条目覆盖（合并保留原 id）。
+ */
+export function findLineStyleHostDataSource(save: Save, ls: LineStyle): DataSource | undefined {
+    if (!ls.name) return undefined
+    return save.dataSources?.find(
+        d => d.type === 'lineStyles' && d.overwriteSameName && d.name === ls.name
+    )
+}
+
 export async function autoUpdateDataSources(
     save: Save,
     getNewId: () => number,
