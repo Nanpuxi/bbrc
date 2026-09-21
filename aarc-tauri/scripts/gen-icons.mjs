@@ -41,9 +41,18 @@ ${gradient.replace('id="SVGID_1_"', 'id="bg"')}
 </g>
 </svg>`
 
-// Android 前景层：透明底，Λ 缩至 85% 居中，保证落在 66dp 安全区内
+// Windows 专用：满幅 squircle（去掉 macOS 的 20% 视觉边距），符合 Windows 图标满幅规范。
+// 与 macosSvg 相同的 squircle/Λ 比例，仅撑满画布，避免 exe 图标"小一圈"。
+const windowsSvg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 255 255">
+${gradient.replace('id="SVGID_1_"', 'id="bg"')}
+<path d="${squirclePath()}" fill="url(#bg)"/>
+${lambda()}
+</svg>`
+
+// Android 前景层：透明底，Λ 缩至 61%（66dp 安全区 / 108dp 画布）居中，
+// 保证落在 adaptive icon 的可显示安全区内，不被系统裁剪到铺满
 const androidFgSvg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 255 255">
-<g transform="translate(19.125,19.125) scale(0.85)">${lambda()}</g>
+<g transform="translate(49.725,49.725) scale(0.61)">${lambda()}</g>
 </svg>`
 
 // Android 背景层：渐变满幅
@@ -74,6 +83,30 @@ ${lambda()}
 </svg>`
 
 const render = (svg, size) => sharp(Buffer.from(svg(size))).png().toBuffer()
+
+// 打包 ICO：把若干已渲染好的 PNG 以 PNG-in-ICO 形式（Vista+ 支持）内嵌进单一 .ico。
+// 各尺寸由 SVG 直接以目标像素渲染（sharp 高质量抗锯齿），绕开 png2icons.createICO 从单一
+// 1024 源内部低质重采样的缺陷——其 BICUBIC/BILINEAR 会在 squircle 半透明边缘产生振铃，
+// 表现为图标轮廓上零星的白色瑕疵像素。entries: [{ size, png }]
+const packIco = (entries) => {
+  const header = Buffer.alloc(6)
+  header.writeUInt16LE(1, 2) // 类型：图标
+  header.writeUInt16LE(entries.length, 4)
+  const dir = Buffer.alloc(16 * entries.length)
+  let offset = header.length + dir.length
+  entries.forEach(({ size, png }, i) => {
+    const o = i * 16
+    dir.writeUInt8(size >= 256 ? 0 : size, o) // 宽（256 记为 0）
+    dir.writeUInt8(size >= 256 ? 0 : size, o + 1) // 高
+    dir.writeUInt16LE(1, o + 4) // 颜色平面
+    dir.writeUInt16LE(32, o + 6) // 位深
+    dir.writeUInt32LE(png.length, o + 8) // 数据长度
+    dir.writeUInt32LE(offset, o + 12) // 数据偏移
+    offset += png.length
+  })
+  return Buffer.concat([header, dir, ...entries.map((e) => e.png)])
+}
+
 const written = []
 const write = (rel, buf) => {
   const dest = path.join(iconsDir, rel)
@@ -99,10 +132,14 @@ const icns = png2icons.createICNS(mac1024, png2icons.BICUBIC2, 0)
 if (!icns) throw new Error('createICNS failed')
 write('icon.icns', icns)
 
-// Windows ico（同一 squircle 源）
-const ico = png2icons.createICO(mac1024, png2icons.BICUBIC2, 0, true)
-if (!ico) throw new Error('createICO failed')
-write('icon.ico', ico)
+// Windows 图标统一输出到 icons/windows：ico + ico 内各尺寸 png（满幅 squircle，原生渲染无重采样白点）
+const icoEntries = []
+for (const size of [16, 24, 32, 40, 48, 64, 72, 96, 128, 256]) {
+  const png = await render(windowsSvg, size)
+  write(`windows/icon-${size}.png`, png)
+  icoEntries.push({ size, png })
+}
+write('windows/icon.ico', packIco(icoEntries))
 
 // Android adaptive icon 前景/背景层（108dp 画布，各密度）
 for (const [dpi, size] of [['mdpi', 108], ['hdpi', 162], ['xhdpi', 216], ['xxhdpi', 324], ['xxxhdpi', 432]]) {
@@ -116,11 +153,11 @@ for (const [dpi, size] of [['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi',
   write(`android/mipmap-${dpi}/ic_launcher_round.png`, await render(legacyRoundSvg, size))
 }
 
-// Windows Store 磁贴（满幅）
+// Windows Store 磁贴（满幅，输出到 icons/windows）
 for (const size of [30, 44, 71, 89, 107, 142, 150, 284, 310]) {
-  write(`Square${size}x${size}Logo.png`, await render(fullbleedSvg, size))
+  write(`windows/Square${size}x${size}Logo.png`, await render(fullbleedSvg, size))
 }
-write('StoreLogo.png', await render(fullbleedSvg, 50))
+write('windows/StoreLogo.png', await render(fullbleedSvg, 50))
 
 // iOS AppIcon（满幅；iOS/App Store 不允许 alpha，统一 removeAlpha）
 const iosTargets = [
