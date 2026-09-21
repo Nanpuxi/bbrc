@@ -125,7 +125,7 @@ export interface LineStyle{
     noBase?: boolean
     layers:{
         color?:string
-        colorMode?:'fixed'|'line' //undefined默认为fixed
+        colorMode?:'fixed'|'line'|'bg' //undefined默认为fixed
         width?:number
         opacity?:number
         dash?:string

@@ -13,21 +13,24 @@ export const lineStylePreviewCvsHeight = 60
 const previewResourceDynaColor = '#3399FF'
 
 /**
- * 在给定 ctx 上绘制一条线路样式预览：白色背景 + 居中水平线。
+ * 在给定 ctx 上绘制一条线路样式预览：背景填充 + 居中水平线。
  * 画布尺寸须为 lineStylePreviewCvsWidth × lineStylePreviewCvsHeight
  * （正方形缩略图请先自行 translate 到内容条带区域）。
+ * bgColor 同时用作预览背景填充与 colorMode==='bg' 层的颜色来源，缺省白色
+ * （资源缩略图须保持固定白色，见 renderLineStylePreviewBlob）。
  */
 export function drawLineStylePreview(
     ctx: CanvasRenderingContext2D,
     lineStyle: LineStyle,
-    dynaColor: string
+    dynaColor: string,
+    bgColor?: string
 ){
     if(!lineStyle.layers)
         return
     const w = lineStylePreviewCvsWidth
     const h = lineStylePreviewCvsHeight
     const lrMargin = w/10
-    ctx.fillStyle = 'white'
+    ctx.fillStyle = bgColor ?? 'white'
     ctx.fillRect(0, 0, w, h)
     ctx.beginPath()
     ctx.moveTo(lrMargin, h/2)
@@ -36,6 +39,7 @@ export function drawLineStylePreview(
         lineStyle,
         lineWidthBase: h/3,
         dynaColor,
+        bgColor,
         fixedColorConverter: (c)=>c,
         baseCap: 'butt'
     })

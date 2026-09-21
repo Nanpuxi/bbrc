@@ -3,6 +3,7 @@ import { drawLineStylePreview, lineStylePreviewCvsWidth, lineStylePreviewCvsHeig
 import { LineStyle } from 'aarc-core/models/save';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { moveUpInArray } from 'aarc-core/utils/lang/moveUpInArray';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { storeToRefs } from 'pinia';
@@ -18,6 +19,7 @@ import LineStylesConfigReuse from './LineStylesConfigReuse.vue';
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const envStore = useEnvStore()
+const configStore = useConfigStore()
 const showDetail = ref<Record<number, boolean|undefined>>({})
 const colorPicker = useTemplateRef('colorPicker')
 const reuseSidebar = useTemplateRef('reuseSidebar')
@@ -40,6 +42,9 @@ function removeEmbeddedPattern(layer:LineStyle['layers'][number]){
     delete layer.patternEmbedded
     // 随嵌入一起携带的 pattern id 来自源存档，在本存档中无意义，一并清除
     layer.pattern = undefined
+}
+function onColorModeChange(layer:LineStyle['layers'][number], e:Event){
+    layer.colorMode = (e.target as HTMLSelectElement).value as NonNullable<LineStyle['layers'][number]['colorMode']>
 }
 function addLayer(lineStyle:LineStyle){
     lineStyle.layers.unshift(getDefaultLayer())
@@ -93,7 +98,7 @@ function renderPreviewCvsOf(lineStyle:LineStyle, dynaColor:string){
     const ctx = cvs?.getContext('2d')
     if(!ctx)
         return
-    drawLineStylePreview(ctx, lineStyle, dynaColor)
+    drawLineStylePreview(ctx, lineStyle, dynaColor, configStore.config.bgColor)
 }
 
 const styleNameMaxLength = 8
@@ -167,10 +172,15 @@ onUnmounted(()=>{
                                     :entry-styles="{border:'1px solid black'}" :pos="-85"
                                     :entry-respond-delay="1"
                                     :panel-click-stop-propagation="true"></AuColorPicker>
-                                <div v-else-if="layer.colorMode==='line'" class="following">跟随线路颜色</div>
+                                <div v-else-if="layer.colorMode==='line'" class="following">跟随线路色</div>
+                                <div v-else-if="layer.colorMode==='bg'" class="following">跟随背景色</div>
                             </div>
-                            <button v-if="layer.colorMode!=='line'" class="lite" @click="layer.colorMode='line'">跟随线路</button>
-                            <button v-else class="lite" @click="layer.colorMode='fixed'">取消跟随</button>
+                            <select class="colorModeSelect" :value="layer.colorMode ?? 'fixed'"
+                                @change="onColorModeChange(layer, $event)">
+                                <option value="fixed">指定颜色</option>
+                                <option value="line">跟随线路</option>
+                                <option value="bg">跟随背景</option>
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -333,7 +343,7 @@ onUnmounted(()=>{
                             justify-content: space-between;
                             align-items: center;
                             .leftPart{
-                                width: 120px;
+                                width: 100px;
                                 display: flex;
                                 justify-content: center;
                             }
@@ -343,13 +353,9 @@ onUnmounted(()=>{
                                 color: #999;
                                 font-size: 14px;
                             }
-                            button.lite{
-                                flex-grow: 0;
+                            .colorModeSelect{
+                                margin: 0px;
                                 font-size: 14px;
-                                text-decoration: underline;
-                                &:hover{
-                                    color:black
-                                }
                             }
                         }
                         .numberConfig{
