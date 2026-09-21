@@ -19,10 +19,12 @@ export function strokeStyledLine(
         lineWidthBase:number,
         baseCap:CanvasLineCap
         dynaColor:string,
+        /** colorMode==='bg' 时的颜色来源，缺省按白色处理 */
+        bgColor?:string,
         fixedColorConverter:(c:string)=>string,
         pathBuilder?:()=>void
     }){
-    const { target, scale, offset, lineWidthBase, lineStyle, baseCap, dynaColor, fixedColorConverter, pathBuilder } = options
+    const { target, scale, offset, lineWidthBase, lineStyle, baseCap, dynaColor, bgColor, fixedColorConverter, pathBuilder } = options
     const needRebuildPath = pathBuilder && isCvsContext(ctx) && isSvgCanvasContext(ctx.getUnderlyingCanvas() as any)
     if(target != 'style' && !lineStyle?.noBase){
         // target 为 base 或 both 时，渲染线路本体
@@ -51,6 +53,9 @@ export function strokeStyledLine(
         let color
         if(layer.colorMode === 'line')
             color = dynaColor
+        else if(layer.colorMode === 'bg')
+            // bgColor 未经上游淡化处理，须走 converter 使淡化对背景色层生效
+            color = fixedColorConverter(bgColor ?? 'white')
         else {
             if(layer.color){
                 color = fixedColorConverter(layer.color)
@@ -71,9 +76,12 @@ export function strokeStyledLine(
         }
         else {
             ctx.setLineDash([])
-            if(layer.pattern){
+            if(layer.pattern || layer.patternEmbedded){
                 let offsetForPattern = offset ?? [0, 0]
-                const patternBase = usePatternStore().getRendered(layer.pattern, scale ?? 1, offsetForPattern , color, 1)
+                const patternStore = usePatternStore()
+                const patternBase = layer.patternEmbedded
+                    ? patternStore.getRenderedOf(layer.patternEmbedded, scale ?? 1, offsetForPattern, color, 1)
+                    : patternStore.getRendered(layer.pattern!, scale ?? 1, offsetForPattern, color, 1)
                 if(patternBase){
                     const pattern = ctx.createPattern(patternBase, null)
                     if(pattern){

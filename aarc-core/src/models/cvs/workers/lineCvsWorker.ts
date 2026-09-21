@@ -499,6 +499,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 lineWidthBase: lineWidth,
                 baseCap: lineCapWithDefault(lineInfo),
                 dynaColor: lineColor,
+                bgColor: cs.config.bgColor,
                 fixedColorConverter: (c) => {
                     if (lineDownplayed)
                         return colorProc.colorProcDownplay.convert(c)
@@ -628,6 +629,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                         lineWidthBase: lineWidth,
                         baseCap: lineCapWithDefault(lineInfo),
                         dynaColor: lineColor,
+                        bgColor: cs.config.bgColor,
                         fixedColorConverter: (c)=>{
                             if(lineDownplayed)
                                 return colorProc.colorProcDownplay.convert(c)

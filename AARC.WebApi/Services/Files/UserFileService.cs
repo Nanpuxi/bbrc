@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Utils;
+using AARC.WebApi.Utils;
 using Microsoft.Extensions.FileProviders;
 
 namespace AARC.WebApi.Services.Files
@@ -91,6 +91,36 @@ namespace AARC.WebApi.Services.Files
                 thumbStream?.Close();
                 if (File.Exists(tempPath))
                     File.Delete(tempPath);
+            }
+        }
+
+        /// <summary>
+        /// 按存储名解析物理文件完整路径（目录不存在时创建）
+        /// </summary>
+        public string GetPhysicalPath(string storeName)
+        {
+            return Path.Combine(GetTargetSubdir(storeName).FullName, storeName);
+        }
+
+        /// <summary>
+        /// 删除物理文件及其缩略图（若存在）。
+        /// 调用方需自行确认无其他实体引用同一 StoreName。
+        /// </summary>
+        public void DeletePhysical(string storeName)
+        {
+            try
+            {
+                var subdir = GetTargetSubdir(storeName);
+                var path = Path.Combine(subdir.FullName, storeName);
+                if (File.Exists(path))
+                    File.Delete(path);
+                var thumbPath = Path.Combine(subdir.FullName, GetThumbName(storeName));
+                if (File.Exists(thumbPath))
+                    File.Delete(thumbPath);
+            }
+            catch (Exception)
+            {
+                // 物理文件清理失败不影响主流程
             }
         }
 

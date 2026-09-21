@@ -9,6 +9,8 @@ import { useIconStore } from 'aarc-core/models/stores/iconStore';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, applyColorSourceMerges } from 'aarc-core/models/save/dataSourceOps';
 import { useExternalColorSetsStore, type ExternalColorSetEntry } from 'aarc-core/app/localConfig/externalColorSets';
+import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
+import { getCoreConfig } from 'aarc-core/app/coreConfig';
 
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
@@ -24,8 +26,32 @@ const typeLabel: Record<DataSource['type'], string> = {
 }
 
 const externalColorSetsStore = useExternalColorSetsStore()
+const userFileFavoriteStore = useUserFileFavoriteStore()
 const creating = ref<DataSource>({ id: 0, url: '', type: 'lineStyles' })
 const createAllowed = ref(false)
+
+// 从收藏的线路样式资源选取：按 id 的固定链接（覆盖上传后仍指向最新内容）
+function pickFromFavorites() {
+    userFileFavoriteStore.openFavoritesSidebar({
+        fileType: 'lineStyle',
+        closeOnSelect: true,
+        onSelected: (f) => {
+            if (typeof f.id !== 'number' || f.id <= 0) {
+                showPop('该资源缺少 id，无法作为数据源', 'failed')
+                return
+            }
+            // 拼绝对 URL：apiUrlBase 缺省时用当前源（同源部署），跨部署打开时经 /proxy/json 拉取
+            const base = getCoreConfig().apiUrlBase || window.location.origin
+            creating.value.type = 'lineStyles'
+            creating.value.name = f.displayName ?? ''
+            creating.value.url = `${base}/api/UserFile/Content?id=${f.id}`
+            creating.value.autoUpdate = true
+            creating.value.overwriteSameName = true
+            validateCreating()
+            showPop('已填入下方表单，确认后点击"添加"', 'info')
+        }
+    })
+}
 
 function validateCreating() {
     const c = creating.value
@@ -223,6 +249,9 @@ async function loadAll() {
 
     <div class="newDs">
         <div class="newDsTitle">添加数据源</div>
+        <div v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" class="dsOps">
+            <button class="ok" @click="pickFromFavorites">从收藏选择线路样式</button>
+        </div>
         <div class="dsField">
             <span>名称</span><input v-model="creating.name" @input="validateCreating" placeholder="必填"/>
         </div>

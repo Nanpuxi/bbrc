@@ -365,7 +365,8 @@ async function upload() {
             { data: thumb, fileName: 'thumb.webp' },
             displayName.value.trim(),
             undefined,
-            UserFileType.Icon
+            UserFileType.Icon,
+            undefined
         );
         if (res) {
             showPop('上传成功', 'success');

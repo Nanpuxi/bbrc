@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { Coord } from 'aarc-core/models/coord';
-import { strokeStyledLine } from 'aarc-core/models/cvs/common/strokeStyledLine';
+import { drawLineStylePreview, lineStylePreviewCvsWidth, lineStylePreviewCvsHeight } from 'aarc-core/models/cvs/common/lineStylePreview';
 import { LineStyle } from 'aarc-core/models/save';
+import { findLineStyleHostDataSource } from 'aarc-core/models/save/dataSourceOps';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import { useConfigStore } from 'aarc-core/models/stores/configStore';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { moveUpInArray } from 'aarc-core/utils/lang/moveUpInArray';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { storeToRefs } from 'pinia';
@@ -19,6 +21,8 @@ import LineStylesConfigReuse from './LineStylesConfigReuse.vue';
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const envStore = useEnvStore()
+const configStore = useConfigStore()
+const { showPop } = useUniqueComponentsStore()
 const showDetail = ref<Record<number, boolean|undefined>>({})
 const colorPicker = useTemplateRef('colorPicker')
 const reuseSidebar = useTemplateRef('reuseSidebar')
@@ -34,16 +38,49 @@ function delLayer(lineStyle:LineStyle, layerIdx:number){
         lineStyle.layers.splice(layerIdx, 1)
     }
 }
+function removeEmbeddedPattern(layer:LineStyle['layers'][number]){
+    if(!window.confirm('确认移除嵌入的纹理？')){
+        return
+    }
+    delete layer.patternEmbedded
+    // 随嵌入一起携带的 pattern id 来自源存档，在本存档中无意义，一并清除
+    layer.pattern = undefined
+}
+function onColorModeChange(layer:LineStyle['layers'][number], e:Event){
+    layer.colorMode = (e.target as HTMLSelectElement).value as NonNullable<LineStyle['layers'][number]['colorMode']>
+}
 function addLayer(lineStyle:LineStyle){
     lineStyle.layers.unshift(getDefaultLayer())
 }
+// 样式是否被数据源托管：与某个开启"覆盖同名"的 lineStyles 数据源同名（动态判断，随数据源增删改名即时生效）
+function hostDsOf(s:LineStyle){
+    return save.value ? findLineStyleHostDataSource(save.value, s) : undefined
+}
 function delStyle(lineStyle:LineStyle){
-    if(window.confirm(`确认删除样式 ${lineStyle.name || ''}`)){
+    const hostDs = hostDsOf(lineStyle)
+    const dsHint = hostDs
+        ? `\n该样式由数据源加载而来，删除后下次加载/自动更新会重新引入`
+        : ''
+    if(window.confirm(`确认删除样式 ${lineStyle.name || ''}？${dsHint}`)){
         const idx = save.value?.lineStyles?.findIndex(x=>x.id === lineStyle.id)
         if(idx!==undefined && idx>=0){
             save.value?.lineStyles?.splice(idx, 1)
         }
     }
+}
+// 记录样式名输入框聚焦时的原名，用于改名后"进入/脱离数据源托管"的提示
+const nameBeforeEdit: Record<number, string|undefined> = {}
+function onStyleNameBlur(s:LineStyle){
+    checkStyleName(s)
+    if (s.name === nameBeforeEdit[s.id]) return
+    const before = save.value
+        ? findLineStyleHostDataSource(save.value, { ...s, name: nameBeforeEdit[s.id] })
+        : undefined
+    const after = hostDsOf(s)
+    if (before && !after)
+        showPop(`不再有同名数据源\n不再会被覆盖`, 'info')
+    else if (!before && after)
+        showPop(`请注意同名数据源\n加载会覆盖`, 'warning')
 }
 function addStyle(){
     if(!save.value) return
@@ -66,19 +103,12 @@ function getDefaultLayer():LineStyle['layers'][number]{
 function cvsEleId(styleId:number){
     return `lineStylePreviewCvs_${styleId}`
 }
-const cvsWidth = 400
-const cvsHeight = 60
+const cvsWidth = lineStylePreviewCvsWidth
+const cvsHeight = lineStylePreviewCvsHeight
 const cvsStyle:CSSProperties = {
     width: '200px',
     height: '30px'
 }
-const cvsCenterY = cvsHeight/2
-const cvsLineWidthBase = cvsHeight/3
-const cvsLRMargin = cvsWidth/10
-const cvsLeftX = cvsLRMargin
-const cvsRightX = cvsWidth - cvsLRMargin
-const cvsLeftCoord:Coord = [cvsLeftX, cvsCenterY]
-const cvsRightCoord:Coord = [cvsRightX, cvsCenterY]
 function renderPreviewCvs(){
     if(!save.value?.lineStyles)
         return
@@ -89,25 +119,11 @@ function renderPreviewCvs(){
     }
 }
 function renderPreviewCvsOf(lineStyle:LineStyle, dynaColor:string){
-    const layers = lineStyle.layers
-    if(!layers)
-        return
     const cvs = document.getElementById(cvsEleId(lineStyle.id)) as HTMLCanvasElement|null
     const ctx = cvs?.getContext('2d')
-    if(!cvs || !ctx)
+    if(!ctx)
         return
-    ctx.fillStyle = 'white'
-    ctx.fillRect(0, 0, cvsWidth, cvsHeight)
-    ctx.beginPath()
-    ctx.moveTo(...cvsLeftCoord)
-    ctx.lineTo(...cvsRightCoord)
-    strokeStyledLine(ctx, {
-        lineStyle: lineStyle,
-        lineWidthBase: cvsLineWidthBase,
-        dynaColor: dynaColor,
-        fixedColorConverter: (c)=>c,
-        baseCap: 'butt'
-    })
+    drawLineStylePreview(ctx, lineStyle, dynaColor, configStore.config.bgColor)
 }
 
 const styleNameMaxLength = 8
@@ -149,8 +165,12 @@ onUnmounted(()=>{
             </div>
         </div>
         <div v-if="showDetail[s.id]" class="detail">
+            <div v-if="hostDsOf(s)" class="dsNote">
+                由开启“覆盖同名”的数据源加载而来，编辑内容将在下次加载/自动更新时被覆盖。改名、关闭数据源“覆盖同名”、重新上传样式（覆盖资源）均可脱离这种状态
+            </div>
             <div class="name">
-                <h3>样式名</h3><input v-model="s.name" placeholder="必填" @blur="checkStyleName(s)"/>
+                <h3>样式名</h3><input v-model="s.name" placeholder="必填"
+                    @focus="nameBeforeEdit[s.id] = s.name" @blur="onStyleNameBlur(s)"/>
             </div>
             <div class="noBase">
                 <label><input type="checkbox" v-model="s.noBase"/> 隐藏线路本体</label>
@@ -181,10 +201,15 @@ onUnmounted(()=>{
                                     :entry-styles="{border:'1px solid black'}" :pos="-85"
                                     :entry-respond-delay="1"
                                     :panel-click-stop-propagation="true"></AuColorPicker>
-                                <div v-else-if="layer.colorMode==='line'" class="following">跟随线路颜色</div>
+                                <div v-else-if="layer.colorMode==='line'" class="following">跟随线路色</div>
+                                <div v-else-if="layer.colorMode==='bg'" class="following">跟随背景色</div>
                             </div>
-                            <button v-if="layer.colorMode!=='line'" class="lite" @click="layer.colorMode='line'">跟随线路</button>
-                            <button v-else class="lite" @click="layer.colorMode='fixed'">取消跟随</button>
+                            <select class="colorModeSelect" :value="layer.colorMode ?? 'fixed'"
+                                @change="onColorModeChange(layer, $event)">
+                                <option value="fixed">指定颜色</option>
+                                <option value="line">跟随线路</option>
+                                <option value="bg">跟随背景</option>
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -218,7 +243,11 @@ onUnmounted(()=>{
                     </div>
                     <div v-if="!layer.dash">
                         <b>纹理</b>
-                        <select v-model="layer.pattern">
+                        <div v-if="layer.patternEmbedded" class="embeddedPattern">
+                            <span>已使用嵌入纹理</span>
+                            <button class="lite" @click="removeEmbeddedPattern(layer)">移除嵌入</button>
+                        </div>
+                        <select v-else v-model="layer.pattern">
                             <option :value="undefined">无</option>
                             <option v-for="p in save?.patterns" :value="p.id">{{ p.name }}</option>
                         </select>
@@ -289,6 +318,14 @@ onUnmounted(()=>{
             background-color: white;
             padding: 8px;
             border-radius: 0px 0px 8px 8px; // 外层容器的radius - 边框宽度
+            .dsNote{
+                font-size: 12px;
+                color: #a70;
+                background: #fff8e1;
+                border-radius: 4px;
+                padding: 4px 6px;
+                margin-bottom: 6px;
+            }
             h3{
                 font-size: 16px;
                 font-weight: normal;
@@ -343,7 +380,7 @@ onUnmounted(()=>{
                             justify-content: space-between;
                             align-items: center;
                             .leftPart{
-                                width: 120px;
+                                width: 100px;
                                 display: flex;
                                 justify-content: center;
                             }
@@ -353,13 +390,9 @@ onUnmounted(()=>{
                                 color: #999;
                                 font-size: 14px;
                             }
-                            button.lite{
-                                flex-grow: 0;
+                            .colorModeSelect{
+                                margin: 0px;
                                 font-size: 14px;
-                                text-decoration: underline;
-                                &:hover{
-                                    color:black
-                                }
                             }
                         }
                         .numberConfig{
@@ -373,6 +406,24 @@ onUnmounted(()=>{
                         .dashConfigInput{
                             margin: 0px;
                             width: 120px;
+                        }
+                        .embeddedPattern{
+                            display: flex;
+                            flex-direction: row;
+                            align-items: center;
+                            justify-content: space-between;
+                            gap: 6px;
+                            span{
+                                color: #999;
+                                font-size: 14px;
+                            }
+                            button.lite{
+                                font-size: 14px;
+                                text-decoration: underline;
+                                &:hover{
+                                    color:black
+                                }
+                            }
                         }
                     }
                     .layerHead{

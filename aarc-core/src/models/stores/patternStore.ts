@@ -3,6 +3,7 @@ import { useSaveStore } from "./saveStore";
 import { CvsBlock, CvsContext } from "../cvs/common/cvsContext";
 import { Coord } from "../coord";
 import { coordAdd } from "aarc-core/utils/coordUtils/coordMath";
+import { Pattern } from "../save";
 
 export const usePatternStore = defineStore('pattern', ()=>{
     // 不要去读saveStore（非常大且与本功能无关），读src/models/save.ts中的interface Pattern即可
@@ -12,6 +13,10 @@ export const usePatternStore = defineStore('pattern', ()=>{
         const p = save.value?.patterns?.find(x=>x.id == id)
         if(!p) 
             return
+        return getRenderedOf(p, scale, offset, color, opacity)
+    }
+
+    function getRenderedOf(p:Pattern, scale:number, offset:[number, number], color?:string, opacity?:number){
         // 由于canvas边长必须为整数，但我们必须生成边长任意的pattern，只能画一个更大的canvas再取整，以降低误差
         let enlarge = Math.round(250 / Math.min(p.width, p.height))
         const cvsWidth = Math.round(p.width * scale * enlarge)
@@ -74,6 +79,7 @@ export const usePatternStore = defineStore('pattern', ()=>{
     }
 
     return {
-        getRendered
+        getRendered,
+        getRenderedOf
     }
 })
