@@ -20,6 +20,60 @@ export interface TextTagIconDisplayItem{
 } 
 
 const maxLoadWaitMs = 8000
+
+/**
+ * 把存档里写的图标链接换算成实际可请求的地址（站内相对路径补 origin，站外走代理）
+ */
+export function resolveIconUrl(url: string): string {
+    if (url.startsWith('/'))
+        return window.location.origin + url
+    return convertToProxyUrlIfNeeded(url, 'icon')
+}
+
+/**
+ * 检查并加载一个图标，结果就地写入 data（img 会在确认链接可用后立即挂上，供预览/列表复用）
+ * @param src 已由 resolveIconUrl 换算过的地址
+ */
+export function loadIconImage(src: string, name: string, data: TextTagIconData): Promise<void> {
+    return new Promise((res) => {
+        data.status = 'loading'
+        checkUrlIsImage(src).then(checkErr => {
+            if (checkErr) {
+                data.status = 'failed'
+                data.errmsg = checkErr
+                console.warn(`[icon]"${name}"(${src})${checkErr}`)
+                res()
+                return
+            }
+            const img = new Image()
+            data.img = img
+            img.src = src
+            let timer = window.setTimeout(() => {
+                data.status = 'failed'
+                data.errmsg = '加载超时'
+                console.warn(`[icon]"${name}"(${src})数据加载超时`)
+                res()
+            }, maxLoadWaitMs)
+            img?.addEventListener('load', () => {
+                window.clearTimeout(timer)
+                data.status = 'loaded'
+                data.errmsg = undefined
+                data.naturalWidth = img.naturalWidth
+                data.naturalHeight = img.naturalHeight
+                console.log(`[icon]"${name}"(${src})数据加载成功`)
+                res()
+            })
+            img?.addEventListener('error', () => {
+                window.clearTimeout(timer)
+                data.status = 'failed'
+                data.errmsg = '加载失败'
+                console.warn(`[icon]"${name}"(${src})数据加载失败`)
+                res()
+            })
+        })
+    })
+}
+
 export const useIconStore = defineStore('iconStore', ()=>{
     const saveStore = useSaveStore()
     const { save } = storeToRefs(saveStore)
@@ -35,57 +89,16 @@ export const useIconStore = defineStore('iconStore', ()=>{
                 imgData = {status:'loading'}
                 data.value.set(ic.id, imgData)
             }
-            let icUrlFull = ic.url ?? ""
-            if(icUrlFull?.startsWith('/'))
-                icUrlFull = window.location.origin + icUrlFull
-            else
-                icUrlFull = convertToProxyUrlIfNeeded(icUrlFull, 'icon')
+            const icUrlFull = resolveIconUrl(ic.url ?? "")
             if(!imgData?.img || !ic.url || imgData?.img.src !== icUrlFull){
                 triedIds.push(ic.id)
-                proms.push(new Promise((res)=>{
-                    if(!ic.url){
-                        imgData.status = 'failed'
-                        imgData.errmsg = '缺少链接'
-                        console.warn(`[icon]"${ic.name}"(${ic.url})缺少链接`)
-                        res()
-                        return
-                    }
-                    checkUrlIsImage(icUrlFull)
-                        .then(checkErr=>{
-                            if(checkErr){
-                                imgData.status = 'failed'
-                                imgData.errmsg = checkErr
-                                console.warn(`[icon]"${ic.name}"(${ic.url})${checkErr}`)
-                                res()
-                            }else{
-                                const img = new Image()
-                                imgData.img = img
-                                img.src = icUrlFull
-                                let timer = window.setTimeout(()=>{
-                                    imgData.status = 'failed'
-                                    imgData.errmsg = '加载超时'
-                                    console.warn(`[icon]"${ic.name}"(${ic.url})数据加载超时`)
-                                    res()
-                                }, maxLoadWaitMs)
-                                img?.addEventListener('load', ()=>{
-                                    window.clearTimeout(timer)
-                                    imgData.status = 'loaded'
-                                    imgData.errmsg = undefined
-                                    imgData.naturalWidth = img.naturalWidth
-                                    imgData.naturalHeight = img.naturalHeight
-                                    console.log(`[icon]"${ic.name}"(${ic.url})数据加载成功`)
-                                    res()
-                                })
-                                img?.addEventListener('error', ()=>{
-                                    window.clearTimeout(timer)
-                                    imgData.status = 'failed'
-                                    imgData.errmsg = '加载失败'
-                                    console.warn(`[icon]"${ic.name}"(${ic.url})数据加载失败`)
-                                    res()
-                                })
-                            }
-                        })
-                }))
+                if(!ic.url){
+                    imgData.status = 'failed'
+                    imgData.errmsg = '缺少链接'
+                    console.warn(`[icon]"${ic.name}"(${ic.url})缺少链接`)
+                }else{
+                    proms.push(loadIconImage(icUrlFull, ic.name ?? '', imgData))
+                }
             }
         }
         await Promise.all(proms)

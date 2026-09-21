@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue';
 
 import ConfigSection from './shared/ConfigSection.vue';
-import { useIconStore } from 'aarc-core/models/stores/iconStore';
+import SideBar from 'aarc-core/components/common/SideBar.vue';
+import { loadIconImage, resolveIconUrl, TextTagIconData, useIconStore } from 'aarc-core/models/stores/iconStore';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
 import { TextTagIcon } from 'aarc-core/models/save';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
@@ -19,6 +20,8 @@ const { prefixes, prefixSelected, prefixedIcons, accessBlocked } = storeToRefs(i
 
 const hideImgs = ref(false) //使img标签强制重新创建，否则无响应式效果
 const creatingIcon = ref<TextTagIcon>({id:0})
+const iconSidebar = useTemplateRef('iconSidebar')
+const creatingPreview = ref<{src:string} & TextTagIconData>()
 const createAllowed = computed<boolean>(()=>{
     const i = creatingIcon.value
     return !!i.name && !!i.url
@@ -32,6 +35,7 @@ async function createIcon(){
     saveStore.save.textTagIcons ??= []
     saveStore.save.textTagIcons.push(i)
     creatingIcon.value = {id:0}
+    creatingPreview.value = undefined
     hideImgs.value = true
     await ensureAllLoaded()
     await nextTick()
@@ -42,6 +46,23 @@ async function createIcon(){
 async function urlInputBlurHandler(){
     const triedIds = await ensureAllLoaded()
     rerenderIfNeeded(triedIds)
+}
+
+async function checkCreatingUrl(){
+    const rawUrl = creatingIcon.value.url
+    const url = rawUrl?.trim()
+    if(rawUrl !== url)
+        creatingIcon.value.url = url
+    if(!url){
+        creatingPreview.value = undefined
+        return
+    }
+    const src = resolveIconUrl(url)
+    if(creatingPreview.value?.src === src)
+        return
+    //写入的是本次预览自己的对象，用户改链接后旧检查只会写到已弃用的对象上
+    creatingPreview.value = {src, status:'loading'}
+    await loadIconImage(src, url, creatingPreview.value)
 }
 async function rerenderIfNeeded(iconIds:number[]) {
     if(iconIds.length>0){
@@ -66,7 +87,10 @@ onMounted(async()=>{
         抱歉，本栏目仅限编辑者或所有者查看
     </div>
     <div v-else-if="ok" class="ttIconConfig">
-        <button v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" class="add-from-favorites" @click="userFileFavoriteStore.openFavoritesSidebar({ fileType: 'icon' })">从收藏取用资源</button>
+        <div class="iconAddRow">
+            <button v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" @click="userFileFavoriteStore.openFavoritesSidebar({ fileType: 'icon' })">从收藏取用资源</button>
+            <button @click="iconSidebar?.extend()">从图片链接添加</button>
+        </div>
         <div class="ttIconPrefixSelect">
             图标组
             <select v-model="prefixSelected">
@@ -95,21 +119,29 @@ onMounted(async()=>{
                     链接<input v-model="item.i.url" style="font-size: 12px;" @blur="urlInputBlurHandler"/>
                 </div>
             </div>
-            <div class="newIcon">
-                <div>添加自定义图标</div>
-                <div class="prefixedIconKV">
-                    名称<input v-model="creatingIcon.name" :placeholder="'组名-图标名'"/>
-                </div>
-                <div class="prefixedIconKV">
-                    链接<input v-model="creatingIcon.url" style="font-size: 12px;"/>
-                </div>
-                <button @click="createIcon" :class="createAllowed ? 'ok':'off'">添加</button>
-                <div class="smallNote">使用：“工具-创建文本标签”，然后在标签的设置中启用并选择图标</div>
-            </div>
         </div>
     </div>
     <div v-else>加载图标文件中，请稍后</div>
 </ConfigSection>
+
+<SideBar ref="iconSidebar">
+    <h1>从图片链接添加</h1>
+    <div class="newIconForm">
+        <div class="iconKV">
+            名称<input v-model="creatingIcon.name" :placeholder="'组名-图标名'"/>
+        </div>
+        <div class="iconKV">
+            链接<input v-model="creatingIcon.url" style="font-size: 12px;" @blur="checkCreatingUrl"/>
+        </div>
+        <div class="iconPreview" v-if="creatingPreview">
+            <img v-if="creatingPreview.status=='loaded'" :src="creatingPreview.src"/>
+            <div v-else-if="creatingPreview.status=='loading'" class="previewNote">检查中…</div>
+            <div v-else class="previewErr">{{ creatingPreview.errmsg ?? '加载失败' }}</div>
+        </div>
+        <button @click="createIcon" :class="createAllowed ? 'ok':'off'">添加</button>
+        <div class="smallNote">使用：“工具-创建文本标签”，然后在标签的设置中启用并选择图标</div>
+    </div>
+</SideBar>
 </template>
 
 <style scoped lang="scss">
@@ -118,8 +150,16 @@ onMounted(async()=>{
     flex-direction: column;
     align-items: stretch;
 }
-.add-from-favorites{
-    margin: 10px auto;
+.iconAddRow{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0;
+    button{
+        margin: 0;
+        white-space: nowrap;
+    }
 }
 .ttIconPrefixSelect{
     background-color: #ccc;
@@ -174,11 +214,43 @@ onMounted(async()=>{
             object-fit: contain;
         }
     }
-    .newIcon{
-        border-color: #aaa;
-        input::placeholder{
-            color: #bbb;
+}
+.newIconForm{
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    .iconKV{
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        input{
+            flex: 1;
+            min-width: 0;
         }
+    }
+    .iconPreview{
+        align-self: center;
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        img{
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+        .previewNote{
+            color: #666;
+            font-size: 13px;
+        }
+        .previewErr{
+            color: red;
+            font-size: 13px;
+        }
+    }
+    input::placeholder{
+        color: #bbb;
     }
 }
 </style>
