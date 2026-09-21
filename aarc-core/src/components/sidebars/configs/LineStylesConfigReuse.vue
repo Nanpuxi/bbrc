@@ -82,12 +82,26 @@ function exportToFile() {
 // 宿主（web）在应用启动时注入上传实现，编辑器打开时必定已就绪
 const uploaderAvailable = hasUserFileUploader()
 
+// 上传的样式会被导入到任意存档，pattern id 在目标存档中无意义，须把引用的 pattern 整体嵌入
+function embedReferencedPatterns(styles: LineStyle[]) {
+    const patterns = save.value?.patterns
+    if (!patterns) return
+    for (const s of styles) {
+        for (const layer of s.layers) {
+            if (layer.pattern === undefined) continue
+            const p = patterns.find(x => x.id === layer.pattern)
+            if (p) layer.patternEmbedded = deepClone(p)
+        }
+    }
+}
+
 async function uploadAsResource() {
     const data = getLineStylesForExport()
     if (data.length === 0) {
         showPop('请先选择要上传的样式', 'warning')
         return
     }
+    embedReferencedPatterns(data)
     const res = await uploadLineStylesAsResource(data)
     if (res === 'ok')
         showPop('上传成功，可前往"文件"页收藏这些资源', 'success')

@@ -71,9 +71,12 @@ export function strokeStyledLine(
         }
         else {
             ctx.setLineDash([])
-            if(layer.pattern){
+            if(layer.pattern || layer.patternEmbedded){
                 let offsetForPattern = offset ?? [0, 0]
-                const patternBase = usePatternStore().getRendered(layer.pattern, scale ?? 1, offsetForPattern , color, 1)
+                const patternStore = usePatternStore()
+                const patternBase = layer.patternEmbedded
+                    ? patternStore.getRenderedOf(layer.patternEmbedded, scale ?? 1, offsetForPattern, color, 1)
+                    : patternStore.getRendered(layer.pattern!, scale ?? 1, offsetForPattern, color, 1)
                 if(patternBase){
                     const pattern = ctx.createPattern(patternBase, null)
                     if(pattern){

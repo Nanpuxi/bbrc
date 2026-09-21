@@ -33,6 +33,14 @@ function delLayer(lineStyle:LineStyle, layerIdx:number){
         lineStyle.layers.splice(layerIdx, 1)
     }
 }
+function removeEmbeddedPattern(layer:LineStyle['layers'][number]){
+    if(!window.confirm('确认移除嵌入的纹理？')){
+        return
+    }
+    delete layer.patternEmbedded
+    // 随嵌入一起携带的 pattern id 来自源存档，在本存档中无意义，一并清除
+    layer.pattern = undefined
+}
 function addLayer(lineStyle:LineStyle){
     lineStyle.layers.unshift(getDefaultLayer())
 }
@@ -196,7 +204,11 @@ onUnmounted(()=>{
                     </div>
                     <div v-if="!layer.dash">
                         <b>纹理</b>
-                        <select v-model="layer.pattern">
+                        <div v-if="layer.patternEmbedded" class="embeddedPattern">
+                            <span>已使用嵌入纹理</span>
+                            <button class="lite" @click="removeEmbeddedPattern(layer)">移除嵌入</button>
+                        </div>
+                        <select v-else v-model="layer.pattern">
                             <option :value="undefined">无</option>
                             <option v-for="p in save?.patterns" :value="p.id">{{ p.name }}</option>
                         </select>
@@ -351,6 +363,24 @@ onUnmounted(()=>{
                         .dashConfigInput{
                             margin: 0px;
                             width: 120px;
+                        }
+                        .embeddedPattern{
+                            display: flex;
+                            flex-direction: row;
+                            align-items: center;
+                            justify-content: space-between;
+                            gap: 6px;
+                            span{
+                                color: #999;
+                                font-size: 14px;
+                            }
+                            button.lite{
+                                font-size: 14px;
+                                text-decoration: underline;
+                                &:hover{
+                                    color:black
+                                }
+                            }
                         }
                     }
                     .layerHead{

@@ -131,6 +131,8 @@ export interface LineStyle{
         dash?:string
         cap?:CanvasLineCap,
         pattern?:number
+        /** 嵌入的完整 pattern（跨存档分享样式时随样式携带，渲染优先于 pattern id） */
+        patternEmbedded?:Pattern
     }[]
 }
 export interface LineGroup{
