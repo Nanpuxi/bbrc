@@ -10,7 +10,6 @@ import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, applyColorSourceMerges } from 'aarc-core/models/save/dataSourceOps';
 import { useExternalColorSetsStore, type ExternalColorSetEntry } from 'aarc-core/app/localConfig/externalColorSets';
 import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
-import { getCoreConfig } from 'aarc-core/app/coreConfig'
 import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 const saveStore = useSaveStore()
@@ -39,22 +38,20 @@ function openLinkModal() {
     linkModalShow.value = true
 }
 
-// 从收藏的线路样式资源选取：按 id 的固定链接（覆盖上传后仍指向最新内容）
+// 从收藏的线路样式资源选取：使用宿主拼好的按 uniqueName 的固定链接（覆盖上传后仍指向最新内容）
 function pickFromFavorites() {
     userFileFavoriteStore.openFavoritesSidebar({
         fileType: 'lineStyle',
         closeOnSelect: true,
-        onSelected: (f) => {
-            if (typeof f.id !== 'number' || f.id <= 0) {
-                showPop('该资源缺少 id，无法作为数据源', 'failed')
+        onSelected: (f, contentUrl) => {
+            if (!contentUrl) {
+                showPop('该资源缺少固定链接，无法作为数据源', 'failed')
                 return
             }
-            // 拼绝对 URL：apiUrlBase 缺省时用当前源（同源部署），跨部署打开时经 /proxy/json 拉取
-            const base = getCoreConfig().apiUrlBase || window.location.origin
             creating.value = {
                 id: 0,
                 name: f.displayName ?? '',
-                url: `${base}/api/UserFile/Content?id=${f.id}`,
+                url: contentUrl,
                 type: 'lineStyles',
                 autoUpdate: true,
                 overwriteSameName: false

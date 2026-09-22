@@ -6,8 +6,11 @@ import { computed, ref } from "vue";
  * 打开收藏夹时的一次性取用意图（由消费方在 openFavoritesSidebar 时传入）
  */
 export interface FavoritesPickIntent {
-    /** 本次取用的回调（优先于全局 onFavoriteFileSelected），被消费一次后失效 */
-    onSelected?: (userFile: UserFileDto) => void
+    /**
+     * 本次取用的回调（优先于全局 onFavoriteFileSelected），被消费一次后失效；
+     * contentUrl 为宿主拼好的按 uniqueName 的绝对固定链接，存量资源无 uniqueName 时为 undefined
+     */
+    onSelected?: (userFile: UserFileDto, contentUrl: string | undefined) => void
     /** 按资源类型过滤收藏列表（如 'icon' / 'lineStyle'）；具体枚举由宿主映射 */
     fileType?: string
     /** 取用一次后立即关闭侧栏；缺省 false（允许连续取用多个） */
@@ -25,7 +28,7 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
         openFavoritesSidebarWarned = false
     }
     /** 本次取用的一次性回调（宿主选中文件时优先消费） */
-    const pendingOnSelected = ref<(userFile: UserFileDto)=>void>()
+    const pendingOnSelected = ref<(userFile: UserFileDto, contentUrl: string | undefined) => void>()
     /** 本次打开的列表过滤类型（宿主映射为后端枚举；下次打开时重置） */
     const pickFileType = ref<string>()
     /** 本次打开是否"取用后立即关闭侧栏"（宿主消费；下次打开时重置） */
@@ -41,19 +44,20 @@ export const useUserFileFavoriteStore = defineStore('userFileFavorite', ()=>{
             openFavoritesSidebarWarned = true
         }
     }
-    const onFavoriteFileSelected = ref<(userFile:UserFileDto)=>void>(()=>{})
+    const onFavoriteFileSelected = ref<(userFile: UserFileDto, contentUrl: string | undefined) => void>(()=>{})
     /**
      * 宿主在用户选中收藏文件时调用；
+     * contentUrl 为宿主拼好的按 uniqueName 的绝对固定链接（无 uniqueName 时传 undefined）；
      * 返回 true 表示被本次意图的 onSelected 消费，否则走全局 onFavoriteFileSelected
      */
-    function notifyFileSelected(userFile: UserFileDto): boolean{
+    function notifyFileSelected(userFile: UserFileDto, contentUrl: string | undefined): boolean{
         const cb = pendingOnSelected.value
         pendingOnSelected.value = undefined
         if(cb){
-            cb(userFile)
+            cb(userFile, contentUrl)
             return true
         }
-        onFavoriteFileSelected.value(userFile)
+        onFavoriteFileSelected.value(userFile, contentUrl)
         return false
     }
     return {

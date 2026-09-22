@@ -5,6 +5,7 @@ import { useApiStore } from '@/app/com/apiStore';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
+import { buildUserFileContentUrl } from '@/utils/userFileUrl';
 
 const api = useApiStore()
 const { showPop } = useUniqueComponentsStore()
@@ -61,8 +62,10 @@ function onSearchInput() {
 }
 
 function select(file: UserFileDto) {
+    // 固定链接由 web 拼接（core 不接触 uniqueName → URL 的映射）；存量资源无 uniqueName 时为 undefined
+    const contentUrl = file.uniqueName ? buildUserFileContentUrl(file.uniqueName) : undefined
     // 一次性取用意图（如"选为数据源"）优先；否则走 core 注册的全局回调（图标）
-    const consumed = userFileFavoriteStore.notifyFileSelected(file)
+    const consumed = userFileFavoriteStore.notifyFileSelected(file, contentUrl)
     if (!consumed)
         showPop('已添加', 'success')
     // 消费方要求时取用后立即关闭；否则保持打开以连续取用

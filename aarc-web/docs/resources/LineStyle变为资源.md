@@ -176,7 +176,8 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 
 - `openFavoritesSidebar(intent?: FavoritesPickIntent)`：intent 含一次性 `onSelected`
   回调与可选 `fileType` 过滤（如 `'lineStyle'`，具体枚举由宿主映射）；每次打开重置。
-- 宿主选中文件时调 `notifyFileSelected(file)`：优先消费一次性 `onSelected`（消费后
+- 宿主选中文件时调 `notifyFileSelected(file, contentUrl)`（`contentUrl` 为宿主拼好的
+  按 uniqueName 的绝对固定链接，无 uniqueName 时为 undefined）：优先消费一次性 `onSelected`（消费后
   失效），否则回退到全局 `onFavoriteFileSelected`（图标流程不变，见 web 侧
   `UserFileFavorites.vue` 的 `select`）。
 - 收藏列表过滤：`UserFavoriteController.GetUserFiles` 新增可选 `fileType` 参数，
@@ -188,9 +189,12 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 收藏夹侧栏时显示，经 `hasOpenFavoritesSidebar` 判断）：
 
 1. 用第 3 步的机制打开收藏夹（`fileType: 'lineStyle'` 过滤），回调中拿到
-   `UserFileDto`（窄投影含 `id`/`displayName`）。
-2. 拼**按 id 的固定链接**：`{apiUrlBase || window.location.origin}/api/UserFile/Content?id={id}`。
-   后端 `UserFileController.Content`（匿名可访问）按 id 解析当前 `StoreName` 输出
+   `UserFileDto`（窄投影含 `id`/`displayName`）与宿主拼好的 `contentUrl`。
+2. **按 uniqueName 的固定链接由 web 拼接**（`aarc-web/src/utils/userFileUrl.ts`）：
+   `{apiUrlBase || window.location.origin}/api/UserFile/Content?uniqueName={uniqueName}`，
+   经 `notifyFileSelected(file, contentUrl)` 传给消费方，core 不接触 uniqueName。
+   后端 `UserFileController.Content`（匿名可访问）按 uniqueName（创建时生成的 16 位
+   `0-9A-Z` 随机串，覆盖上传不变）解析当前 `StoreName` 输出
    物理文件——覆盖上传后 md5 物理路径变化也不影响引用；响应带
    `Cache-Control: no-cache` + ETag（内容 md5），配合 `fetchDataSource` 的
    `cache: 'no-cache'`，新版内容下次拉取即生效，未变时命中 304。
@@ -210,7 +214,7 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
   `window.location.origin`，不能读 `import.meta.env`。
 - **内容寻址 = 不可变**：`/userfile/{md5}.json` 静态 URL 内容永远相同（改样式重新上传
   会得到新 md5 URL），数据源的 `autoUpdate` 对这类 URL 实际无意义。需要"引用最新版"
-  时应改用按 id 的 `/api/UserFile/Content?id=` 链接（"从收藏选择"入口生成的就是它），
+  时应改用按 uniqueName 的 `/api/UserFile/Content?uniqueName=` 链接（"从收藏选择"入口生成的就是它），
   其 ETag/no-cache 保证覆盖上传后客户端能拿到新版。
 - **预览图颜色固定**：必须用固定 dynaColor 渲染预览，否则同一样式每次上传缩略图
   md5 不同、产生垃圾文件；服务端目前不清理失去引用的文件（`UserFileRepo.cs` 内有
@@ -243,8 +247,8 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 | `aarc-core/src/models/save/lineStyleResourceOps.ts` + `aarc-web/src/App.vue` ✅ | 已新建 `initUserFileUploader`/`uploadLineStylesAsResource` 注入口，web 经 `initCoreHostServices` 用 `api.userFile.upload` 实现 |
 | `aarc-core/src/models/stores/utils/userFileFavoriteStore.ts` ✅ | 已支持一次性取用意图（`openFavoritesSidebar(intent)` + `notifyFileSelected`） |
 | `aarc-web/src/components/common/userFile/UserFileFavorites.vue` ✅ | 选中时调 `notifyFileSelected`（一次性回调优先）；按 `pickFileType` 过滤列表 |
-| `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` ✅ | 已加"从收藏选择线路样式"入口（生成 `/api/UserFile/Content?id=` 固定链接，默认开自动更新+覆盖同名） |
-| 后端 ✅（id 固定链接 + 收藏过滤） | 已完成：`UserFileController.Content`（匿名，ETag=内容md5 + no-cache）、`UserFavoriteController.GetUserFiles` 加 `fileType` 过滤 |
+| `aarc-core/src/components/sidebars/configs/DataSourcesConfig.vue` ✅ | 已加"从收藏选择线路样式"入口（使用宿主提供的 `/api/UserFile/Content?uniqueName=` 固定链接，默认开自动更新+覆盖同名） |
+| 后端 ✅（uniqueName 固定链接 + 收藏过滤） | 已完成：`UserFileController.Content`（匿名，按 uniqueName 解析，ETag=内容md5 + no-cache；`UserFileRepo.Add` 创建时生成 16 位 `0-9A-Z` 的 `UniqueName`）、`UserFavoriteController.GetUserFiles` 加 `fileType` 过滤 |
 | （可选，已无需）`aarc-web/.../GenericFileUpload.vue` | ~~支持携带缩略图上传~~（改走注入口路线，未采用）✅ 另已接入同名覆盖预检 |
 | 后端 ✅（同名覆盖部分） | 已完成：`Upload` 加 `overwriteId`、新增 `FindExisting` preflight、`UserFileRepo.Overwrite` + `UserFileService.DeletePhysical`；（可选：GetUserFiles 加 type 过滤） |
 | `aarc-web/src/app/globalStores/overwriteConfirmStore.ts` ✅ | 已新建：覆盖确认弹窗状态（`request(items): Promise<boolean>`），与资源类型无关 |

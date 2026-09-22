@@ -80,17 +80,17 @@ namespace AARC.WebApi.Controllers.Files
         }
 
         /// <summary>
-        /// 按 id 输出文件内容（匿名可访问，与 /userfile 静态路径等价）。<br/>
-        /// 覆盖上传后物理文件（md5 URL）会变，但本路径按 id 解析、始终指向最新内容，
+        /// 按 uniqueName 输出文件内容（匿名可访问，与 /userfile 静态路径等价）。<br/>
+        /// 覆盖上传后物理文件（md5 URL）会变，但本路径按 uniqueName 解析、始终指向最新内容，
         /// 适合作为存档数据源的长期引用。<br/>
         /// 缓存策略：ETag 取内容 md5（StoreName），并要求每次回源校验（no-cache），
         /// 内容未变时由 ETag/LastModified 命中 304，变化时客户端能拿到新版。
         /// </summary>
         [AllowAnonymous]
         [HttpGet]
-        public IActionResult Content(int id)
+        public new IActionResult Content(string uniqueName)
         {
-            var info = userFileRepo.GetContentInfo(id);
+            var info = userFileRepo.GetContentInfo(uniqueName);
             if (info is null)
                 return NotFound();
             var (storeName, lastActive) = info.Value;

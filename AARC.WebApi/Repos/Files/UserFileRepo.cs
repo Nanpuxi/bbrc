@@ -12,6 +12,7 @@ using AARC.WebApi.Services.Identities.AuthGrants;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace AARC.WebApi.Repos.Files
 {
@@ -48,12 +49,24 @@ namespace AARC.WebApi.Repos.Files
             {
                 DisplayName = displayName ?? Path.GetRandomFileName(),
                 StoreName = storeName,
+                UniqueName = GenerateUniqueName(),
                 Intro = intro,
                 OwnerUserId = uid,
                 Size = size,
                 Type = type
             };
             Add(userFile);
+        }
+
+        /// <summary>
+        /// 生成 16 位 0-9A-Z 随机串，作为资源的稳定公开标识
+        /// </summary>
+        private static string GenerateUniqueName()
+        {
+            const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            return new string(Enumerable.Range(0, 16)
+                .Select(_ => chars[RandomNumberGenerator.GetInt32(chars.Length)])
+                .ToArray());
         }
 
         public void Edit(int id, string? displayName, string? intro)
@@ -96,12 +109,12 @@ namespace AARC.WebApi.Repos.Files
         }
 
         /// <summary>
-        /// 按 id 获取文件的存储信息（匿名内容输出用：与 /userfile 静态路径等价，仅多一步 id → StoreName 解析）
+        /// 按 uniqueName 获取文件的存储信息（匿名内容输出用：与 /userfile 静态路径等价，仅多一步 uniqueName → StoreName 解析）
         /// </summary>
-        public (string StoreName, DateTime LastActive)? GetContentInfo(int id)
+        public (string StoreName, DateTime LastActive)? GetContentInfo(string uniqueName)
         {
             var model = Existing.AsNoTracking()
-                .Where(x => x.Id == id)
+                .Where(x => x.UniqueName == uniqueName)
                 .Select(x => new { x.StoreName, x.LastActive })
                 .FirstOrDefault();
             if (model is null)
@@ -316,6 +329,7 @@ namespace AARC.WebApi.Repos.Files
         public int Id { get; set; }
         public string? DisplayName { get; set; }
         public string? StoreName { get; set; }
+        public string? UniqueName { get; set; }
         public string? UrlThumb { get; set; }
         public string? UrlOriginal { get; set; }
         public int OwnerUserId { get; set; }
