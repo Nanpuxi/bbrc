@@ -616,6 +616,11 @@ export const useSaveStore = defineStore('save', () => {
         // 经过上述转移后，可能造成link的两个点变成了同一个，需要删除
         if(save.value.pointLinks)
             removeAllByPred(save.value.pointLinks, ({pts})=> pts[0] == pts[1])
+        //把被删除的点在选区组中的成员身份转移到保留的点上（替换后去重，避免留下死id）
+        save.value.selectionGroups?.forEach(group=>{
+            if(group.ptIds.includes(delPt.id))
+                group.ptIds = [...new Set(group.ptIds.map(id=>id===delPt.id?keepPt.id:id))]
+        })
         return {
             mutatedLines:delFromLines,
             mergedWithPt:thatPt,
