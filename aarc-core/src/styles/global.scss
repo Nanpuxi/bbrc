@@ -188,6 +188,18 @@ button.lite{
             background-color: transparent;
         }
     }
+    &.ok{
+        color:olivedrab;
+        &:hover{
+            background-color: transparent;
+        }
+    }
+    &.off{
+        color: #aaa;
+        &:hover{
+            background-color: transparent;
+        }
+    }
 }
 
 .smallNote{
