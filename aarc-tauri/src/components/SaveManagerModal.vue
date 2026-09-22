@@ -143,7 +143,7 @@ function looksLikeSave(data: unknown): boolean {
         && typeof o.meta === 'object' && o.meta !== null
 }
 
-// 导入：选择设备上的单个存档 json（即备份 zip 里的 <id>.json），解析后存为新存档并切入。
+// 导入：选择设备上的单个存档 json（即备份 zip 里的 <存档名>.aarc.json），解析后存为新存档并切入。
 // 用隐藏 input[type=file] 而非 dialog+fs：浏览器 dev / 桌面 / 安卓 webview 通用，
 // 且不受 plugin-fs scope 限制（安卓 SAF 返回的 content:// 路径 plugin-fs 读不了）
 const fileInput = ref<HTMLInputElement>()
@@ -166,7 +166,7 @@ async function importSaveFile(e: Event) {
             return
         }
         const existingNames = new Set(saves.value.map(x => x.name))
-        const baseName = file.name.replace(/\.json$/i, '') || '导入存档'
+        const baseName = file.name.replace(/(\.aarc)?\.json$/i, '') || '导入存档'
         let name = baseName
         for (let i = 2; existingNames.has(name); i++)
             name = `${baseName} ${i}`
