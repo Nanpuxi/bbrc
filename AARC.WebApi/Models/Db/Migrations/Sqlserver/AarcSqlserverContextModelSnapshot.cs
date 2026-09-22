@@ -17,7 +17,7 @@ namespace AARC.WebApi.Models.Db.Migrations.Sqlserver
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.6")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -96,7 +96,13 @@ namespace AARC.WebApi.Models.Db.Migrations.Sqlserver
                     b.Property<byte>("Type")
                         .HasColumnType("tinyint");
 
+                    b.Property<string>("UniqueName")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UniqueName");
 
                     b.HasIndex("OwnerUserId", "Priority");
 
