@@ -11,6 +11,7 @@ import { quadInside } from "aarc-core/utils/coordUtils/coordRect";
 import { ExtendBtn, useLineExtendStore } from "./lineExtendStore";
 import { useTextTagRectStore } from "../textTagRectStore";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
+import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 
 export const useOnDetectStore = defineStore('onDetect', ()=>{
     const cs = useConfigStore()
@@ -20,6 +21,7 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
     const { enumerateLineExtendBtns } = useLineExtendStore()
     const { enumerateTextTagRects } = useTextTagRectStore()
     const { showPop } = useUniqueComponentsStore()
+    const editorLocalConfig = useEditorLocalConfigStore()
     function ptLockedByLines(ptId:number){
         const belongLines = saveStore.getLinesByPt(ptId)
         return belongLines.length > 0 && belongLines.every(l=>l.locked)
@@ -154,13 +156,16 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
         return onLeb
     }
     function onTextTag(c:Coord){
+        const { textTagClickMode } = editorLocalConfig
         //在所有命中的tag中取最后渲染（视觉上最上层）的一个
         let onTextTag:TextTag|undefined;
         let topSeq = -1;
         enumerateTextTagRects((id, item)=>{
             if(item.seq <= topSeq)
                 return;
-            if(quadInside(item.quad, c) || coordDistSqLessThan(item.anchor, c, cs.clickPtThrsSq)){
+            const inQuad = textTagClickMode !== 'anchor' && quadInside(item.quad, c)
+            const nearAnchor = textTagClickMode !== 'rect' && coordDistSqLessThan(item.anchor, c, cs.clickPtThrsSq)
+            if(inQuad || nearAnchor){
                 const tag = saveStore.save?.textTags.find(x=>x.id===id)
                 if(tag){
                     onTextTag = tag

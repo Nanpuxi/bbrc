@@ -7,7 +7,7 @@ import { onMounted } from 'vue';
 import { ControlPointSta } from 'aarc-core/models/save.ts';
 
 const configStore = useEditorLocalConfigStore()
-const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize, lineExtendSta } = storeToRefs(configStore)
+const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize, lineExtendSta, textTagClickMode } = storeToRefs(configStore)
 
 onMounted(()=>{
     configStore.backCompat()
@@ -15,8 +15,21 @@ onMounted(()=>{
 </script>
 
 <template>
-<ConfigSection :title="'编辑器【新】'">
+<ConfigSection :title="'编辑器'">
     <table><tbody>
+        <tr><th>文本标签点击判定</th></tr>
+        <tr>
+            <td>
+                <select v-model="textTagClickMode">
+                    <option value="rect">仅矩形</option>
+                    <option value="anchor">仅原点</option>
+                    <option value="rectAndAnchor">矩形+原点</option>
+                </select>
+                <div class="explain">
+                    <p>点击文本标签时的命中判定方式：仅当点击落在标签矩形内、仅当点击足够靠近锚点、或两者任一命中。</p>
+                </div>
+            </td>
+        </tr>
         <tr><th>线路延长站点类型</th></tr>
         <tr>
             <td>
