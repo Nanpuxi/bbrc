@@ -1,6 +1,6 @@
 import { defineStore, storeToRefs } from "pinia";
 import { useSaveStore } from "./saveStore";
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { TextTagIcon } from "../save";
 import { convertToProxyUrlIfNeeded } from "aarc-core/utils/urlUtils/proxyUrl";
 import { checkUrlIsImage } from "aarc-core/utils/urlUtils/checkUrl";
@@ -94,7 +94,7 @@ export function useIconUrlPreview(){
         const src = resolveIconUrl(url)
         if(src === checkedSrc)
             return
-        preview.value = {status:'loading'}
+        preview.value = reactive<TextTagIconData>({status:'loading'})
         await loadIconImage(src, url, preview.value)
     }
     return {preview, check}
@@ -112,7 +112,9 @@ export const useIconStore = defineStore('iconStore', ()=>{
         for(const ic of icons){
             let imgData = data.value.get(ic.id)
             if(!imgData){
-                imgData = {status:'loading'}
+                //必须存 reactive 对象：ref(Map) 里 set 进去的裸对象不会惰性包代理，
+                //loadIconImage 完成后就地改 status 不会触发任何依赖，列表项会卡在“检查中”
+                imgData = reactive({status:'loading'}) as TextTagIconData
                 data.value.set(ic.id, imgData)
             }
             const icUrlFull = resolveIconUrl(ic.url ?? "")
