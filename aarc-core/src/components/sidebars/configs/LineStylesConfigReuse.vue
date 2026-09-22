@@ -7,11 +7,13 @@ import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueCompo
 import { LineStyle } from 'aarc-core/models/save';
 import { upgradeLineStyle } from 'aarc-core/models/save/upgrade/lineStyles';
 import { hasUserFileUploader, uploadLineStylesAsResource } from 'aarc-core/models/save/lineStyleResourceOps';
+import { useResourceAccessStore } from 'aarc-core/models/stores/utils/resourceAccessStore';
 import SwitchingTabs from 'aarc-core/components/common/SwitchingTabs.vue';
 import rfdc from 'rfdc';
 
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
+const { uploadAccessNotice } = storeToRefs(useResourceAccessStore())
 const { showPop } = useUniqueComponentsStore()
 
 const selectedIds = ref<Set<number>>(new Set())
@@ -230,11 +232,14 @@ function mergeLineStyles(importedStyles: unknown[]) {
     <div class="reuseActions">
         <SwitchingTabs class="reuseTabs" :texts="tabTexts">
             <div class="tabPane" v-if="uploaderAvailable">
-                <p class="smallNote">上传为资源后（每条选中的样式各成为一个资源），可在"我的资源"页收藏它们，并在任意存档的"数据源"中添加，实现跨存档共享</p>
-                <p class="smallNote">如果重复上传同名的样式，资源将被更新，任何存档若使用了“自动更新”和“覆盖同名”的数据源，将会同步更新同名的线路样式（更新一次即为同步更新所有）</p>
-                <div class="btnGroup">
-                    <button @click="uploadAsResource" class="ok">上传为资源</button>
-                </div>
+                <div v-if="uploadAccessNotice">{{ uploadAccessNotice }}</div>
+                <template v-else>
+                    <p class="smallNote">上传为资源后（每条选中的样式各成为一个资源），可在"我的资源"页收藏它们，并在任意存档的"数据源"中添加，实现跨存档共享</p>
+                    <p class="smallNote">如果重复上传同名的样式，资源将被更新，任何存档若使用了“自动更新”和“覆盖同名”的数据源，将会同步更新同名的线路样式（更新一次即为同步更新所有）</p>
+                    <div class="btnGroup">
+                        <button @click="uploadAsResource" class="ok">上传为资源</button>
+                    </div>
+                </template>
             </div>
             <div class="tabPane">
                 <p class="smallNote">文件方式适合备份与发送：导出为一个 json 文件，在别的存档打开本菜单即可导入</p>

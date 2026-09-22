@@ -162,9 +162,12 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
+            //浏览模式且不是所有者：文案即屏蔽理由，三处可各给各的，这里暂时共用
             await loadSaveIntoEditor(obj, {
                 visitorMode: viewOnly.value || notOwner,
-                blockIconAccess: viewOnly.value && notOwner, //浏览模式且不是所有者：隐藏图标栏目
+                iconAccessNotice: (viewOnly.value && notOwner) ? '抱歉，本栏目仅限编辑者或所有者查看' : undefined,
+                dataSourcesAccessNotice: notOwner ? '抱歉，本栏目仅限所有者使用' : undefined,
+                uploadAccessNotice: notOwner ? '抱歉，本栏目仅限所有者使用' : undefined,
                 onDataSourceEvent: dataSourceEventLoggers
             })
             loadComplete.value = true

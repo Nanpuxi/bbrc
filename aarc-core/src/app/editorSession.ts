@@ -4,6 +4,7 @@ import { autoUpdateDataSources, DataSourceMergeReport } from "aarc-core/models/s
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { useIconStore } from "aarc-core/models/stores/iconStore";
+import { useResourceAccessStore } from "aarc-core/models/stores/utils/resourceAccessStore";
 import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
@@ -25,8 +26,12 @@ export interface DataSourceUpdateEvents {
 export interface LoadSaveOptions {
     /** 浏览模式（不渲染水印等）；由宿主据 preflight/所有权判定 */
     visitorMode: boolean
-    /** 隐藏图标栏目（浏览模式且非所有者） */
-    blockIconAccess?: boolean
+    /** "文本标签图标"栏目屏蔽文案；传入即屏蔽，文案会原样显示给用户 */
+    iconAccessNotice?: string
+    /** "数据源"栏目屏蔽文案 */
+    dataSourcesAccessNotice?: string
+    /** "线路样式"导入/导出侧栏"上传资源"页的屏蔽文案 */
+    uploadAccessNotice?: string
     /** 数据源自动更新过程的事件回调（宿主日志等） */
     onDataSourceEvent?: DataSourceUpdateEvents
 }
@@ -40,10 +45,15 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
     const saveStore = useSaveStore()
     const resetterStore = useResetterStore()
     const iconStore = useIconStore()
+    const resourceAccessStore = useResourceAccessStore()
     const undoStore = useUndoStore()
     const mainCvsDispatcher = useMainCvsDispatcher()
 
     mainCvsDispatcher.visitorMode = opts.visitorMode
+    // 每次装载都赋值，切回可编辑存档时才不会残留上一次的屏蔽
+    resourceAccessStore.iconAccessNotice = opts.iconAccessNotice
+    resourceAccessStore.dataSourcesAccessNotice = opts.dataSourcesAccessNotice
+    resourceAccessStore.uploadAccessNotice = opts.uploadAccessNotice
     saveStore.save = normalizeSave(raw)
     // resetDerivedStores 不是废弃逻辑：此处语义是“新数据填充后重建派生态”，必须保留
     resetterStore.resetDerivedStores()
@@ -51,9 +61,6 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
     if (saveStore.save) {
         await autoUpdateDataSources(saveStore.save, saveStore.getNewId, opts.onDataSourceEvent)
         await iconStore.ensureAllLoaded()
-        if (opts.blockIconAccess) {
-            iconStore.accessBlocked = true
-        }
         // undo 基线：首次 push 即 initUndo，clear 后必须紧跟 push 重建基线
         undoStore.clear()
         undoStore.push(saveStore.save)

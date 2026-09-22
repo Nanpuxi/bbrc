@@ -24,7 +24,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | 功能 | core 侧约定 | web 实现 |
 |---|---|---|
 | Pinia 实例 + persist 插件 | core 的 store 依赖全局 pinia，其中 5 个 store 使用 `persist` 选项，要求 pinia 注册了 `pinia-plugin-persistedstate`；vue/pinia 必须单实例（源码导出 + 宿主统一打包保证） | `src/main.ts:11` `createPinia().use(piniaPluginPersistedstate)` |
-| 编辑器宿主组件 | 挂载 `Cvs.vue` 与 `Menu.vue`；接线 `Menu` 的两个事件：`@save-data(mustBackup)`（保存存档）与 `@leave`（离开编辑器）；负责权限判定、心跳、压缩上传等宿主业务。存档数据进出 core 的时序走会话 API（`app/editorSession.ts`），宿主只传数据与选项、不直接操作 core store 的装配顺序：`loadSaveIntoEditor(raw, opts)`（normalize → 重建派生态 → 数据源自动更新 → 图标加载 → undo 基线；visitorMode 与图标栏隐藏经 opts 传入）、`prepareSavePayload()`（保存前：配置写回 + 站名坐标截断）、`disposeEditor()`（卸载清理） | `src/pages/editors/Editor.vue`（模板 440-441 行） |
+| 编辑器宿主组件 | 挂载 `Cvs.vue` 与 `Menu.vue`；接线 `Menu` 的两个事件：`@save-data(mustBackup)`（保存存档）与 `@leave`（离开编辑器）；负责权限判定、心跳、压缩上传等宿主业务。存档数据进出 core 的时序走会话 API（`app/editorSession.ts`），宿主只传数据与选项、不直接操作 core store 的装配顺序：`loadSaveIntoEditor(raw, opts)`（normalize → 重建派生态 → 数据源自动更新 → 图标加载 → undo 基线；visitorMode 与三个资源栏目的屏蔽文案（opts 的 `iconAccessNotice`/`dataSourcesAccessNotice`/`uploadAccessNotice`，传入即屏蔽、文案原样显示给用户，状态存 `models/stores/utils/resourceAccessStore.ts`）经 opts 传入）、`prepareSavePayload()`（保存前：配置写回 + 站名坐标截断）、`disposeEditor()`（卸载清理） | `src/pages/editors/Editor.vue`（模板 440-441 行） |
 | 当前存档 id | `setCurrentSaveIdRaw(id)`，宿主从路由参数同步，core 不读 route | `Editor.vue:52` `watch(() => props.saveId, ..., { immediate: true })` |
 
 ### 二、回调注入接口（`init*` 注册）

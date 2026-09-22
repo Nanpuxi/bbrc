@@ -10,6 +10,7 @@ import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, applyColorSourceMerges } from 'aarc-core/models/save/dataSourceOps';
 import { useExternalColorSetsStore, type ExternalColorSetEntry } from 'aarc-core/app/localConfig/externalColorSets';
 import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
+import { useResourceAccessStore } from 'aarc-core/models/stores/utils/resourceAccessStore';
 import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 const saveStore = useSaveStore()
@@ -17,6 +18,7 @@ const { save } = storeToRefs(saveStore)
 const { showPop } = useUniqueComponentsStore()
 const iconStore = useIconStore()
 const envStore = useEnvStore()
+const { dataSourcesAccessNotice } = storeToRefs(useResourceAccessStore())
 
 const typeLabel: Record<DataSource['type'], string> = {
     lineStyles: '线路样式',
@@ -227,7 +229,8 @@ async function loadAll() {
 
 <template>
 <ConfigSection :title="'数据源'">
-<div class="dataSources">
+<div v-if="dataSourcesAccessNotice">{{ dataSourcesAccessNotice }}</div>
+<div v-else class="dataSources">
     <div class="smallNote" style="text-align: center;">
         添加返回 JSON 数组的 URL，可一键导入线路样式、纹理、颜色集
     </div>

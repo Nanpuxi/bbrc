@@ -6,6 +6,7 @@ import IconPreview from './shared/IconPreview.vue';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { useIconStore, useIconUrlPreview } from 'aarc-core/models/stores/iconStore';
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
+import { useResourceAccessStore } from 'aarc-core/models/stores/utils/resourceAccessStore';
 import { TextTagIcon } from 'aarc-core/models/save';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
@@ -21,7 +22,8 @@ const rr = ()=>mainCvs.renderMainCvs({})
 const debouncedRr = debounce(rr, 600)
 const { ensureAllLoaded, ensurePrefixSelectedValid, enforcePrefixSelectedTo,
     toggleGroupExpanded, revealGroupOfIcon, getDataByIconId } = iconStore
-const { iconGroups, expandedGroups, accessBlocked } = storeToRefs(iconStore)
+const { iconGroups, expandedGroups } = storeToRefs(iconStore)
+const { iconAccessNotice } = storeToRefs(useResourceAccessStore())
 
 const creatingIcon = ref<TextTagIcon>({id:0})
 const addSidebar = useTemplateRef('addSidebar')
@@ -92,9 +94,7 @@ onMounted(async()=>{
 
 <template>
 <ConfigSection :title="'文本标签图标'">
-    <div v-if="accessBlocked">
-        抱歉，本栏目仅限编辑者或所有者查看
-    </div>
+    <div v-if="iconAccessNotice">{{ iconAccessNotice }}</div>
     <div v-else-if="ok" class="ttIconConfig">
         <div class="iconAddRow">
             <button v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" @click="userFileFavoriteStore.openFavoritesSidebar({ fileType: 'icon' })">从收藏取用资源</button>

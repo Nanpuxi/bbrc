@@ -133,7 +133,10 @@ core 新建 `src/app/editorSession.ts`，把 §1.2 的时序收进 core：
 ```ts
 export interface LoadSaveOptions {
     visitorMode: boolean        // 由宿主据 preflight/所有权判定
-    blockIconAccess?: boolean   // 浏览模式且非所有者（现 iconStore.accessBlocked）
+    // 以下三个屏蔽状态各自独立（2026-09 由单个 blockIconAccess 拆分），值即提示文案、存 resourceAccessStore
+    iconAccessNotice?: string         // "文本标签图标"栏目：传入即屏蔽并显示该文案
+    dataSourcesAccessNotice?: string  // "数据源"栏目
+    uploadAccessNotice?: string       // "线路样式"导入/导出侧栏的"上传资源"页
     onDataSourceEvent?: {...}   // autoUpdateDataSources 的 onLoad/onDone/onError 日志回调
 }
 /** 把存档数据装入编辑器：normalize → 写入 store → 重建派生态 → 数据源更新 → 图标加载 → undo 初始化 */

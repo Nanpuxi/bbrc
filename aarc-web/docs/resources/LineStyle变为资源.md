@@ -131,8 +131,11 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
     因此每条选中的样式各自成为一个 UserFile，同名覆盖的 preflight 与确认也逐条
     各自进行（web 侧 `uploadUserFileGuarded` 每次调用处理一条）。任一条取消/失败
     即中止后续上传。
-- core 的 `LineStylesConfigReuse.vue` 导出按钮组下方新增"上传为资源"按钮
-  （仅 `hasUserFileUploader()` 为真时显示）；成功后提示用户前往"文件"页收藏。
+- core 的 `LineStylesConfigReuse.vue` 导出按钮组下方新增"上传资源"页（"上传为资源"按钮）
+  （仅 `hasUserFileUploader()` 为真时显示该页签）；成功后提示用户前往"文件"页收藏。
+  页签内已按 `resourceAccessStore.uploadAccessNotice` 屏蔽：宿主判定用户无权上传时（web 为
+  "浏览模式且非所有者"）传入提示文案，页签保留、页内只显示该文案、不给按钮（页签数量不变，
+  避免 `SwitchingTabs` 在 onMounted 缓存的 children 错位）。
   上传前对深拷贝出的样式执行 `embedReferencedPatterns`，把各层引用的 pattern 嵌入
   `patternEmbedded`（因此上传的 JSON 可能比导出到剪切板/文件的多出该字段，
   保证样式在任意存档中纹理不丢失）。
