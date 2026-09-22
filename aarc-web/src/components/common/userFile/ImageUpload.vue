@@ -32,7 +32,7 @@ const originalWidth = ref(0);
 const originalHeight = ref(0);
 const width = ref(256);
 const height = ref(256);
-const quality = ref(0.5);
+const quality = ref(0.6);
 const convertSvgToBitmap = ref(false);
 const processing = ref(false);
 const thumbProcessing = ref(false);
@@ -481,12 +481,12 @@ defineExpose({ open, close });
                             v-model.number="quality"
                             type="range"
                             min="0.01"
-                            max="1"
+                            max="0.9"
                             step="0.01"
                         />
                         <span class="qualityValue">{{ Math.round(quality * 100) }}%</span>
                     </div>
-                    <div v-if="quality > 0.9" class="qualityWarn">
+                    <div v-if="quality > 0.8" class="qualityWarn">
                         质量过高可能导致图片加载缓慢
                     </div>
                 </template>
