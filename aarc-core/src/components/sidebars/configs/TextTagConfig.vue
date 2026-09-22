@@ -48,14 +48,18 @@ onMounted(()=>{
             <td>主文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagPlain.fontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagPlain.fontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagPlain.fontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagPlain.subFontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagPlain.subFontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagPlain.subFontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
@@ -67,14 +71,18 @@ onMounted(()=>{
             <td>主文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagForLine.fontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagForLine.fontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagForLine.fontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagForLine.subFontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagForLine.subFontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagForLine.subFontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
@@ -82,7 +90,7 @@ onMounted(()=>{
             <td>
                 <input type="range" v-model="config.textTagForLine.padding" :min="0.5" :max="5" :step="0.25" @input="c"/>
                 <div>
-                    <input type="number" v-model="config.textTagForLine.width" :min="0" :step="1" @input="c"/>
+                    <input type="number" v-model="config.textTagForLine.padding" :min="0" :step="0.25" @input="c"/>
                 </div>
             </td>
         </tr>
@@ -168,14 +176,18 @@ onMounted(()=>{
             <td>主文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagForTerrain.fontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagForTerrain.fontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagForTerrain.fontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
                 <input type="range" v-model="config.textTagForTerrain.subFontSize" :min="0.5" :max="5" :step="0.25" @input="c"/>
-                <div>{{ config.textTagForTerrain.subFontSize ?? 1 }}</div>
+                <div>
+                    <input type="number" v-model="config.textTagForTerrain.subFontSize" :min="0.5" :step="0.25" @input="c"/>
+                </div>
             </td>
         </tr>
         <tr>
