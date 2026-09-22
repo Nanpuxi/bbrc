@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import ConfigSection from './shared/ConfigSection.vue';
 import IconPreview from './shared/IconPreview.vue';
@@ -9,6 +9,7 @@ import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDi
 import { TextTagIcon } from 'aarc-core/models/save';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
+import { debounce } from 'aarc-core/utils/lang/debounce';
 import { storeToRefs } from 'pinia';
 import foldIcon from 'aarc-core/assets/ui/fold.svg';
 
@@ -17,6 +18,7 @@ const iconStore = useIconStore()
 const userFileFavoriteStore = useUserFileFavoriteStore()
 const mainCvs = useMainCvsDispatcher()
 const rr = ()=>mainCvs.renderMainCvs({})
+const debouncedRr = debounce(rr, 600)
 const { ensureAllLoaded, ensurePrefixSelectedValid, enforcePrefixSelectedTo,
     toggleGroupExpanded, revealGroupOfIcon, getDataByIconId } = iconStore
 const { iconGroups, expandedGroups, accessBlocked } = storeToRefs(iconStore)
@@ -75,6 +77,10 @@ async function rerenderIfNeeded(iconIds:number[]) {
         }
     }
 }
+
+// 图标数据的任何变化（本组件的增删改、收藏取用、数据源加载等）都要算作“未保存”的编辑。
+// 图标不一定被画布上已有的标签引用，因此不能只靠各处按需重绘，统一由这个 watch 触发重绘
+watch(()=>saveStore.save?.textTagIcons, ()=>debouncedRr(), {deep:true})
 
 const ok = ref(false)
 onMounted(async()=>{
@@ -276,5 +282,6 @@ onMounted(async()=>{
 }
 .centerPreview{
     align-self: center;
+    margin: 10px 0px;
 }
 </style>
