@@ -27,6 +27,7 @@ namespace AARC.WebApi.Repos.Files
     {
         private const int fileSizeLimitMB = 3;
         private const int fileSizeLimitKBOfSvg = 1024;
+        private const int totalSizeLimitMB = 200;
         private readonly static string[] extAllowed 
             = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".json"];
         public void Add(
@@ -41,6 +42,7 @@ namespace AARC.WebApi.Repos.Files
             CheckModel(displayName, intro);
             var uid = httpUserIdProvider.RequireUserId();
             CheckFile(f);
+            CheckTotalSizeLimit(uid);
             userFileService.Write(
                 f.OpenReadStream(), f.FileName,
                 thumb?.OpenReadStream(),
@@ -93,6 +95,7 @@ namespace AARC.WebApi.Repos.Files
             if (intro is not null && intro.Length >= UserFile.introMaxLength)
                 throw new RqEx("简介过长");
             CheckFile(f);
+            CheckTotalSizeLimit(uid, excludingId: model.Id);
             var oldStoreName = model.StoreName;
             userFileService.Write(
                 f.OpenReadStream(), f.FileName,
@@ -140,6 +143,20 @@ namespace AARC.WebApi.Repos.Files
             dto.UrlThumb = userFileService.GetUrl(dto.StoreName, thumb: true);
             dto.UrlOriginal = userFileService.GetUrl(dto.StoreName, thumb: false);
             return dto;
+        }
+
+        /// <summary>
+        /// 校验该用户已占用的文件总尺寸是否超过上限（<see cref="totalSizeLimitMB"/>MB）。
+        /// 覆盖上传时被覆盖的旧文件不计入。
+        /// </summary>
+        private void CheckTotalSizeLimit(int uid, int excludingId = 0)
+        {
+            var q = Existing.Where(x => x.OwnerUserId == uid);
+            if (excludingId > 0)
+                q = q.Where(x => x.Id != excludingId);
+            var total = q.Sum(x => (long?)x.Size) ?? 0L;
+            if (total > totalSizeLimitMB * 1024L * 1024L)
+                throw new RqEx($"你已达到文件总尺寸上限（{totalSizeLimitMB}MB）");
         }
 
         private static void CheckFile(IFormFile f)
