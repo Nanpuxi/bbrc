@@ -3,6 +3,8 @@ import { storeToRefs } from 'pinia';
 import ConfigSection from './shared/ConfigSection.vue';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
+import { TextTagPerTypeGlobalConfig } from 'aarc-core/models/config';
+import { clamp } from 'aarc-core/utils/lang/clamp';
 import { debounce } from 'aarc-core/utils/lang/debounce';
 import { computed, watch } from 'vue';
 
@@ -43,6 +45,18 @@ watch(() => [
     config.value.textTagForTerrain.fontSize,
     config.value.textTagForTerrain.subFontSize,
 ], debounce(() => envStore.rerender([], []), 500))
+
+/**
+ * 数字输入框能被清空（此时 valueAsNumber 为 NaN），也能填出滑块表示不了的越界值。
+ * 空值回落到生效默认值，其余夹到滑块区间——字号 0 会画出隐形文字。
+ * 区间取自 input 自身的 min/max，避免和模板里的属性写两份。
+ */
+function repairNum(evt:Event, group:TextTagPerTypeGlobalConfig,
+        key:'fontSize'|'subFontSize'|'padding'|'width', fallback:number){
+    const el = evt.target as HTMLInputElement
+    const val = el.valueAsNumber
+    group[key] = Number.isFinite(val) ? clamp(val, Number(el.min), Number(el.max)) : fallback
+}
 </script>
 
 <template>
@@ -56,18 +70,22 @@ watch(() => [
         <tr>
             <td>主文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagPlain.fontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagPlain.fontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagPlain.fontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagPlain.fontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagPlain, 'fontSize', 1)"/>
                 </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagPlain.subFontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagPlain.subFontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagPlain.subFontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagPlain.subFontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagPlain, 'subFontSize', 1)"/>
                 </div>
             </td>
         </tr>
@@ -79,27 +97,33 @@ watch(() => [
         <tr>
             <td>主文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagForLine.fontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagForLine.fontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagForLine.fontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagForLine.fontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagForLine, 'fontSize', 1)"/>
                 </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagForLine.subFontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagForLine.subFontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagForLine.subFontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagForLine.subFontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagForLine, 'subFontSize', 1)"/>
                 </div>
             </td>
         </tr>
         <tr>
             <td rowspan="2">边距</td>
             <td>
-                <input type="range" v-model="config.textTagForLine.padding" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagForLine.padding" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagForLine.padding" :min="0" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagForLine.padding"
+                        :min="0" :max="20" :step="0.25"
+                        @change="repairNum($event, config.textTagForLine, 'padding', 1)"/>
                 </div>
             </td>
         </tr>
@@ -149,9 +173,11 @@ watch(() => [
         <tr>
             <td>宽度</td>
             <td>
-                <input type="range" v-model="config.textTagForLine.width" :min="0" :max="300" :step="5"/>
+                <input type="range" v-model.number="config.textTagForLine.width" :min="0" :max="300" :step="5"/>
                 <div>
-                    <input type="number" v-model="config.textTagForLine.width" :min="0" :step="1"/>
+                    <input type="number" v-model.number.lazy="config.textTagForLine.width"
+                        :min="0" :max="2000" :step="1"
+                        @change="repairNum($event, config.textTagForLine, 'width', 0)"/>
                 </div>
                 <div class="explain">如果短于指定宽度<br/>将会向锚点对侧拉长</div>
                 <div class="explain">设为0将其关闭</div>
@@ -184,18 +210,22 @@ watch(() => [
         <tr>
             <td>主文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagForTerrain.fontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagForTerrain.fontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagForTerrain.fontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagForTerrain.fontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagForTerrain, 'fontSize', 1)"/>
                 </div>
             </td>
         </tr>
         <tr>
             <td>副文字<br/>大小</td>
             <td>
-                <input type="range" v-model="config.textTagForTerrain.subFontSize" :min="0.5" :max="5" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagForTerrain.subFontSize" :min="0.5" :max="5" :step="0.25"/>
                 <div>
-                    <input type="number" v-model="config.textTagForTerrain.subFontSize" :min="0.5" :step="0.25"/>
+                    <input type="number" v-model.number.lazy="config.textTagForTerrain.subFontSize"
+                        :min="0.1" :max="20" :step="0.1"
+                        @change="repairNum($event, config.textTagForTerrain, 'subFontSize', 1)"/>
                 </div>
             </td>
         </tr>
