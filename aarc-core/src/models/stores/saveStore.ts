@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta, Line, LineType, Save, SelectionGroup, saveLineCount, saveStaCount } from "../save";
+import { ControlPoint, ControlPointDir, ControlPointLink, ControlPointSta, Line, LineType, Save, SelectionGroup, TextTag, saveLineCount, saveStaCount } from "../save";
 import { ensureValidCvsSize } from "../save/valid/cvsSize";
 import { Coord } from "../coord";
 import { isSameCoord } from "aarc-core/utils/sgn";
@@ -249,6 +249,15 @@ export const useSaveStore = defineStore('save', () => {
         }
         return res
     })
+    const textTagDict = computed<Record<number, TextTag|undefined>>(()=>{
+        const res:Record<number, TextTag|undefined> = {}
+        if(!save.value?.textTags)
+            return res
+        for(const tag of save.value.textTags){
+            res[tag.id] = tag
+        }
+        return res
+    })
     const linesSortedByZIndex = computed(()=>{
         if(!save.value)
             return [];
@@ -402,7 +411,7 @@ export const useSaveStore = defineStore('save', () => {
         })
     }
     function getTextTagById(textTagId:number){
-        return save.value?.textTags.find(x=>x.id === textTagId)
+        return textTagDict.value[textTagId]
     }
     function getPointLinksByPt(ptId:number){
         return ptRelatedLinks.value[ptId] || []
