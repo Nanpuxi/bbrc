@@ -169,9 +169,6 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
-<<<<<<< HEAD
-            // 协作开关开但无活跃房间：持有心跳者在独占编辑，按协作出现前的行为回退——仅浏览。
-            // （collabEnabled 存在存档数据里，必须先解析才能判定；Occupied 时 loadData 已用 forEdit=false）
             const collabJoinable = obj?.meta?.collabEnabled === true && preRes.collabRoomActive === true
             if(preRes.status == SavePreflightStatus.Occupied && !collabJoinable){
                 if(!viewOnly.value){
@@ -181,9 +178,7 @@ async function load() {
                 savingDisabledWarningStore.setWarning(`当前有其他用户在编辑，无法保存更改\n占用者：${preRes.editingByUserName ?? '??'}`)
                 savingDisabledWarningStore.editingUserId = preRes.editingByUserId ?? 0
             }
-=======
             //浏览模式且不是所有者：文案即屏蔽理由，三处可各给各的，这里暂时共用
->>>>>>> master
             await loadSaveIntoEditor(obj, {
                 visitorMode: viewOnly.value || notOwner,
                 iconAccessNotice: (viewOnly.value && notOwner) ? '抱歉，本栏目仅限编辑者或所有者查看' : undefined,
