@@ -47,7 +47,7 @@ const {
     exportFailedMsg, 
     downloadAnchorElementId,
     canEncodeWebP,
-    cvsToDataUrl,
+    cvsToBlob,
     triggerDownload,
     getExportFileName,
     startExport,
@@ -76,20 +76,19 @@ const {
     getAnimationTimePoints
 } = useAnimatedExport()
 
-async function renderMainCvsToSvgBlobUrl(): Promise<string | null> {
-    const blob = await mainCvsDispatcher.renderMainCvsToSvgBlob({
+async function renderMainCvsToSvgBlob(): Promise<Blob | null> {
+    return await mainCvsDispatcher.renderMainCvsToSvgBlob({
         withAds: ads.value,
         withBgRefImage: bgRefImage.value,
         withGridLayer: grid.value.layer,
         withGridLevel: grid.value.level
     })
-    return URL.createObjectURL(blob)
 }
 
 /**
- * 渲染主画布并返回 Data URL
+ * 渲染主画布并返回图片 Blob
  */
-async function renderMainCvsToDataUrl(): Promise<string | null> {
+async function renderMainCvsToBlob(): Promise<Blob | null> {
     const { scale, cvsWidth, cvsHeight } = getExportRenderSize()
     const cvs = new OffscreenCanvas(cvsWidth, cvsHeight)
     const ctx2d = cvs.getContext('2d')!
@@ -104,7 +103,7 @@ async function renderMainCvsToDataUrl(): Promise<string | null> {
         withGridLevel: grid.value.level
     }
     mainCvsDispatcher.renderMainCvs(mainRenderingOptions)
-    return await cvsToDataUrl(cvs, fileFormat.value, fileQuality.value)
+    return await cvsToBlob(cvs, fileFormat.value, fileQuality.value)
 }
 
 async function downloadMainCvsAsImage() {
@@ -120,12 +119,12 @@ async function downloadMainCvsAsImage() {
     if(fileName){
         renderOptionsStore.exporting = true; // 启用导出模式
 
-        let imageDataUrl
+        let imageBlob
         try{
             if(fileFormat.value === 'svg'){
-                imageDataUrl = await renderMainCvsToSvgBlobUrl()
+                imageBlob = await renderMainCvsToSvgBlob()
             }else{
-                imageDataUrl = await renderMainCvsToDataUrl()
+                imageBlob = await renderMainCvsToBlob()
             }
         }
         catch(e){
@@ -135,25 +134,23 @@ async function downloadMainCvsAsImage() {
             renderOptionsStore.exporting = false;
             return
         }
-        if(!imageDataUrl){
+        if(!imageBlob){
             renderOptionsStore.exporting = false;
             return
         }
-        triggerDownload(imageDataUrl, fileName)
+        triggerDownload(imageBlob, fileName)
 
         renderOptionsStore.exporting = false; // 复位导出模式
     }
     finishExport()
 }
-let activeUrl:string|undefined = undefined;
+let activeBlob:Blob|undefined = undefined;
 async function downloadMiniatureCvsAsImage() {
     if(exporting.value)
         return
     startExport()
     const fileName = await getExportImageFileName(true, miniImage.value.fileFormat)
     if(fileName){
-        if(activeUrl)
-            URL.revokeObjectURL(activeUrl)
         let appliedTime = false
         renderOptionsStore.exporting = true
         try{
@@ -165,7 +162,7 @@ async function downloadMiniatureCvsAsImage() {
                 }
             }
             if(miniImage.value.fileFormat === 'svg'){
-                activeUrl = await miniatureCvsDispatcher.renderMiniatureCvsToSvgBlobUrl({
+                activeBlob = await miniatureCvsDispatcher.renderMiniatureCvsToSvgBlob({
                     sideLength: miniImage.value.sideLength,
                     lineWidth: miniImage.value.lineWidth,
                     filterNotOpened: miniImage.value.hideNotOpened
@@ -176,7 +173,7 @@ async function downloadMiniatureCvsAsImage() {
                     lineWidth: miniImage.value.lineWidth,
                     filterNotOpened: miniImage.value.hideNotOpened
                 })
-                activeUrl = await cvsToDataUrl(cvs, miniImage.value.fileFormat, fileQuality.value)
+                activeBlob = await cvsToBlob(cvs, miniImage.value.fileFormat, fileQuality.value)
             }
         }catch(e){
             console.error(e)
@@ -189,11 +186,11 @@ async function downloadMiniatureCvsAsImage() {
                 renderOptionsStore.setTimeMomentOverride(undefined)
             }
         }
-        if(!activeUrl){
+        if(!activeBlob){
             finishExport()
             return
         }
-        triggerDownload(activeUrl, fileName)
+        triggerDownload(activeBlob, fileName)
     }
     finishExport()
 }
@@ -225,16 +222,16 @@ async function downloadMainCvsAtAllTimePoints(){
             // 设置当前时间点
             renderOptionsStore.setTimeMomentOverride(time)
             
-            // 渲染画布并获取 Data URL
-            const imageDataUrl = await renderMainCvsToDataUrl()
-            if(!imageDataUrl){
+            // 渲染画布并得到图片 Blob
+            const imageBlob = await renderMainCvsToBlob()
+            if(!imageBlob){
                 continue
             }
             
             // 生成文件名（添加年月日后缀）并下载
             const dateSuffix = toYMD(time, { hyphen: false, pad: true }) || `${i + 1}`
             const fileName = baseFileName.replace(/(\.\w+)$/, `-${dateSuffix}$1`)
-            triggerDownload(imageDataUrl, fileName)
+            triggerDownload(imageBlob, fileName)
             
             // 小延迟，避免浏览器阻塞
             await new Promise(resolve => setTimeout(resolve, 200))

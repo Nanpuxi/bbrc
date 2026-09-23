@@ -117,14 +117,14 @@ async function downloadStaNameListTxt() {
     const txt = buildStaNameListTxt()
     const fileName = await getExportFileName('txt', 'stations')
     if (fileName) {
-        triggerDownload(URL.createObjectURL(new Blob([txt], { type: 'text/plain' })), fileName)
+        triggerDownload(new Blob([txt], { type: 'text/plain' }), fileName)
     }
 }
 async function downloadLineListTxt() {
     const txt = buildLineListTxt()
     const fileName = await getExportFileName('txt', 'lines')
     if (fileName) {
-        triggerDownload(URL.createObjectURL(new Blob([txt], { type: 'text/plain' })), fileName)
+        triggerDownload(new Blob([txt], { type: 'text/plain' }), fileName)
     }
 }
 async function copyText(txt: string) {
