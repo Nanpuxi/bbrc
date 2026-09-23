@@ -23,19 +23,15 @@
 
 import { useSaveStore } from "../../stores/saveStore";
 import { ControlPoint, Line, LineType } from "../../save";
-import { applyBias, applyBiasFree } from "aarc-core/utils/coordUtils/coordBias";
-import { Coord, FormalPt, FormalRay, twinPts2Ray, twinPts2SgnCoord } from "../../coord";
-import { coordDotProduct, coordCrossProduct, makeCoordLength1 } from "aarc-core/utils/coordUtils/coordMath";
-import { isZero } from "aarc-core/utils/sgn";
-import { coordDist } from "aarc-core/utils/coordUtils/coordDist";
+import { FormalPt } from "../../coord";
 import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { FormalizedLine, SpanRenderInfo, useFormalizedLineStore } from "aarc-core/models/stores/saveDerived/formalizedLineStore";
-import { rayRel, WayRel } from "aarc-core/utils/rayUtils/rayParallel";
+import { WayRel } from "aarc-core/utils/rayUtils/rayParallel";
 import { defineStore } from "pinia";
 import { ptInLineIndices } from "aarc-core/utils/lineUtils/ptInLineIndices";
-import { getByIndexInRing, isRing, isRingByFormalPts } from "aarc-core/utils/lineUtils/isRing";
-import { drawArcByThreePoints } from "aarc-core/utils/drawUtils/drawArc";
+import { getByIndexInRing, isRing } from "aarc-core/utils/lineUtils/isRing";
+import { adaptLegacyGetTurnRadiusOf, buildLinePathGeometry } from "aarc-core/utils/lineUtils/buildLinePathGeometry";
 import { CvsContext } from "../common/cvsContext";
 import { useCvsBlocksControlStore } from "../common/cvs";
 import { LineStrokeTarget, strokeStyledLine } from "../common/strokeStyledLine";
@@ -54,16 +50,13 @@ export type GetTurnRadiusOf = (lineInfo: Line, rel: WayRel | number) => number
 /**
  * 将一组 formalized 线路点连接成 canvas 路径。
  *
- * 核心思路：
+ * 几何构造委托给 buildLinePathGeometry（与采样功能同源）：
  * - 相邻两段直线的转角处，用圆角（arc）代替尖角；
  * - 直线部分只画到“切点”（sok），圆角部分用切点-顶点-切点三点画弧；
- * - 环线与非环线的“处理单个转角”逻辑完全相同，区别仅在于：
- *   1. 起始/结束位置不同；
- *   2. 环线首点的前一段是“倒数第二点 → 首点”。
- *   因此把公共转角处理提取到同一个循环中。
+ * - 环线从头部切点开始，末尾画回该切点平滑闭合。
  *
- * 注意：当前统一使用 drawArcByThreePoints 的默认 'formal' 模式，
- *      自由点（free）的任意角度圆角集成需在此显式传入 mode: 'free'。
+ * 本函数只负责“走一遍图元序列”：moveTo 到首图元起点后逐个 appendTo，
+ * 不识别图元种类；新转角/新几何在 buildLinePathGeometry 的注册表处扩展。
  */
 export function linkPts(
     ctx:CvsContext,
@@ -76,149 +69,13 @@ export function linkPts(
     if(formalPts.length<=1){
         return;
     }
-    // 判断是否为环线：首末 formal 点坐标重合
-    const isRingLine = isRingByFormalPts(formalPts)
-    // 提取所有 formal 点的实际坐标，后续几何计算只依赖位置
-    const pts = formalPts.map(x=>x.pos)
-
-    // 视图足够远时直接连线，不再绘制圆角
-    if(simplify){
-        ctx.moveTo(...pts[0])
-        for(let i=1;i<pts.length;i++){
-            ctx.lineTo(...pts[i])
-        }
-        if(isRingLine){
-            ctx.lineTo(...pts[0])
-        }
+    const prims = buildLinePathGeometry(formalPts, lineInfo,
+        adaptLegacyGetTurnRadiusOf(getTurnRadiusOf), { simplify })
+    if(prims.length === 0)
         return
-    }
-
-    // 确定需要处理“转角”的索引范围，以及获取每个转角前一点索引的规则
-    let cornerStartIdx:number
-    let cornerEndIdx:number          // 包含该索引
-    let getPrevIdx:(i:number)=>number
-    if(!isRingLine){
-        // 非环线：转角在 pts[1] .. pts[n-2]，前一点就是 i-1
-        cornerStartIdx = 1
-        cornerEndIdx = pts.length - 2
-        getPrevIdx = i => i - 1
-        // 路径从第一个点开始
-        ctx.moveTo(...pts[0])
-    }else{
-        // 环线：转角在 pts[0] .. pts[n-2]（pts[n-1] 与 pts[0] 重合）
-        // 首点的前一段是“倒数第二点 → 首点”
-        cornerStartIdx = 0
-        cornerEndIdx = pts.length - 2
-        getPrevIdx = i => i === 0 ? pts.length - 2 : i - 1
-    }
-
-    // 初始化“进入”第一个转角的前一段状态
-    const initialPrevIdx = getPrevIdx(cornerStartIdx)
-    let prevPt:Coord = pts[initialPrevIdx]
-    let prevToNowRay:FormalRay = twinPts2Ray(prevPt, pts[cornerStartIdx])
-    let prevDist:number = coordDist(prevPt, pts[cornerStartIdx])
-    // 环线专用：保存头部切点，最后 lineTo 回到该点以闭合路径
-    let ringHeadStartSok:Coord | undefined
-
-    for(let i=cornerStartIdx;i<=cornerEndIdx;i++){
-        const nowPt = pts[i]
-        const nextPt = pts[i+1]
-        const nowFormal = formalPts[i]
-        const nextFormal = formalPts[i+1]
-        const prevFormal = formalPts[getPrevIdx(i)]
-
-        // 下一段直线的长度
-        const nextDist = coordDist(nowPt, nextPt)
-        // 从当前点指向下一个点的 8 方向射线
-        const nowToNextRay = twinPts2Ray(nowPt, nextPt)
-
-        // 判断当前转角是否涉及自由点/直接段
-        const isFreeCorner = prevFormal.free || nowFormal.free || nextFormal.free
-
-        let prevSok: Coord
-        let nextSok: Coord
-        let arcMode: 'formal' | 'free' = 'formal'
-
-        if(isFreeCorner){
-            // ---------- 自由角度分支：使用浮点向量计算真实夹角与切点 ----------
-            arcMode = 'free'
-            const v1: Coord = [nowPt[0] - prevPt[0], nowPt[1] - prevPt[1]]
-            const v2: Coord = [nextPt[0] - nowPt[0], nextPt[1] - nowPt[1]]
-            const len1 = Math.hypot(v1[0], v1[1])
-            const len2 = Math.hypot(v2[0], v2[1])
-
-            // 若任一段退化成长度为 0，则不画弧
-            if(isZero(len1) || isZero(len2)){
-                prevSok = nowPt
-                nextSok = nowPt
-            } else {
-                const u1 = makeCoordLength1(v1)
-                const u2 = makeCoordLength1(v2)
-                const dot = coordDotProduct(u1, u2)
-                const cross = coordCrossProduct(u1, u2)
-
-                // 两段线近乎平行（同向或反向），不画弧，由 drawArcByThreePoints 退化处理
-                if(isZero(cross)){
-                    prevSok = nowPt
-                    nextSok = nowPt
-                } else {
-                    // 内角 theta = atan2(|cross|, -dot)，范围 [0, pi]
-                    // theta=pi 时直线；theta=0 时反向（U 弯），cross 已为 0 被过滤
-                    const theta = Math.atan2(Math.abs(cross), -dot)
-                    const turnRadius = getTurnRadiusOf(lineInfo, theta)
-                    const d = Math.min(
-                        turnRadius / Math.tan(theta / 2),
-                        len1 / 2,
-                        len2 / 2
-                    )
-                    // 沿入射方向反向回退 d，沿出射方向前进 d
-                    prevSok = applyBiasFree(nowPt, [-u1[0], -u1[1]], d)
-                    nextSok = applyBiasFree(nowPt, u2, d)
-                }
-            }
-        } else {
-            // ---------- 8 方向 formal 分支 ----------
-            // 两段射线的方向关系：parallel / 90 / 45 / 135
-            const rel = rayRel(prevToNowRay, nowToNextRay)
-            // 根据线路配置和转角关系获取理论圆角半径
-            const turnRadius = getTurnRadiusOf(lineInfo, rel)
-            // 实际圆角半径不能超过前后线段长度的一半，防止弧越界
-            const taRadius = Math.min(turnRadius, prevDist/2, nextDist/2)
-
-            // prevBias: 从当前点指向前一个点的 8 方向单位向量（SgnCoord）
-            const prevBias = twinPts2SgnCoord(nowPt, prevPt)
-            // prevSok: 沿 prevBias 方向从当前点回退 taRadius 得到的切点
-            prevSok = applyBias(nowPt, prevBias, taRadius)
-            // nextBias: 从当前点指向下一个点的 8 方向单位向量
-            const nextBias = twinPts2SgnCoord(nowPt, nextPt)
-            // nextSok: 沿 nextBias 方向从当前点前进 taRadius 得到的切点
-            nextSok = applyBias(nowPt, nextBias, taRadius)
-        }
-
-        if(isRingLine && i === cornerStartIdx){
-            // 环线首点：从头部切点开始路径，并保存该切点用于最后闭合
-            ctx.moveTo(...prevSok)
-            ringHeadStartSok = prevSok
-        }else{
-            // 先画到前一段的切点
-            ctx.lineTo(...prevSok)
-        }
-        // 用 prevSok（弧起点）、nowPt（弧经过点）、nextSok（弧终点）画圆角
-        drawArcByThreePoints(ctx, prevSok, nowPt, nextSok, arcMode)
-
-        // 为下一次迭代更新状态
-        prevDist = nextDist;
-        prevToNowRay = nowToNextRay;
-        prevPt = nowPt;
-    }
-
-    // 路径收尾
-    if(!isRingLine){
-        // 非环线：从最后一个转角切点画直线到最后一个点
-        ctx.lineTo(...pts[pts.length-1])
-    }else if(ringHeadStartSok){
-        // 环线：从最后一个转角切点画直线回到头部切点，平滑闭合
-        ctx.lineTo(...ringHeadStartSok)
+    ctx.moveTo(...prims[0].start())
+    for(const p of prims){
+        p.appendTo(ctx)
     }
 }
 

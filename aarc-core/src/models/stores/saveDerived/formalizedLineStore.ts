@@ -6,6 +6,11 @@ import { useLineSpanStore } from "./slice/lineSpanStore";
 import { useLineStateStore } from "./state/lineStateStore";
 import { useRenderOptionsStore } from "../renderOptionsStore";
 import { extractSpanFormalPts } from "aarc-core/utils/lineUtils/extractSpanFormalPts";
+import { useSaveStore } from "../saveStore";
+import { useConfigStore } from "../configStore";
+import { formalize } from "aarc-core/utils/lineUtils/formalize";
+import { adaptLegacyGetTurnRadiusOf, buildLinePathGeometry } from "aarc-core/utils/lineUtils/buildLinePathGeometry";
+import { sampleLinePath } from "aarc-core/utils/lineUtils/sampleLinePath";
 
 export interface FormalizedLine{
     lineId:number,
@@ -116,6 +121,31 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
         return infos
     }
 
+    /**
+     * 面向业务的线路“采样”入口：以固定间隔沿线路实际绘制轨迹生成一系列点，
+     * 采样点与屏幕所见的线贴合（含圆角，复刻 linkPts 的几何）。
+     *
+     * 默认始终按非简化几何采样（与缩放级别无关）；如需与屏幕所见严格一致，
+     * 可自行传入 simplify（对应 lineShouldSimplify() 的结果）。
+     * 几何构造与采样行走均为纯函数，本入口只负责取 formal 点与注入半径来源。
+     */
+    function sampleLineCoords(line: Line, interval: number, options?: {
+        includeEnds?: boolean
+        simplify?: boolean
+    }): Coord[] {
+        // 视野外的线路渲染时会清掉 formalPts 缓存，此处判空并按需重新 formalize
+        let formalPts = getItem(line.id)
+        if (!formalPts) {
+            const saveStore = useSaveStore()
+            formalPts = formalize(saveStore.getPtsByIds(line.pts))
+        }
+        const cs = useConfigStore()
+        const prims = buildLinePathGeometry(formalPts, line,
+            adaptLegacyGetTurnRadiusOf(cs.getTurnRadiusOf),
+            { simplify: options?.simplify })
+        return sampleLinePath(prims, interval, options?.includeEnds ?? true)
+    }
+
     return { 
         setLinesFormalPts,
         getLinesFormalPts: getItem,
@@ -123,6 +153,7 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
         findAdjacentFormalPts,
         clearItems,
         setLocalFormalSegs,
-        collectSpanRenderInfos
+        collectSpanRenderInfos,
+        sampleLineCoords
     }
 })
