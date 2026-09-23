@@ -56,6 +56,7 @@ async function copyQQGroup() {
 
         <footer class="footer">
             <p>游戏设计：武定门-3 及其团队</p>
+            <p>几套卡牌图片设计：武定门-3 及QQ群群友</p>
             <p>网站版实现：Au</p>
             <p>约对局、添加牌组设计：请加 QQ 群
                 <a href="javascript:void(0)" @click="copyQQGroup">{{ qqGroup }}</a>
