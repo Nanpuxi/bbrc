@@ -4,7 +4,8 @@ import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import Notice from 'aarc-core/components/common/Notice.vue';
 import { storeToRefs } from 'pinia';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 
 const api = useApiStore()
@@ -12,6 +13,9 @@ const { showPop } = useUniqueComponentsStore()
 const userInfoStore = useUserInfoStore()
 const { isLogined } = storeToRefs(userInfoStore)
 const { loginRouteJump } = useIdentitiesRoutesJump()
+const route = useRoute()
+
+const enteredFromEmailBindSuccess = computed<boolean>(() => route.query.fromEmailBind === '1')
 
 const question = ref<string>("");
 const answer = ref<string>("");
@@ -54,6 +58,10 @@ onMounted(async() => {
 <template>
     <div class="container">
         <h1>密码重置问答</h1>
+        <p v-if="enteredFromEmailBindSuccess">
+            你已成功绑定邮箱<br/>
+            本页面非必填，可随时由「个人信息设置-设置重置问答」再次进入，但强烈建议立即设置
+        </p>
         <div class="form">
             <div class="row">
                 <input v-model="question" placeholder="问题（32字以内）" maxlength="32" />
@@ -67,7 +75,7 @@ onMounted(async() => {
             设置问题和答案后，忘记密码时可通过“邮箱+答案”自助重置密码。答案不会展示给任何人（包括你自己），修改时需要从头重新输入。
         </Notice>
         <Notice :type="'warn'" :title="'注意'">
-            请设置他人难以猜到的问题和答案<br/>
+            请设置无歧义且他人难以猜到的问题和答案<br/>
             正确例子：
             <div class="example">
                 问题：我最喜欢的演员姓+我最喜欢的城市，无分隔<br/>

@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.DbModels.Enums;
+using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Repos.Files;
 using AARC.WebApi.Repos.Saves;
 using AARC.WebApi.Services.App.ActionFilters;
@@ -117,11 +117,12 @@ namespace AARC.WebApi.Controllers.Files
             UserFavoriteType type,
             string? search = null,
             int skip = 0,
-            int take = 30)
+            int take = 30,
+            UserFileType? fileType = null)
         {
             if (take > 30)
                 take = 30;
-            var ids = userFavoriteRepo.GetUserFileFavoriteIds(type, search, skip, take);
+            var ids = userFavoriteRepo.GetUserFileFavoriteIds(type, search, skip, take, fileType);
             return userFileRepo.GetUserFileDtosByIds(ids);
         }
     }

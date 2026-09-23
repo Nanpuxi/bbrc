@@ -2,19 +2,23 @@
 import { DataSource } from 'aarc-core/models/save';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import { storeToRefs } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import ConfigSection from './shared/ConfigSection.vue';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useIconStore } from 'aarc-core/models/stores/iconStore';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
 import { fetchDataSource, mergeDataSourceItems, mergeColorSourceItems, applyColorSourceMerges } from 'aarc-core/models/save/dataSourceOps';
 import { useExternalColorSetsStore, type ExternalColorSetEntry } from 'aarc-core/app/localConfig/externalColorSets';
+import { useUserFileFavoriteStore } from 'aarc-core/models/stores/utils/userFileFavoriteStore';
+import { useResourceAccessStore } from 'aarc-core/models/stores/utils/resourceAccessStore';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 
 const saveStore = useSaveStore()
 const { save } = storeToRefs(saveStore)
 const { showPop } = useUniqueComponentsStore()
 const iconStore = useIconStore()
 const envStore = useEnvStore()
+const { dataSourcesAccessNotice } = storeToRefs(useResourceAccessStore())
 
 const typeLabel: Record<DataSource['type'], string> = {
     lineStyles: '线路样式',
@@ -24,34 +28,81 @@ const typeLabel: Record<DataSource['type'], string> = {
 }
 
 const externalColorSetsStore = useExternalColorSetsStore()
+const userFileFavoriteStore = useUserFileFavoriteStore()
 const creating = ref<DataSource>({ id: 0, url: '', type: 'lineStyles' })
 const createAllowed = ref(false)
+const linkModalShow = ref(false)
+const attrModalShow = ref(false)
+
+function openLinkModal() {
+    creating.value = { id: 0, url: '', type: 'lineStyles', autoUpdate: true, overwriteSameName: false }
+    createAllowed.value = false
+    linkModalShow.value = true
+}
+
+// 从收藏的线路样式资源选取：使用宿主拼好的按 uniqueName 的固定链接（覆盖上传后仍指向最新内容）
+function pickFromFavorites() {
+    userFileFavoriteStore.openFavoritesSidebar({
+        fileType: 'lineStyle',
+        closeOnSelect: true,
+        onSelected: (f, contentUrl) => {
+            if (!contentUrl) {
+                showPop('该资源缺少固定链接，无法作为数据源', 'failed')
+                return
+            }
+            creating.value = {
+                id: 0,
+                name: f.displayName ?? '',
+                url: contentUrl,
+                type: 'lineStyles',
+                autoUpdate: true,
+                overwriteSameName: false
+            }
+            attrModalShow.value = true
+        }
+    })
+}
 
 function validateCreating() {
     const c = creating.value
     createAllowed.value = !!c.url.trim() && !!c.name?.trim()
 }
 
-function addDataSource() {
-    if (!createAllowed.value || !save.value) return
+// 链接是否已存在同链接数据源（不阻塞添加，只提示会覆盖）
+const sameUrlExisting = computed(() => {
     const url = creating.value.url.trim()
+    if (!url) return undefined
+    return save.value?.dataSources?.find(x => x.url === url)
+})
+
+function addDataSource() {
+    if (!save.value) return
+    const url = creating.value.url.trim()
+    if (!url) return
     const type = creating.value.type
     save.value.dataSources ??= []
-    // 不允许 URL 重复
-    const existing = save.value.dataSources.find(x => x.url === url)
+    const existing = sameUrlExisting.value
+    let ds: DataSource
     if (existing) {
-        showPop('已存在相同链接的数据源', 'warning')
-        return
+        // 同链接：沿用原 id 和位置，只覆盖属性
+        existing.name = creating.value.name?.trim()
+        existing.type = type
+        existing.autoUpdate = creating.value.autoUpdate
+        existing.overwriteSameName = creating.value.overwriteSameName
+        ds = existing
+    } else {
+        ds = {
+            id: saveStore.getNewId(),
+            name: creating.value.name?.trim(),
+            url,
+            type,
+            autoUpdate: creating.value.autoUpdate,
+            overwriteSameName: creating.value.overwriteSameName
+        }
+        save.value.dataSources.push(ds)
     }
-    const ds: DataSource = {
-        id: saveStore.getNewId(),
-        name: creating.value.name?.trim(),
-        url,
-        type,
-        autoUpdate: creating.value.autoUpdate,
-        overwriteSameName: creating.value.overwriteSameName
-    }
-    save.value.dataSources.push(ds)
+    linkModalShow.value = false
+    attrModalShow.value = false
     creating.value = { id: 0, url: '', type: 'lineStyles' }
     createAllowed.value = false
     setTimeout(() => loadDataSource(ds), 500)
@@ -178,9 +229,15 @@ async function loadAll() {
 
 <template>
 <ConfigSection :title="'数据源'">
-<div class="dataSources">
+<div v-if="dataSourcesAccessNotice">{{ dataSourcesAccessNotice }}</div>
+<div v-else class="dataSources">
     <div class="smallNote" style="text-align: center;">
-        添加返回 JSON 数组的 URL，可一键导入线路样式、图标或纹理
+        添加返回 JSON 数组的 URL，可一键导入线路样式、纹理、颜色集
+    </div>
+
+    <div class="dsOps">
+        <button v-if="userFileFavoriteStore.hasOpenFavoritesSidebar" @click="pickFromFavorites">从收藏添加</button>
+        <button @click="openLinkModal">从链接添加</button>
     </div>
 
     <div v-for="ds in save?.dataSources" :key="ds.id" class="dsItem">
@@ -208,47 +265,75 @@ async function loadAll() {
         </div>
         <div class="dsOps">
             <button
+                class="lite"
                 :class="loadingIds.has(ds.id) ? 'off' : 'ok'"
                 :disabled="loadingIds.has(ds.id)"
                 @click="loadDataSource(ds)">
                 {{ loadingIds.has(ds.id) ? '加载中...' : '加载' }}
             </button>
-            <button class="cancel" @click="removeDataSource(ds.id)">删除</button>
+            <button class="lite cancel" @click="removeDataSource(ds.id)">删除</button>
         </div>
     </div>
 
     <div v-if="save?.dataSources && save.dataSources.length > 1" class="dsOps" style="justify-content: center;">
-        <button class="ok" @click="loadAll">全部加载</button>
+        <button class="lite ok" @click="loadAll">全部加载一次</button>
     </div>
 
-    <div class="newDs">
-        <div class="newDsTitle">添加数据源</div>
-        <div class="dsField">
-            <span>名称</span><input v-model="creating.name" @input="validateCreating" placeholder="必填"/>
+    <Prompt v-if="attrModalShow" :bg-click-close="true" @close="attrModalShow = false">
+        <div class="dsModal">
+            <div class="dsModalTitle">添加数据源</div>
+            <div class="dsModalName">{{ creating.name || '未命名' }}</div>
+            <div class="dsChecks">
+                <label>
+                    <input type="checkbox" v-model="creating.autoUpdate" />
+                    启动时自动更新
+                </label>
+                <label>
+                    <input type="checkbox" v-model="creating.overwriteSameName" />
+                    覆盖同名项目
+                </label>
+            </div>
+            <div v-if="sameUrlExisting" class="dsWarn">将会覆盖同链接数据源</div>
+            <div class="dsOps">
+                <button class="cancel" @click="attrModalShow = false">取消</button>
+                <button class="ok" @click="addDataSource">添加</button>
+            </div>
         </div>
-        <div class="dsField">
-            <span>链接</span><input v-model="creating.url" @input="validateCreating" placeholder="https://..."/>
+    </Prompt>
+
+    <Prompt v-if="linkModalShow" :bg-click-close="true" @close="linkModalShow = false">
+        <div class="dsModal">
+            <div class="dsModalTitle">添加数据源</div>
+            <div class="dsField">
+                <span>名称</span><input v-model="creating.name" @input="validateCreating" placeholder="必填"/>
+            </div>
+            <div class="dsField">
+                <span>链接</span><input v-model="creating.url" @input="validateCreating" placeholder="https://..."/>
+            </div>
+            <div class="dsField typeField">
+                <select v-model="creating.type">
+                    <option value="lineStyles">线路样式</option>
+                    <option value="patterns">纹理</option>
+                    <option value="colorSets">颜色集</option>
+                </select>
+            </div>
+            <div class="dsChecks">
+                <label>
+                    <input type="checkbox" v-model="creating.autoUpdate" />
+                    启动时自动更新
+                </label>
+                <label>
+                    <input type="checkbox" v-model="creating.overwriteSameName" />
+                    覆盖同名项目
+                </label>
+            </div>
+            <div v-if="sameUrlExisting" class="dsWarn">将会覆盖同链接数据源</div>
+            <div class="dsOps">
+                <button class="cancel" @click="linkModalShow = false">取消</button>
+                <button :class="createAllowed ? 'ok' : 'off'" :disabled="!createAllowed" @click="addDataSource">添加</button>
+            </div>
         </div>
-        <div class="dsField typeField">
-            <select v-model="creating.type">
-                <option value="lineStyles">线路样式</option>
-                <option value="textTagIcons">文本标签图标</option>
-                <option value="patterns">纹理</option>
-                <option value="colorSets">颜色集</option>
-            </select>
-        </div>
-        <div class="dsChecks">
-            <label>
-                <input type="checkbox" v-model="creating.autoUpdate" />
-                启动时自动更新
-            </label>
-            <label>
-                <input type="checkbox" v-model="creating.overwriteSameName" />
-                覆盖同名项目
-            </label>
-        </div>
-        <button @click="addDataSource" :class="createAllowed ? 'ok':'off'">添加</button>
-    </div>
+    </Prompt>
 </div>
 </ConfigSection>
 </template>
@@ -301,18 +386,21 @@ async function loadAll() {
     justify-content: center;
     gap: 6px;
 }
-.newDs{
-    border-radius: 10px;
-    padding: 8px;
+.dsModal{
     display: flex;
     flex-direction: column;
     gap: 6px;
-    box-shadow: 0px 0px 5px 0px #ccc;
-    background-color: #eee;
-    overflow: hidden;
-    .newDsTitle{
+    min-width: 240px;
+    .dsModalTitle{
         font-weight: bold;
         font-size: 14px;
+        text-align: center;
+    }
+    .dsModalName{
+        font-size: 13px;
+        color: #666;
+        text-align: center;
+        word-break: break-all;
     }
     .dsField{
         display: flex;
@@ -342,6 +430,14 @@ async function loadAll() {
             cursor: pointer;
         }
     }
+    .dsWarn{
+        font-size: 12px;
+        color: #a70;
+        background: #fff8e1;
+        padding: 4px 6px;
+        border-radius: 4px;
+        text-align: center;
+    }
 }
 .dsFlags{
     display: flex;
@@ -349,13 +445,14 @@ async function loadAll() {
     .flag{
         font-size: 11px;
         color: #fff;
-        background: cornflowerblue;
+        background: #666;
         padding: 1px 5px;
         border-radius: 4px;
         cursor: pointer;
         user-select: none;
         &.off{
-            background: #bbb;
+            background: #eee;
+            color: #666;
         }
     }
 }

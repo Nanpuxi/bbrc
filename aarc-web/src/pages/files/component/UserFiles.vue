@@ -7,6 +7,7 @@ import UserFavoriteStar from '@/pages/components/UserFavoriteStar.vue';
 import AuthGrantEdit from '@/pages/components/AuthGrantEdit.vue';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
 import { isSvg } from '@/utils/fileUtils/ext';
+import { buildUserFileContentUrl } from '@/utils/userFileUrl';
 import copy from 'copy-to-clipboard';
 import linkIcon from '@/assets/ui/chain.svg';
 import settingsIcon from '@/assets/ui/gear.svg';
@@ -31,8 +32,10 @@ const editingName = ref('')
 const editingIntro = ref('')
 
 async function copyImageLink(file: UserFileDto) {
-    const domain = window.location.origin;
-    const imageUrl = `${domain}${file.urlOriginal}`;
+    // 存量资源没有 uniqueName，退回复制旧的 md5 静态链接
+    const imageUrl = file.uniqueName
+        ? buildUserFileContentUrl(file.uniqueName)
+        : `${window.location.origin}${file.urlOriginal}`;
     const success = await copy(imageUrl);
     if (success) {
         showPop('已复制链接', 'success');

@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import Pop from './components/common/Pop.vue';
 import Wait from './components/common/Wait.vue';
+import OverwriteConfirmPrompt from './components/common/userFile/OverwriteConfirmPrompt.vue';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { storeToRefs } from 'pinia';
 import TopbarParent from './components/common/topbar/TopbarParent.vue';
 import Footer from './components/common/Footer.vue';
 import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
+import { UserFileType } from '@/app/com/apiGenerated';
 import { initCoreHostServices } from 'aarc-core/app/hostServices';
 import { initWebCollabTransport } from './app/com/collabSignalrStore';
 import { useRouter } from 'vue-router';
 import { aboutName } from './pages/identities/routes/routesNames';
 import { forkAarcName } from './pages/etc/routes/routesNames';
+import { uploadUserFileGuarded } from './app/com/userFileUploadGuard';
 
 const uniq = useUniqueComponentsStore()
 const { topbarShow } = storeToRefs(uniq)
@@ -37,7 +40,15 @@ onMounted(()=>{
         siteLinks: {
             about: router.resolve({ name: aboutName }).href,
             forkAarc: router.resolve({ name: forkAarcName }).href
-        }
+        },
+        userFileResourceUploader: (req) => uploadUserFileGuarded({
+            file: req.file,
+            fileName: req.fileName,
+            thumb: req.thumb,
+            displayName: req.displayName,
+            intro: req.intro,
+            type: UserFileType.LineStyle
+        })
     })
     initWebCollabTransport()
 })
@@ -53,6 +64,7 @@ onMounted(()=>{
 </div>
 <Pop ref="pop"></Pop>
 <Wait ref="wait"></Wait>
+<OverwriteConfirmPrompt></OverwriteConfirmPrompt>
 </template>
 
 <style scoped lang="scss">

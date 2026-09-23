@@ -42,9 +42,9 @@ const groupOptions = computed(() => {
 
 const displayTitle = computed(() => {
     if (!selectedGroup.value || selectedGroup.value === allGroupsLabel) {
-        return '我的收藏'
+        return ''
     }
-    return `我的收藏 - ${selectedGroup.value}`
+    return ` - ${selectedGroup.value}`
 })
 
 async function loadGroups() {
@@ -112,7 +112,10 @@ onMounted(() => {
 
 <template>
     <h1 class="h1WithBtns">
-        <span>{{ displayTitle }}</span>
+        <span>
+            我的收藏
+            <span class="group-name">{{ displayTitle }}</span>
+        </span>
         <div class="group-ops">
             <select :value="selectedGroup || allGroupsLabel" @change="selectGroup(($event.target as HTMLSelectElement).value)">
                 <option v-for="g in groupOptions" :key="g" :value="g">{{ g }}</option>
@@ -135,6 +138,11 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
+.group-name {
+    font-size: 15px;
+    letter-spacing: normal;
+}
+
 .group-ops {
     margin-left: auto;
 

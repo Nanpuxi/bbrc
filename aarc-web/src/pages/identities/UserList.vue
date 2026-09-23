@@ -13,7 +13,7 @@ import { WithIntroShow } from '@/utils/type/WithIntroShow';
 import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { useRouter } from 'vue-router';
 import AuthGrantEdit from '../components/AuthGrantEdit.vue';
-import SwitchingTabs from '@/components/common/SwitchingTabs.vue';
+import SwitchingTabs from 'aarc-core/components/common/SwitchingTabs.vue';
 import { userUpgradeToMemberName } from './routes/routesNames';
 
 const list = ref<WithIntroShow<UserDto>[]>()

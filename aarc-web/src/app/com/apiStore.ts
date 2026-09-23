@@ -180,7 +180,9 @@ export const useApiStore = defineStore('api', () => {
     const saveUtils = w(new api.SaveUtilsClient(baseUrl, instance))
     const saveFolder = w(new api.SaveFolderClient(baseUrl, instance))
     const saveComment = w(new api.SaveCommentClient(baseUrl, instance))
-    const userFavorite = w(new api.UserFavoriteClient(baseUrl, instance))
+    const userFavorite = w(new api.UserFavoriteClient(baseUrl, instance), {
+        noShowWaitForActions: ['getSaves']
+    })
     const saveSvg = w(new api.SaveSvgClient(baseUrl, instance))
     // 协作快照直传不用 w() 包装：成员轮询时 404（快照未就绪）属正常流程，
     // 不能弹窗/转圈/吞错误；404→null 等错误分类由 collabSignalrStore 自行处理

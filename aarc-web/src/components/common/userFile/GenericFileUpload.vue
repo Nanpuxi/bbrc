@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { UserFileType } from '@/app/com/apiGenerated';
-import { useApiStore } from '@/app/com/apiStore';
+import { uploadUserFileGuarded } from '@/app/com/userFileUploadGuard';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { dataSizeStr } from '@/utils/fileUtils/dataSizeStr';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
@@ -11,7 +11,6 @@ const props = defineProps<{
     onSuccess?: () => void;
 }>();
 
-const api = useApiStore();
 const { showPop } = useUniqueComponentsStore();
 
 const sidebarRef = ref<InstanceType<typeof SideBar>>();
@@ -84,27 +83,22 @@ async function upload() {
     }
     uploading.value = true;
     try {
-        const res = await api.userFile.upload(
-            { data: file.value, fileName: file.value.name },
-            undefined,
-            displayName.value.trim(),
-            undefined,
-            props.type
-        );
-        if (res) {
+        const res = await uploadUserFileGuarded({
+            file: file.value,
+            fileName: file.value.name,
+            displayName: displayName.value.trim(),
+            type: props.type
+        });
+        if (res === 'ok') {
             showPop('上传成功', 'success');
             close();
             reset();
             props.onSuccess?.();
+        } else if (res === 'canceled') {
+            showPop('已取消上传', 'info');
         } else {
             showPop('上传失败', 'failed');
         }
-    } catch (err) {
-        showPop(
-            err instanceof Error ? err.message : '上传失败',
-            'failed'
-        );
-        console.error(err);
     } finally {
         uploading.value = false;
     }

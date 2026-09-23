@@ -110,3 +110,48 @@ describe('configStore - getTurnRadiusOf', () => {
     expect(cs.getTurnRadiusOf(line, '135', 'middle')).toBeCloseTo(r90 * turn45Ratio)
   })
 })
+
+describe('configStore - 文本标签倍率清洗', () => {
+  beforeEach(() => {
+    createTestPinia()
+  })
+
+  it('空串/NaN/负数/0 字号清洗为未设置，合法字符串值转为数字', () => {
+    const cs = useConfigStore()
+    cs.importConfig({
+      textTagForLine: {
+        fontSize: '',
+        subFontSize: 0,
+        padding: -1,
+        width: NaN
+      }
+    } as any)
+    expect(cs.config.textTagForLine.fontSize).toBeUndefined()
+    expect(cs.config.textTagForLine.subFontSize).toBeUndefined()
+    expect(cs.config.textTagForLine.padding).toBeUndefined()
+    expect(cs.config.textTagForLine.width).toBeUndefined()
+
+    cs.importConfig({ textTagForLine: { fontSize: '1.25' } } as any)
+    expect(cs.config.textTagForLine.fontSize).toBe(1.25)
+  })
+
+  it('width 与 padding 的 0 是合法值，予以保留', () => {
+    const cs = useConfigStore()
+    cs.importConfig({ textTagForLine: { width: 0, padding: 0, fontSize: '0' } } as any)
+    expect(cs.config.textTagForLine.width).toBe(0)
+    expect(cs.config.textTagForLine.padding).toBe(0)
+    expect(cs.config.textTagForLine.fontSize).toBeUndefined()
+  })
+
+  it('三组标签都会被清洗', () => {
+    const cs = useConfigStore()
+    cs.importConfig({
+      textTagPlain: { fontSize: '' },
+      textTagForLine: { subFontSize: '' },
+      textTagForTerrain: { fontSize: 'x' }
+    } as any)
+    expect(cs.config.textTagPlain.fontSize).toBeUndefined()
+    expect(cs.config.textTagForLine.subFontSize).toBeUndefined()
+    expect(cs.config.textTagForTerrain.fontSize).toBeUndefined()
+  })
+})

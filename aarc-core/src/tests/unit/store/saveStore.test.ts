@@ -119,6 +119,33 @@ describe('saveStore linePtsChanged watch', () => {
     })
 })
 
+describe('saveStore tryMergePt 选区组转移', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+    })
+
+    it('合并重合控制点后，选区组成员 id 应转移到保留点并去重', async () => {
+        const saveStore = useSaveStore()
+        const line: Line = { id: 1, pts: [10, 20, 30], name: '', nameSub: '', color: '', type: 0 } as Line
+        const save = createSave([line])
+        save.points = [
+            { id: 10, pos: [0, 0] } as ControlPoint,
+            { id: 20, pos: [0, 0] } as ControlPoint,
+            { id: 30, pos: [100, 100] } as ControlPoint,
+        ]
+        save.selectionGroups = [{ id: 100, ptIds: [20, 30, 10], tagIds: [] }]
+        saveStore.save = save
+        await nextTick()
+
+        const res = saveStore.tryMergePt(10)
+        expect(res).toBeTruthy()
+
+        const group = saveStore.save!.selectionGroups![0]
+        expect(group.ptIds).not.toContain(20)
+        expect([...group.ptIds].sort((a, b) => a - b)).toEqual([10, 30])
+    })
+})
+
 describe('saveStore getLinesDecidedPtNameSSize', () => {
     beforeEach(() => {
         setActivePinia(createPinia())

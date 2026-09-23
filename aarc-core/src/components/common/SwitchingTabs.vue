@@ -59,6 +59,7 @@ onMounted(async ()=>{
     gap:5px
 }
 .controls>div:hover{
+    color: #333;
     background-color: #eee;
     border-bottom: 4px solid #aaa;
 }

@@ -1,7 +1,7 @@
 import { sqrt2 } from "aarc-core/utils/consts"
 import { defineStore } from "pinia"
 import { computed, ref } from "vue"
-import { Config, ConfigInSave } from "../config"
+import { Config, ConfigInSave, TextTagPerTypeGlobalConfig } from "../config"
 import { useSaveStore } from "./saveStore"
 import { ColorPreset, Line, LineType } from "../save"
 import { WayRel } from "aarc-core/utils/rayUtils/rayParallel"
@@ -110,6 +110,7 @@ export const useConfigStore = defineStore('config', ()=>{
         const sc = saveStore.save.config;
         Object.assign(config.value, sc)
         normalizeSnapRayAngles()
+        normalizeTextTagConfigs()
     }
     function writeConfigToSave(){
         const configNow = deepClone(config.value)
@@ -132,6 +133,7 @@ export const useConfigStore = defineStore('config', ()=>{
             }
         }
         normalizeSnapRayAngles()
+        normalizeTextTagConfigs()
         console.log('写入后的配置：', deepClone(config.value))
     }
 
@@ -147,6 +149,27 @@ export const useConfigStore = defineStore('config', ()=>{
             return
         }
         config.value[key] = raw.map(v => String(v))
+    }
+
+    /**
+     * 清洗文本标签的全局倍率。这些值可能来自存档、导入配置或协作对端，
+     * 清空后的 '' 和 0 字号会让文字画不出来，NaN 还会污染命中测试矩形。
+     */
+    function normalizeTextTagConfigs(){
+        normalizeTextTagNumbers(config.value.textTagPlain)
+        normalizeTextTagNumbers(config.value.textTagForLine)
+        normalizeTextTagNumbers(config.value.textTagForTerrain)
+    }
+    function normalizeTextTagNumbers(g:TextTagPerTypeGlobalConfig){
+        for(const key of ['fontSize', 'subFontSize', 'padding', 'width'] as const){
+            // 存档里这些值可能是字符串（旧的 input 不做类型转换），声明类型不可信
+            const raw = g[key] as number | string | undefined
+            // 清空后的 '' 视作未设置
+            const v = typeof raw == 'string' && !raw.trim() ? NaN : Number(raw)
+            // width 的 0 表示“关闭拉长”、padding 的 0 表示“无边距”，都是合法值
+            const allowZero = key == 'padding' || key == 'width'
+            g[key] = Number.isFinite(v) && v >= 0 && (allowZero || v > 0) ? v : undefined
+        }
     }
 
     const clickPtThrsSq = computed<number>(()=>

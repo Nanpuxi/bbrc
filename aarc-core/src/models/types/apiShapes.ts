@@ -12,8 +12,9 @@ export interface SaveDto {
     name?: string | undefined;
 }
 
-/** UserFileDto 投影：core 仅在选择收藏文件时取显示名与原图地址 */
+/** UserFileDto 投影：core 仅在收藏取用时取 id、显示名与原图地址（固定链接 url 由宿主另行提供，见 userFileFavoriteStore） */
 export interface UserFileDto {
+    id?: number | undefined;
     displayName?: string | undefined;
     urlOriginal?: string | undefined;
 }
