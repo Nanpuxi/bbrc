@@ -86,7 +86,7 @@
 | 状态 | 位置 | 后果 | 方案 |
 |---|---|---|---|
 | `stashStore.s`（A 的完整存档深拷贝） | `stashStore.ts:14` | 切到 B 后 `thaw()` 把 A 的暂存盖到 B 头上 | 切换时清空或按存档隔离 |
-| `iconStore.accessBlocked` | `iconStore.ts:27`；只在 `editorSession.ts:54-56` 置 true，无人复位 | 从浏览模式存档切到自有存档，图标栏仍隐藏 | `loadSaveIntoEditor` 开头复位为 false |
+| ~~`iconStore.accessBlocked`~~ | 已修复（2026-09）：屏蔽状态迁到 `models/stores/utils/resourceAccessStore.ts`，三个资源栏目各一 ref（值为宿主传入的提示文案，有值即屏蔽），`loadSaveIntoEditor` 每次装载无条件赋值 | 原问题"从浏览模式存档切到自有存档，图标栏仍隐藏"已消除 | 无需再处理 |
 | `renderOptionsStore.accentuationLineIds / timeMoment / timeMomentStr` | `renderOptionsStore.ts:10-15` | 按 A 的 lineId/时间轴作用于 B 的同 id 线路（`lineStateStore.ts:42-98` 直接作用于主画布渲染） | reset 存档相关字段 |
 | `snapStore.snapLines / snapInterPtTargets` | `snapStore.ts:28,51` | activeCvs 的 50ms 渲染定时器跨切换仍在跑（`Cvs.vue:56-58`），把 A 的吸附辅助线画到 B 上，直到下次交互 | reset |
 | nameEdit/textTagEdit 编辑中暂存 | `resetterStore.ts:44-51` | 当前靠"clearItems 先跑、targetPtId 先被清掉"的**隐式顺序**才安全——若顺序变动，`applyName` 会按旧 targetPtId 在 B 里查点覆写名字（`nameEditStore.ts:64-76`）。且切换时 A 未完成的命名被静默丢弃 | 显式化顺序依赖（reset 前先 endEveryEditing）；文档化 |
@@ -111,7 +111,7 @@
 | `heartbeatTimer` + `heartbeatOnEdit` | :303, :339, :346 | load()→startHeartbeat 再开 interval **覆盖** timer 引用，旧 interval 永久泄漏；且 `renewHeartbeat` 用 `saveIdNum`（:310），B 为 viewOnly 时旧 interval 持续给 B 发心跳，服务端视角是"幽灵编辑者"；`heartbeatOnEdit` 的 `??=` 只赋值一次 | **严重** |
 | 心跳释放用的 saveId | :418 | A 的心跳从不释放（且此处读的是当前 prop，补做时必须用 watch 回调的 oldValue） | **严重** |
 | SignalR / ChatRoom | :69, :183 | ChatRoom 无 `:key` 被复用，其 onUnmounted（`ChatRoom.vue:291-307`：leaveRoom+stopConnection+clearMessages）不跑 → 不退 A 房间就加入 B 房间，服务端房间成员与 joinedRooms 同时残留 | **严重**（给 `<ChatRoom :key="saveIdNum">` 一行可解） |
-| `viewOnly` | :76, :134 | 只置 true 不置 false，A 是 viewOnly 则 B 永远 visitorMode、隐藏图标栏、不启动心跳 | **严重** |
+| `viewOnly` | :76, :134 | 只置 true 不置 false，A 是 viewOnly 则 B 永远 visitorMode、屏蔽资源栏目（图标/数据源/上传，现已随 load 无条件赋值故不受影响）、不启动心跳 | **严重** |
 | `loadError` / `loadComplete` | :77, :72 | 残留则全屏错误页挡住 B / Cvs 在 B 加载完成前挂着 A 的数据 | **严重** |
 | `savingDisabledWarningStore` | `savingDisabledWarningStore.ts:22-28` | `clearWarning()` 已存在但**全项目无人调用**；B 加载失败提前 return 时永久显示 A 的警告文案 | 中 |
 | `preventLeavingDisabled` | :171, :192, :280 | 只置 true，**全项目无任何复位点**；viewOnly/demo/未登录会话之后，可编辑存档静默失去未保存离开保护。**两个场景都中招且无 UI 表现，最易漏** | 中 |
@@ -137,7 +137,7 @@
 
 1. `loadSaveIntoEditor`（`editorSession.ts`）：
    - `saveStore.save` 赋值后立即 `configStore.readConfigFromSave()`
-   - 开头复位 `iconStore.accessBlocked = false`
+   - ✅ 已做（2026-09）：屏蔽状态迁至 `resourceAccessStore` 并在 `loadSaveIntoEditor` 开头无条件赋值（三个栏目分别对应 opts 的 `iconAccessNotice`/`dataSourcesAccessNotice`/`uploadAccessNotice`，值即给用户看的文案）
    - 末尾调用扩展后的 `relaunchDerivedStores()`
 2. `resetDerivedStores`（`resetterStore.ts`）清理名单增加：
    - `selectionStore.selected.clear()`（连带 mode/showControl）
@@ -163,7 +163,7 @@
 ### 第三步：验证
 
 - 两包 type-check + core 测试
-- 手动回归矩阵：数字存档→数字存档、数字→demo、demo→数字、viewOnly→可编辑、可编辑→viewOnly（重点核对心跳释放/图标栏/未保存保护）、未保存改动时切换被路由守卫拦截、切换后保存 B 检查 config 未被 A 污染、tauri 存档管理器点击加载
+- 手动回归矩阵：数字存档→数字存档、数字→demo、demo→数字、viewOnly→可编辑、可编辑→viewOnly（重点核对心跳释放/资源栏目屏蔽/未保存保护）、未保存改动时切换被路由守卫拦截、切换后保存 B 检查 config 未被 A 污染、tauri 存档管理器点击加载
 
 ## 5. 工作量评估
 

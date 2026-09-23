@@ -40,9 +40,12 @@ export const useIdentitiesRoutesJump = ()=>{
             name:passwordResetName
         }
     }
-    function passwordResetQAEditRoute():RouteLocationRaw{
+    function passwordResetQAEditRoute(fromEmailBind?:boolean):RouteLocationRaw{
         return {
-            name:passwordResetQAEditName
+            name:passwordResetQAEditName,
+            query:{
+                fromEmailBind: fromEmailBind ? '1' : undefined
+            }
         }
     }
     return { loginRoute, loginRouteJump, registerRoute, userListRoute, userEmailBindRoute, passwordResetRoute, passwordResetQAEditRoute }

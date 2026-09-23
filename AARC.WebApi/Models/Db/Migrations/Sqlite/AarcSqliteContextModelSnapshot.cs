@@ -15,7 +15,7 @@ namespace AARC.WebApi.Models.Db.Migrations.Sqlite
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.6");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
             modelBuilder.Entity("AARC.WebApi.Models.DbModels.Files.UserFavorite", b =>
                 {
@@ -87,7 +87,13 @@ namespace AARC.WebApi.Models.Db.Migrations.Sqlite
                     b.Property<byte>("Type")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("UniqueName")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UniqueName");
 
                     b.HasIndex("OwnerUserId", "Priority");
 

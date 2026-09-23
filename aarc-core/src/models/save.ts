@@ -1,4 +1,4 @@
-import { ConfigInSave } from "./config";
+import { ConfigInSave, StaNameCarpetConfig } from "./config";
 import { Coord, SgnNumber } from "./coord";
 
 export interface Save{
@@ -39,10 +39,14 @@ export interface ControlPoint{
     nameS?:string
     nameP?:Coord
     nameSize?:number
+    /** 副站名尺寸；0/undefined 时跟随上级（cluster→线路推导），全部未设置时跟随 nameSize */
+    nameSSize?:number
     /** 站名旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
     nameAngle?:number
     anchorX?:SgnNumber
     anchorY?:SgnNumber
+    /** 站名“地毯”（描边基底）设置；各字段 undefined 时回退到全局配置 config.staNameCarpet */
+    nameCarpet?:StaNameCarpetConfig
     noLeader?:boolean
     free?:boolean
 }
@@ -87,6 +91,8 @@ export interface Line{
     group?:number
     width?:number
     ptNameSize?:number
+    /** 副站名尺寸；0/undefined 时跟随上级（线宽映射→最终跟随 ptNameSize 链路） */
+    ptNameSSize?:number
     ptNameSnapSize?:number
     ptSize?:number
     ptSnapSize?:number
@@ -119,12 +125,14 @@ export interface LineStyle{
     noBase?: boolean
     layers:{
         color?:string
-        colorMode?:'fixed'|'line' //undefined默认为fixed
+        colorMode?:'fixed'|'line'|'bg' //undefined默认为fixed
         width?:number
         opacity?:number
         dash?:string
         cap?:CanvasLineCap,
         pattern?:number
+        /** 嵌入的完整 pattern（跨存档分享样式时随样式携带，渲染优先于 pattern id） */
+        patternEmbedded?:Pattern
     }[]
 }
 export interface LineGroup{
@@ -164,6 +172,8 @@ export interface TextTag{
     angle?:number
     removeCarpet?:boolean
     sunken?:boolean
+    /** 显示层级（同一“置底/非置底”分组内，高层级盖住低层级；undefined 按 0 处理） */
+    zIndex?:number
     //rot?:FormalRotation
 }
 export interface TextOptions{

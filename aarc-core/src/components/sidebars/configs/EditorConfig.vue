@@ -4,9 +4,10 @@ import ConfigSection from './shared/ConfigSection.vue';
 import PerformanceConfig from './PerformanceConfig.vue';
 import { storeToRefs } from 'pinia';
 import { onMounted } from 'vue';
+import { ControlPointSta } from 'aarc-core/models/save.ts';
 
 const configStore = useEditorLocalConfigStore()
-const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize } = storeToRefs(configStore)
+const { duplicateNameDistThrs, allowMergePtAndTerrain, ignoreStyleAndSpan, staNameSnapDiagonal, gridLabelSize, lineExtendSta, textTagClickMode } = storeToRefs(configStore)
 
 onMounted(()=>{
     configStore.backCompat()
@@ -16,7 +17,33 @@ onMounted(()=>{
 <template>
 <ConfigSection :title="'编辑器'">
     <table><tbody>
-        <tr><th>重复站名检测</th></tr>
+        <tr><th>文本标签点击判定</th></tr>
+        <tr>
+            <td>
+                <select v-model="textTagClickMode">
+                    <option value="rect">仅矩形</option>
+                    <option value="anchor">仅原点</option>
+                    <option value="rectAndAnchor">矩形+原点</option>
+                </select>
+                <div class="explain">
+                    <p>点击文本标签时的命中判定方式：仅当点击落在标签矩形内、仅当点击足够靠近锚点、或两者任一命中。</p>
+                </div>
+            </td>
+        </tr>
+        <tr><th>线路延长站点类型</th></tr>
+        <tr>
+            <td>
+                <select v-model="lineExtendSta">
+                    <option :value="undefined">跟随末端</option>
+                    <option :value="ControlPointSta.plain">固定（控制点）</option>
+                    <option :value="ControlPointSta.sta">固定（车站点）</option>
+                </select>
+                <div class="explain">
+                    <p>拖动线路延长手柄形成的站点类型</p>
+                </div>
+            </td>
+        </tr>
+        <tr><th>站名重复距离判定</th></tr>
         <tr>
             <td>
                 <input v-model="duplicateNameDistThrs" placeholder="0-1000"/>
@@ -77,7 +104,14 @@ onMounted(()=>{
                 </div>
             </td>
         </tr>
-    </tbody></table>        
+        <tr>
+            <td>
+                <div class="explain">
+                    此处所有设置都存储在浏览器内（不随存档存储）
+                </div>
+            </td>
+        </tr>
+    </tbody></table>
 </ConfigSection>
 <PerformanceConfig />
 </template>

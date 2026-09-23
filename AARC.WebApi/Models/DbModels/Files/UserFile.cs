@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AARC.WebApi.Models.DbModels.Files
 {
     [Index(nameof(OwnerUserId), nameof(Priority))]
+    [Index(nameof(UniqueName))]
     public class UserFile : IDbModel, IPrioritizable, IOwnable
     {
         public int Id { get; set; }
@@ -12,6 +13,8 @@ namespace AARC.WebApi.Models.DbModels.Files
         public required string DisplayName { get; set; }
         [MaxLength(64)]
         public required string StoreName { get; set; }
+        [MaxLength(16)]
+        public string? UniqueName { get;set; }
         public int OwnerUserId { get; set; }
         [MaxLength(introMaxLength)]
         public string? Intro { get; set; }

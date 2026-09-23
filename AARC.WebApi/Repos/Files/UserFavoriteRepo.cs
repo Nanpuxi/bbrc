@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.Db.Context;
+using AARC.WebApi.Models.Db.Context;
 using AARC.WebApi.Models.Db.Context.Specific;
 using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Files;
@@ -92,13 +92,16 @@ namespace AARC.WebApi.Repos.Files
                     && x.ObjectId > 0);
             if (!string.IsNullOrEmpty(group))
                 q = q.Where(x => x.Group == group);
-            var ids = q
+            var objectIds = q
                 .GroupBy(x => x.ObjectId)
-                .Select(g => new { ObjectId = g.Key, LastActive = g.Max(x => x.LastActive) })
-                .OrderByDescending(x => x.LastActive)
+                .Select(g => g.Key);
+            var ids = (
+                from objectId in objectIds
+                join save in Context.Saves.Existing() on objectId equals save.Id
+                orderby save.LastActive descending
+                select objectId)
                 .Skip(skip)
                 .Take(take + 1)
-                .Select(x => x.ObjectId)
                 .ToList();
             var hasMore = ids.Count > take;
             if (hasMore)
@@ -106,7 +109,7 @@ namespace AARC.WebApi.Repos.Files
             return new UserFavoriteIdPage { Ids = ids, HasMore = hasMore };
         }
 
-        public List<int> GetUserFileFavoriteIds(UserFavoriteType type, string? search, int skip, int take)
+        public List<int> GetUserFileFavoriteIds(UserFavoriteType type, string? search, int skip, int take, UserFileType? fileType = null)
         {
             var uid = httpUserIdProvider.RequireUserId();
             var q = Existing
@@ -114,6 +117,14 @@ namespace AARC.WebApi.Repos.Files
                     x.OwnerUserId == uid
                     && x.Type == type
                     && x.ObjectId > 0);
+            if (fileType.HasValue)
+            {
+                var typedIds = Context.UserFiles.Existing()
+                    .Where(x => x.Type == fileType.Value)
+                    .Select(x => x.Id)
+                    .ToList();
+                q = q.Where(x => typedIds.Contains(x.ObjectId));
+            }
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var userFileQ = Context.UserFiles.Existing();

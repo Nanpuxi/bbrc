@@ -11,7 +11,7 @@ import { SaveDto, SaveFolderDto } from '@/app/com/apiGenerated';
 import { WithIntroShow } from '@/utils/type/WithIntroShow';
 import AuthGrantEdit from '../../components/AuthGrantEdit.vue';
 import { AuthGrantOn, AuthGrantTypeOfSave } from '@/app/com/apiGenerated';
-import SwitchingTabs from '@/components/common/SwitchingTabs.vue';
+import SwitchingTabs from 'aarc-core/components/common/SwitchingTabs.vue';
 import SaveAvatar from '../../components/SaveAvatar.vue';
 import { useSavesRoutesJump } from '../routes/routesJump';
 import SaveBackups from '../../components/SaveBackups.vue';

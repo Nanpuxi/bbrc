@@ -1,10 +1,11 @@
 import { Router } from "vue-router";
 import { addToRouter } from "@/app/router/addToRouter";
-import { sponsorWxName, donorsName, deriveWikiName, deriveRailchessName, forkAarcName, decouplingUpstreamAlertName } from "./routesNames";
+import { sponsorWxName, donorsName, deriveWikiName, deriveRailchessName, deriveMetroShuttleName, forkAarcName, decouplingUpstreamAlertName } from "./routesNames";
 import SponsorWx from "../SponsorWx.vue";
 import Donors from "../Donors.vue";
 import DeriveWiki from "../DeriveWiki.vue";
 import DeriveRailchess from "../DeriveRailchess.vue";
+import DeriveMetroShuttle from "../DeriveMetroShuttle.vue";
 import ForkAarc from "../ForkAarc.vue";
 import DecouplingUpstreamAlert from "../DecouplingUpstreamAlert.vue";
 
@@ -32,6 +33,11 @@ const routes = [
         path: "/derive-railchess",
         component: DeriveRailchess,
         name: deriveRailchessName
+    },
+    {
+        path: "/derive-metroshuttle",
+        component: DeriveMetroShuttle,
+        name: deriveMetroShuttleName
     },
     {
         path: "/fork-aarc",

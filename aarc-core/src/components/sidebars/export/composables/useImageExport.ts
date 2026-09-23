@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import { useExportLocalConfigStore } from 'aarc-core/app/localConfig/exportLocalConfig';
 import { SaveDto } from 'aarc-core/models/types/apiShapes';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
@@ -39,8 +40,21 @@ export function hasFileSaver(): boolean {
     return !!fileSaver
 }
 
+/**
+ * 浏览器兜底路径当前持有的 blob URL。模块级：兜底用的 <a> 全页只有一个，
+ * 而 useImageExport 会被多个组件各自实例化。
+ */
+let lastBlobUrl: string | undefined
+
+/**
+ * 上一个 URL 的释放延迟。批量导出各时间点只隔 200ms，此时上一次的 click
+ * 可能还没被浏览器完全接管，立即 revoke 有中断那次下载的风险。
+ */
+const BLOB_URL_GRACE = 5000
+
 export function useImageExport() {
     const { browserInfo, isIPhoneOrIPad, isWebkit } = storeToRefs(useBrowserInfoStore())
+    const { showPop } = useUniqueComponentsStore()
     const exportLocalConfig = useExportLocalConfigStore()
     const { fileNameStyle } = storeToRefs(exportLocalConfig)
     const saveStore = useSaveStore()
@@ -60,11 +74,11 @@ export function useImageExport() {
         return c.toDataURL('image/webp').indexOf('data:image/webp') === 0;
     }
 
-    async function cvsToDataUrl(
+    async function cvsToBlob(
         cvs: OffscreenCanvas, 
         fileFormat: 'png' | 'webp' | 'jpeg' | 'svg', 
         fileQuality: number
-    ): Promise<string> {
+    ): Promise<Blob> {
         let mime = 'image/png'
         if (fileFormat == 'webp')
             mime = 'image/webp'
@@ -81,29 +95,40 @@ export function useImageExport() {
             throw new Error(msg)
         }
 
-        const blob = await cvs.convertToBlob({ type: mime, quality: fileQuality });
-        return URL.createObjectURL(blob);
+        return await cvs.convertToBlob({ type: mime, quality: fileQuality });
     }
 
-    async function triggerDownload(url: string, fileName: string): Promise<void> {
+    /**
+     * 交出 Blob 由宿主落盘；未注入宿主实现时退化为浏览器 `<a download>`。
+     * 这里刻意不接受 URL：blob URL 只能用 fetch 取回数据，白绕一圈还受 CSP connect-src 约束。
+     */
+    async function triggerDownload(blob: Blob, fileName: string): Promise<void> {
         if (fileSaver) {
-            //宿主注入了文件保存实现（如 tauri）：把 url 取回为 Blob 交给宿主落盘
             try {
-                const blob = await (await fetch(url)).blob()
                 if (await fileSaver(blob, fileName))
                     exported.value = true
             } catch (e) {
+                //宿主实现的异常都在宿主内提示过，这里兜住其余情况：
+                //静默会让用户看到"点了没反应"，故必须弹出
                 console.error('文件保存失败', e)
+                showPop(`文件保存失败：${e instanceof Error ? e.message : String(e)}`, 'failed')
             }
             return
         }
         const link = getDownloadAnchor()
         if (link && 'href' in link) {
             exported.value = true
-            link.href = url;
+            const staleUrl = lastBlobUrl
+            const url = URL.createObjectURL(blob)
+            link.href = url
             if ('download' in link)
                 (link as HTMLAnchorElement).download = fileName
             link.click();
+            // 只留最近一个：上一次的已被新 href 顶掉，"点击此处"重试链接也指向新的。
+            // 当前这个不释放，留给模板里的兜底重试链接用，最多挂住一个 blob 而不是每次导出一个。
+            if (staleUrl)
+                setTimeout(() => URL.revokeObjectURL(staleUrl), BLOB_URL_GRACE)
+            lastBlobUrl = url
         }
     }
 
@@ -175,7 +200,7 @@ export function useImageExport() {
         // methods
         getDownloadAnchor,
         canEncodeWebP,
-        cvsToDataUrl,
+        cvsToBlob,
         triggerDownload,
         getExportFileName,
         resetExportState,

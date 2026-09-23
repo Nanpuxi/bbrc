@@ -2,6 +2,10 @@
     "update_date": "2026/09/03 3:29",
     "donor_list": [
         {
+            "name": "精苏·东奥",
+            "amount": 0.10
+        },
+        {
             "name": "仲夏之天",
             "amount": 11.45
         },

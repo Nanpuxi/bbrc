@@ -88,11 +88,12 @@ export function mergeDataSourceItems(
         }
         const name = (item as Record<string, unknown>).name
         const cloned = JSON.parse(JSON.stringify(item))
-        ;(cloned as { id: number }).id = getNewId()
 
         if (typeof name === 'string' && existingByName.has(name)) {
             if (ds.overwriteSameName) {
                 const idx = existingByName.get(name)!
+                // 覆盖同名项时保留原 id：线路等处按 id 引用（如 lineStyleId），换 id 会让引用失效
+                ;(cloned as { id: number }).id = (existing[idx] as { id: number }).id
                 existing[idx] = cloned as never
                 report.overwritten++
             } else {
@@ -101,6 +102,7 @@ export function mergeDataSourceItems(
             continue
         }
 
+        ;(cloned as { id: number }).id = getNewId()
         existing.push(cloned as never)
         if (typeof name === 'string') {
             existingByName.set(name, existing.length - 1)
@@ -186,6 +188,17 @@ export function applyColorSourceMerges(url: string, items: ExternalColorSetEntry
     const store = useExternalColorSetsStore()
     console.log('[applyColorSourceMerges] url:', url, 'items count:', items.length)
     store.upsertColorSetGroup(url, items)
+}
+
+/**
+ * 动态判断样式是否被数据源托管：存在同名（lineStyles 类型）且开启"覆盖同名"的数据源。
+ * 托管样式在数据源加载/自动更新时会被 fetch 到的同名条目覆盖（合并保留原 id）。
+ */
+export function findLineStyleHostDataSource(save: Save, ls: LineStyle): DataSource | undefined {
+    if (!ls.name) return undefined
+    return save.dataSources?.find(
+        d => d.type === 'lineStyles' && d.overwriteSameName && d.name === ls.name
+    )
 }
 
 export async function autoUpdateDataSources(

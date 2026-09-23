@@ -5,7 +5,7 @@ import { useFormalizedLineStore } from 'aarc-core/models/stores/saveDerived/form
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 import { useStaNameRectStore } from 'aarc-core/models/stores/saveDerived/staNameRectStore'
-import { ControlPoint, ControlPointDir, ControlPointSta, Line, Save } from 'aarc-core/models/save'
+import { ControlPoint, ControlPointDir, ControlPointSta, Line, LineType, Save } from 'aarc-core/models/save'
 import { BoxType } from 'aarc-core/components/common/types/pop'
 import { FormalPt } from 'aarc-core/models/coord'
 
@@ -101,6 +101,50 @@ describe('onDetectStore - onLine', () => {
     const res = store.onLine([0, 0])
 
     expect(res).toHaveLength(0)
+  })
+
+  describe('onLine - 叠放顺序', () => {
+    it('多条命中时应按视觉叠放顺序排列，zIndex 高者在前', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupFormalizedLine(2, [fp([0, 0], 0), fp([100, 0], 1)])
+      const l1 = makeLine(1, [10, 20]); l1.zIndex = 5
+      const l2 = makeLine(2, [10, 20]); l2.zIndex = -5
+      setupSave([l1, l2])
+      const store = useOnDetectStore()
+
+      const res = store.onLine([50, 0])
+
+      expect(res.map(x => x.lineId)).toEqual([1, 2])
+    })
+
+    it('common 线路整体叠在 terrain 之上，与 zIndex 无关', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupFormalizedLine(2, [fp([0, 0], 0), fp([100, 0], 1)])
+      const terrain = makeLine(1, [10, 20]); terrain.type = LineType.terrain; terrain.zIndex = 9
+      const common = makeLine(2, [10, 20]); common.zIndex = -9
+      setupSave([terrain, common])
+      const store = useOnDetectStore()
+
+      const res = store.onLine([50, 0])
+
+      expect(res.map(x => x.lineId)).toEqual([2, 1])
+    })
+
+    it('支线跟随其 parent 的叠放位置并叠在其上', () => {
+      setupFormalizedLine(1, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupFormalizedLine(2, [fp([0, 0], 0), fp([100, 0], 1)])
+      setupFormalizedLine(3, [fp([0, 0], 0), fp([100, 0], 1)])
+      const parent = makeLine(1, [10, 20]) // zIndex 0
+      const child = makeLine(2, [10, 20]); child.parent = 1; child.zIndex = -9
+      const other = makeLine(3, [10, 20]); other.zIndex = -5
+      setupSave([parent, child, other])
+      const store = useOnDetectStore()
+
+      const res = store.onLine([50, 0])
+
+      // child 虽 zIndex 最低，但随 parent(zIndex 0) 渲染并叠在其上
+      expect(res.map(x => x.lineId)).toEqual([2, 1, 3])
+    })
   })
 
   describe('自由点 direct seg', () => {
@@ -335,6 +379,32 @@ describe('onDetectStore - onLine', () => {
 
       useSaveStore().save!.lines[0].locked = undefined
       expect(store.onStaName([150, 120])?.id).toBe(10)
+    })
+  })
+
+  describe('onStaName - 叠放顺序', () => {
+    function makePt(id: number, pos: [number, number]): ControlPoint {
+      return { id, pos, dir: ControlPointDir.vertical, sta: ControlPointSta.sta } as ControlPoint
+    }
+
+    it('多个站名重叠时应返回 points 数组中靠后（视觉上层）的站名', () => {
+      // 先登记 pt10 的 rect，使 Map 插入顺序与视觉叠放顺序相反，以区分新旧行为
+      useStaNameRectStore().setStaNameRect(10, [[100, 100], [200, 150]])
+      useStaNameRectStore().setStaNameRect(20, [[100, 100], [200, 150]])
+      setupSave([], [makePt(10, [150, 120]), makePt(20, [150, 120])])
+      const store = useOnDetectStore()
+
+      expect(store.onStaName([150, 120])?.id).toBe(20)
+    })
+
+    it('最上层站名锁定时视为命中锁定站名，而不是穿透到下层', () => {
+      useStaNameRectStore().setStaNameRect(10, [[100, 100], [200, 150]])
+      useStaNameRectStore().setStaNameRect(20, [[100, 100], [200, 150]])
+      // pt20 属于锁定线路，且在 points 中靠后（视觉上层）
+      setupSave([makeLine(1, [20, 30], true)], [makePt(10, [150, 120]), makePt(20, [150, 120])])
+      const store = useOnDetectStore()
+
+      expect(store.onStaName([150, 120])).toBeUndefined()
     })
   })
 })

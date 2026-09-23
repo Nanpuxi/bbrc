@@ -5,11 +5,13 @@ import { guideInfo } from 'aarc-core/app/guideInfo';
 import Notice from 'aarc-core/components/common/Notice.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useIdentitiesRoutesJump } from './routes/routesJump';
 
 const api = useApiStore()
 const { showPop } = useUniqueComponentsStore()
 const route = useRoute()
 const router = useRouter()
+const { passwordResetQAEditRoute } = useIdentitiesRoutesJump()
 
 const isChange = computed<boolean>(() => route.query.isChange === '1')
 
@@ -79,8 +81,8 @@ async function confirmBind() {
     if (res) {
         showPop('绑定成功', 'success')
         window.setTimeout(()=>{
-            router.push('/')
-        }, 1000)
+            router.push(passwordResetQAEditRoute(true))
+        }, 500)
     }
 }
 

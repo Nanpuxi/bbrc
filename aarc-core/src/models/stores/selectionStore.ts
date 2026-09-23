@@ -41,8 +41,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
                     selected.value.delete(p)
             }
         }
-        enumerateTextTagRects((id, quad)=>{
-            if(quadCoordDistSqLessThan(quad, coord, radiusSq)){
+        enumerateTextTagRects((id, item)=>{
+            if(quadCoordDistSqLessThan(item.quad, coord, radiusSq)){
                 const t = saveStore.getTextTagById(id)
                 if(!t) return
                 if(mode.value == 'add')
@@ -85,14 +85,18 @@ export const useSelectionStore = defineStore('selection', ()=>{
         return { ptIds, tagIds }
     }
     //当前多选的 id 集合与某个选区组完全一致时，返回该组
+    //比较前先剔除组内的死 id 并去重，避免脏数据（如历史遗留）导致匹配永远失败、解组按钮不出现
     const matchedSelectionGroup = computed<SelectionGroup|undefined>(()=>{
         if(selected.value.size === 0)
             return undefined
         const { ptIds, tagIds } = selectedIdSets()
-        return save.value?.selectionGroups?.find(g=>
-            g.ptIds.length === ptIds.size && g.tagIds.length === tagIds.size
-            && g.ptIds.every(id=>ptIds.has(id))
-            && g.tagIds.every(id=>tagIds.has(id)))
+        return save.value?.selectionGroups?.find(g=>{
+            const gPtIds = new Set(g.ptIds.filter(id=>!!saveStore.getPtById(id)))
+            const gTagIds = new Set(g.tagIds.filter(id=>!!saveStore.getTextTagById(id)))
+            return gPtIds.size === ptIds.size && gTagIds.size === tagIds.size
+                && [...gPtIds].every(id=>ptIds.has(id))
+                && [...gTagIds].every(id=>tagIds.has(id))
+        })
     })
 
     function enableForTouchScreen(setMode?:'add'|'sub'){

@@ -1,4 +1,4 @@
-﻿using AARC.WebApi.Models.Db.Context;
+using AARC.WebApi.Models.Db.Context;
 using AARC.WebApi.Models.Db.Context.Specific;
 using AARC.WebApi.Models.DbModels.Enums;
 using AARC.WebApi.Models.DbModels.Enums.AuthGrantTypes;
@@ -12,6 +12,7 @@ using AARC.WebApi.Services.Identities.AuthGrants;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace AARC.WebApi.Repos.Files
 {
@@ -26,6 +27,7 @@ namespace AARC.WebApi.Repos.Files
     {
         private const int fileSizeLimitMB = 3;
         private const int fileSizeLimitKBOfSvg = 1024;
+        private const int totalSizeLimitMB = 200;
         private readonly static string[] extAllowed 
             = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".json"];
         public void Add(
@@ -37,35 +39,36 @@ namespace AARC.WebApi.Repos.Files
         {
             if (f is null)
                 throw new RqEx("上传失败");
-            var fileName = f.FileName;
             CheckModel(displayName, intro);
             var uid = httpUserIdProvider.RequireUserId();
-            var extLower = Path.GetExtension(fileName)?.ToLower();
-            if (string.IsNullOrWhiteSpace(extLower))
-                throw new RqEx("文件必须有后缀名");
-            if (!extAllowed.Contains(extLower))
-                throw new RqEx("不支持这种后缀名");
-            if (f.Length > fileSizeLimitMB * 1024 * 1024)
-                throw new RqEx($"文件不能大于 {fileSizeLimitMB}MB\n请调低质量或尺寸");
-            if (extLower == ".svg")
-            {
-                if (f.Length > fileSizeLimitKBOfSvg * 1024)
-                    throw new RqEx($"svg文件不能大于 {fileSizeLimitKBOfSvg}KB\n请勾选转换位图");
-            }
+            CheckFile(f);
+            CheckTotalSizeLimit(uid);
             userFileService.Write(
-                f.OpenReadStream(), fileName,
+                f.OpenReadStream(), f.FileName,
                 thumb?.OpenReadStream(),
                 out var storeName, out int size);
             UserFile userFile = new()
             {
                 DisplayName = displayName ?? Path.GetRandomFileName(),
                 StoreName = storeName,
+                UniqueName = GenerateUniqueName(),
                 Intro = intro,
                 OwnerUserId = uid,
                 Size = size,
                 Type = type
             };
             Add(userFile);
+        }
+
+        /// <summary>
+        /// 生成 16 位 0-9A-Z 随机串，作为资源的稳定公开标识
+        /// </summary>
+        private static string GenerateUniqueName()
+        {
+            const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            return new string(Enumerable.Range(0, 16)
+                .Select(_ => chars[RandomNumberGenerator.GetInt32(chars.Length)])
+                .ToArray());
         }
 
         public void Edit(int id, string? displayName, string? intro)
@@ -77,6 +80,99 @@ namespace AARC.WebApi.Repos.Files
             model.DisplayName = displayName ?? Path.GetRandomFileName();
             model.Intro = intro;
             base.Update(model, true);
+        }
+
+        /// <summary>
+        /// 覆盖已有资源的文件内容：不新建/删除实体，仅写新文件并更新 StoreName 等字段。
+        /// </summary>
+        public void Overwrite(int id, IFormFile? f, IFormFile? thumb, string? intro)
+        {
+            if (f is null)
+                throw new RqEx("上传失败");
+            var uid = httpUserIdProvider.RequireUserId();
+            var model = base.Get(id) ?? throw new RqEx("找不到指定数据");
+            if (model.OwnerUserId != uid) throw new RqEx("无权操作");
+            if (intro is not null && intro.Length >= UserFile.introMaxLength)
+                throw new RqEx("简介过长");
+            CheckFile(f);
+            CheckTotalSizeLimit(uid, excludingId: model.Id);
+            var oldStoreName = model.StoreName;
+            userFileService.Write(
+                f.OpenReadStream(), f.FileName,
+                thumb?.OpenReadStream(),
+                out var storeName, out int size);
+            if (oldStoreName != storeName
+                && !Existing.Any(x => x.StoreName == oldStoreName && x.Id != model.Id))
+                userFileService.DeletePhysical(oldStoreName);
+            model.StoreName = storeName;
+            model.Size = size;
+            if (intro is not null)
+                model.Intro = intro;
+            base.Update(model, true);
+        }
+
+        /// <summary>
+        /// 按 uniqueName 获取文件的存储信息（匿名内容输出用：与 /userfile 静态路径等价，仅多一步 uniqueName → StoreName 解析）
+        /// </summary>
+        public (string StoreName, DateTime LastActive)? GetContentInfo(string uniqueName)
+        {
+            var model = Existing.AsNoTracking()
+                .Where(x => x.UniqueName == uniqueName)
+                .Select(x => new { x.StoreName, x.LastActive })
+                .FirstOrDefault();
+            if (model is null)
+                return null;
+            return (model.StoreName, model.LastActive);
+        }
+
+        /// <summary>
+        /// 查找当前用户名下同类型、同名的资源（preflight，用于覆盖确认）
+        /// </summary>
+        public UserFileDto? FindExisting(string displayName, UserFileType type)
+        {
+            var uid = httpUserIdProvider.RequireUserId();
+            // DisplayName 大小写不敏感；sqlite 默认敏感，拉到内存再比较
+            var model = Existing
+                .Where(x => x.OwnerUserId == uid && x.Type == type)
+                .AsEnumerable()
+                .FirstOrDefault(x =>
+                    string.Equals(x.DisplayName, displayName, StringComparison.OrdinalIgnoreCase));
+            if (model is null)
+                return null;
+            var dto = mapper.Map<UserFile, UserFileDto>(model);
+            dto.UrlThumb = userFileService.GetUrl(dto.StoreName, thumb: true);
+            dto.UrlOriginal = userFileService.GetUrl(dto.StoreName, thumb: false);
+            return dto;
+        }
+
+        /// <summary>
+        /// 校验该用户已占用的文件总尺寸是否超过上限（<see cref="totalSizeLimitMB"/>MB）。
+        /// 覆盖上传时被覆盖的旧文件不计入。
+        /// </summary>
+        private void CheckTotalSizeLimit(int uid, int excludingId = 0)
+        {
+            var q = Existing.Where(x => x.OwnerUserId == uid);
+            if (excludingId > 0)
+                q = q.Where(x => x.Id != excludingId);
+            var total = q.Sum(x => (long?)x.Size) ?? 0L;
+            if (total > totalSizeLimitMB * 1024L * 1024L)
+                throw new RqEx($"你已达到文件总尺寸上限（{totalSizeLimitMB}MB）");
+        }
+
+        private static void CheckFile(IFormFile f)
+        {
+            var extLower = Path.GetExtension(f.FileName)?.ToLower();
+            if (string.IsNullOrWhiteSpace(extLower))
+                throw new RqEx("文件必须有后缀名");
+            if (!extAllowed.Contains(extLower))
+                throw new RqEx("不支持这种后缀名");
+            if (f.Length > fileSizeLimitMB * 1024 * 1024)
+                throw new RqEx($"文件不能大于 {fileSizeLimitMB}MB\n请调低质量或尺寸");
+            if (extLower == ".svg")
+            {
+                if (f.Length > fileSizeLimitKBOfSvg * 1024)
+                    throw new RqEx($"svg文件不能大于 {fileSizeLimitKBOfSvg}KB\n请勾选转换位图");
+            }
         }
 
         public void Delete(int id)
@@ -250,6 +346,7 @@ namespace AARC.WebApi.Repos.Files
         public int Id { get; set; }
         public string? DisplayName { get; set; }
         public string? StoreName { get; set; }
+        public string? UniqueName { get; set; }
         public string? UrlThumb { get; set; }
         public string? UrlOriginal { get; set; }
         public int OwnerUserId { get; set; }

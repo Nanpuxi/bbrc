@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
-import { Save, Line, TimeSlice } from 'aarc-core/models/save'
+import { Save, Line, TimeSlice, ControlPoint } from 'aarc-core/models/save'
+import { useConfigStore } from 'aarc-core/models/stores/configStore'
 import { nextTick } from 'vue'
 
 function createSave(lines: Line[], timeSlices: TimeSlice[] = []): Save {
@@ -115,5 +116,95 @@ describe('saveStore linePtsChanged watch', () => {
         await nextTick()
 
         expect(changedLineIds).toHaveLength(0)
+    })
+})
+
+describe('saveStore tryMergePt 选区组转移', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+    })
+
+    it('合并重合控制点后，选区组成员 id 应转移到保留点并去重', async () => {
+        const saveStore = useSaveStore()
+        const line: Line = { id: 1, pts: [10, 20, 30], name: '', nameSub: '', color: '', type: 0 } as Line
+        const save = createSave([line])
+        save.points = [
+            { id: 10, pos: [0, 0] } as ControlPoint,
+            { id: 20, pos: [0, 0] } as ControlPoint,
+            { id: 30, pos: [100, 100] } as ControlPoint,
+        ]
+        save.selectionGroups = [{ id: 100, ptIds: [20, 30, 10], tagIds: [] }]
+        saveStore.save = save
+        await nextTick()
+
+        const res = saveStore.tryMergePt(10)
+        expect(res).toBeTruthy()
+
+        const group = saveStore.save!.selectionGroups![0]
+        expect(group.ptIds).not.toContain(20)
+        expect([...group.ptIds].sort((a, b) => a - b)).toEqual([10, 30])
+    })
+})
+
+describe('saveStore getLinesDecidedPtNameSSize', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+    })
+
+    function createPt(id: number): ControlPoint {
+        return { id, pos: [0, 0], dir: 0, sta: 1 } as ControlPoint
+    }
+
+    it('线路 ptNameSSize > 0 时优先于线宽映射', () => {
+        const saveStore = useSaveStore()
+        const configStore = useConfigStore()
+        configStore.config.lineWidthMapped = { '2': { staNameSSize: 0.8 } }
+        saveStore.save = createSave([
+            { id: 1, pts: [10], name: '', nameSub: '', color: '', type: 0, width: 2, ptNameSSize: 0.5 } as Line
+        ])
+        saveStore.save.points = [createPt(10)]
+
+        expect(saveStore.getLinesDecidedPtNameSSize(10)).toBe(0.5)
+    })
+
+    it('线路未设置时回退到 lineWidthMapped[width].staNameSSize', () => {
+        const saveStore = useSaveStore()
+        const configStore = useConfigStore()
+        configStore.config.lineWidthMapped = { '2': { staNameSSize: 0.8 } }
+        saveStore.save = createSave([
+            { id: 1, pts: [10], name: '', nameSub: '', color: '', type: 0, width: 2 } as Line
+        ])
+        saveStore.save.points = [createPt(10)]
+
+        expect(saveStore.getLinesDecidedPtNameSSize(10)).toBe(0.8)
+    })
+
+    it('各级来源均未设置时返回 0（不做 width/默认值兜底）', () => {
+        const saveStore = useSaveStore()
+        saveStore.save = createSave([
+            { id: 1, pts: [10], name: '', nameSub: '', color: '', type: 0, width: 2, ptNameSize: 3 } as Line
+        ])
+        saveStore.save.points = [createPt(10)]
+
+        expect(saveStore.getLinesDecidedPtNameSSize(10)).toBe(0)
+    })
+
+    it('多条线路取最大值，未设置的线路按 0 参与', () => {
+        const saveStore = useSaveStore()
+        saveStore.save = createSave([
+            { id: 1, pts: [10], name: '', nameSub: '', color: '', type: 0, ptNameSSize: 0.6 } as Line,
+            { id: 2, pts: [10], name: '', nameSub: '', color: '', type: 0, width: 5 } as Line
+        ])
+        saveStore.save.points = [createPt(10)]
+
+        expect(saveStore.getLinesDecidedPtNameSSize(10)).toBe(0.6)
+    })
+
+    it('无线路的点返回 0', () => {
+        const saveStore = useSaveStore()
+        saveStore.save = createSave([])
+        saveStore.save.points = [createPt(10)]
+
+        expect(saveStore.getLinesDecidedPtNameSSize(10)).toBe(0)
     })
 })

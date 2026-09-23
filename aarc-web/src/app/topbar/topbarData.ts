@@ -5,7 +5,7 @@ import { faq } from "@/pages/homes/routes/routesNames";
 import { useCommonLocalConfigStore } from "@/app/localConfig/commonLocalConfig";
 import { userFileList, userFileMarket } from "@/pages/files/routes/routesNames";
 import { useUserListLocalConfigStore } from "../localConfig/userListLocalConfig";
-import { deriveRailchessName, deriveWikiName, donorsName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
+import { deriveMetroShuttleName, deriveRailchessName, deriveWikiName, donorsName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
 
 const isFork = import.meta.env.VITE_IsFork == "true"
 
@@ -77,6 +77,10 @@ export async function getTopbarData(): Promise<TopbarModel> {
                 {
                     title: '多人在线轨交棋',
                     link: { name:deriveRailchessName }
+                },
+                {
+                    title: 'MetroShuttle',
+                    link: { name:deriveMetroShuttleName }
                 },
                 {
                     title: "更多工具",

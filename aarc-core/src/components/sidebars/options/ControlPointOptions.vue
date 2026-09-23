@@ -13,12 +13,16 @@ import { isSameCoord } from 'aarc-core/utils/sgn';
 import { Coord } from 'aarc-core/models/coord';
 import AngleInput from '../shared/AngleInput.vue';
 import { useNamePosMemoryStore } from 'aarc-core/models/stores/utils/namePosMemoryStore';
+import { AuColorPicker } from '@aurouscia/au-color-picker';
+import { useConfigStore } from 'aarc-core/models/stores/configStore';
 
 const sidebar = useTemplateRef('sidebar')
+const pCarpet = useTemplateRef('pCarpet')
 const nameEditStore = useNameEditStore()
 const saveStore = useSaveStore()
 const envStore = useEnvStore()
 const colorProcStore = useColorProcStore()
+const cs = useConfigStore()
 
 const editing = ref<ControlPoint>()
 const showLineSplitMenu = ref(false)
@@ -33,6 +37,8 @@ function startEditing(pt: ControlPoint) {
     editing.value = pt
     if(editing.value.nameSize===undefined)
         editing.value.nameSize = 0
+    if(editing.value.nameSSize===undefined)
+        editing.value.nameSSize = 0
     if(editing.value.nameP===undefined)
         editing.value.nameP = nameEditStore.optimizedNamePos(editing.value.id)
     showLineSplitMenu.value = false
@@ -143,6 +149,43 @@ function clearNamePosMemoryClick(){
     namePosMemoryStore.clear()
 }
 
+function customizeCarpet(){
+    if(editing.value)
+        editing.value.nameCarpet = {}
+}
+function resetCarpet(){
+    if(!editing.value)
+        return
+    if(!window.confirm('确定要恢复全局值吗？这会丢弃本点的基底设置'))
+        return
+    editing.value.nameCarpet = undefined
+}
+function customizeCarpetColor(){
+    if(editing.value?.nameCarpet)
+        editing.value.nameCarpet.color = '#ffffff'
+}
+function resetCarpetColor(){
+    if(editing.value?.nameCarpet)
+        editing.value.nameCarpet.color = undefined
+}
+function normalizeCarpetNumber(key:'width'|'opacity'){
+    const carpet = editing.value?.nameCarpet
+    if(!carpet)
+        return
+    const v = carpet[key]
+    if(typeof v !== 'number' || isNaN(v))
+        carpet[key] = undefined
+}
+//滑块无法表示undefined：未设置时显示回退链上的生效值（单点→全局→默认）
+const carpetWidth = computed<number>({
+    get: ()=> editing.value?.nameCarpet?.width ?? cs.config.staNameCarpet.width ?? 1,
+    set: v => { if(editing.value?.nameCarpet) editing.value.nameCarpet.width = v }
+})
+const carpetOpacity = computed<number>({
+    get: ()=> editing.value?.nameCarpet?.opacity ?? cs.config.staNameCarpet.opacity ?? 0.8,
+    set: v => { if(editing.value?.nameCarpet) editing.value.nameCarpet.opacity = v }
+})
+
 const emit = defineEmits<{
     (e:'changed'):void
 }>()
@@ -169,7 +212,7 @@ defineExpose({
 </script>
 
 <template>
-<SideBar ref="sidebar">
+<SideBar ref="sidebar" @click="pCarpet?.closePanel()">
     <div v-if="editing" class="options">
         <h2>点坐标</h2>
         <div class="optionSection">
@@ -186,13 +229,19 @@ defineExpose({
         <div v-if="!isLineTypeWithoutSta">
             <h2>站名尺寸</h2>
             <div class="optionSection">
+                <div class="smallNote" style="text-align: center;">主站名</div>
                 <div class="viewableRange" v-if="editing.nameSize!==undefined">
                     <input type="range" v-model.number="editing.nameSize" :min="0" :max="3" :step="0.25"/>
                     <input type="number" v-model.number="editing.nameSize" :min="0" :max="3"/>
                 </div>
+                <div class="smallNote" style="text-align: center;">副站名</div>
+                <div class="viewableRange" v-if="editing.nameSSize!==undefined">
+                    <input type="range" v-model.number="editing.nameSSize" :min="0" :max="3" :step="0.25"/>
+                    <input type="number" v-model.number="editing.nameSSize" :min="0" :max="3"/>
+                </div>
                 <div class="smallNote" style="text-align: center;">
                     设为0使用默认大小<br/>
-                    （即车站团内最大的“线路设置站名尺寸”）<br/>
+                    （即车站团内最大的“线路设置站名尺寸”，<br/>副站名均未设置时跟随主站名尺寸）<br/>
                     此处的设置仅影响本点，若站名被拖入<br/>车站团内其他点，则需要重新设置
                 </div>
             </div>
@@ -258,6 +307,58 @@ defineExpose({
                 <div class="smallNote" v-if="editing.nameP && hasNamePosMemory" style="text-align: center;">
                     “记忆”用于临时记录上方表格中的设置，可用于创建统一的站点视觉效果，新命名的站将自动使用记忆值设置，修改时请<b>覆盖</b>，不再需要时请<b>清空</b>（退出编辑时自动清空）
                 </div>
+            </div>
+            <h2>站名基底</h2>
+            <div class="optionSection pointCarpet">
+                <table class="fullWidth"><tbody>
+                    <template v-if="editing.nameCarpet">
+                        <tr>
+                            <td style="width: 76px;">宽度倍率</td>
+                            <td>
+                                <input type="number" v-model.number.lazy="editing.nameCarpet.width"
+                                    :min="0" :step="0.1" placeholder="跟随全局"
+                                    @change="normalizeCarpetNumber('width')"/>
+                                <input type="range" v-model.number="carpetWidth"
+                                    :min="0" :max="2" :step="0.25"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>不透明度</td>
+                            <td>
+                                <input type="number" v-model.number.lazy="editing.nameCarpet.opacity"
+                                    :min="0" :max="1" :step="0.05" placeholder="跟随全局"
+                                    @change="normalizeCarpetNumber('opacity')"/>
+                                <input type="range" v-model.number="carpetOpacity"
+                                    :min="0" :max="1" :step="0.1"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>颜色</td>
+                            <td>
+                                <template v-if="editing.nameCarpet.color !== undefined">
+                                    <AuColorPicker ref="pCarpet" v-model="editing.nameCarpet.color" :pos="-120"
+                                        @done="emit('changed')"
+                                        :panel-click-stop-propagation="true" :entry-respond-delay="1">
+                                    </AuColorPicker>
+                                    <div style="margin-top: 4px;">
+                                        <button class="lite" @click="resetCarpetColor">恢复默认</button>
+                                    </div>
+                                </template>
+                                <button v-else class="lite" @click="customizeCarpetColor">自定义</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <button class="lite" @click="resetCarpet">恢复全局设置</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr v-else>
+                        <td>
+                            <button class="lite" @click="customizeCarpet">自定义</button>
+                        </td>
+                    </tr>
+                </tbody></table>
             </div>
             <h2>拆分线路</h2>
             <div class="optionSection">
@@ -355,5 +456,16 @@ defineExpose({
     gap: 6px;
     justify-content: center;
     margin-top: 6px;
+}
+.pointCarpet{
+    input{
+        width: 100px;
+    }
+    .lite{
+        text-decoration: underline;
+    }
+    &:deep(.acp){
+        margin: auto;
+    }
 }
 </style>

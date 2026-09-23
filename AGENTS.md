@@ -52,6 +52,19 @@ pnpm --filter aarc-core type-check   # 改动 aarc-core 后
 
 在根目录或包目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter <包名> <script>` 指定包。`aarc-web` 的 `test`/`test:run` 已透传到 `aarc-core`（测试随核心迁移）。core 需要宿主（web/未来 tauri）提供的功能清单及 web 对照实现见 `aarc-core/README.md`。详见 `aarc-web/docs/decoupling.md`。
 
+## 前端单元测试（aarc-core，vitest node 环境）
+
+跑单个测试文件用 `cd aarc-core && pnpm vitest run <文件路径>`；不要写成 `pnpm --filter aarc-core test:run -- <文件>`（`--` 会被当成位置参数，过滤失效、跑成全量）。
+
+写/改测试时反复踩过的坑：
+
+- **node 环境没有 DOM**：store 里的 `document`（全局键盘监听等）用 `src/tests/helpers/domStub.ts` 的 `ensureDomStub()` 桩掉；`window`/`Image`/`fetch` 没有桩。隐蔽触发点：`normalizeSave` 的升级逻辑会给缺版本号的存档注入默认文本图标（url 以 `/` 开头），之后任何 `relaunchDerivedStores`（远程 op 应用、快照装填等）都会进 `iconStore.ensureAllLoaded` 访问 `window.location.origin` 而崩溃。测试构造 Save 时带 `meta: { textTagIconsVersion: 1 }` 可避免注入。
+- **异步流程跨用例泄漏**：pinia 每用例重建（`createTestPinia`），store 闭包内的作废机制（如 `sessionEpoch`）随之失效，但模块级单例（如 `getCollabTransport()` 指向的 mock）已是新实例——上一用例遗留的后台异步循环会操作新 mock，表现为灵异断言失败或 unhandled rejection，且报错挂在别的用例头上。对策：mock 的失败/异常必须是**有限次**的（如"gap 只报一次"，不要永远失败）；会留下后台流程的用例，结束前用 `flush()`/`waitFor` 等其收尾。
+- **改了全局时序参数要在 afterEach 还原**（如 `collabSessionTiming`），否则泄漏的流程会按生产时序（秒级轮询）长时间悬挂。
+- **`void promise` 必须接 `.catch`**：vitest 会把未处理拒绝报为 "Vitest caught 1 unhandled error"，污染整个运行、掩盖真实失败位置。
+
+测试输出默认已精简（`vitest.config.ts` 的 `silent: 'passed-only'`）：通过用例的 console 输出（`[初始化]`/`[协作]` 等日志）不打印，失败用例的保留。调试单个文件时可临时去掉该选项。
+
 ## 当用户要求“从 upstream 同步”
 
 如果用户要求“从 upstream 同步”：

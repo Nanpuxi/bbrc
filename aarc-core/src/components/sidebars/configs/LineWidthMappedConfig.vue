@@ -10,7 +10,7 @@ import { onMounted } from 'vue';
 const envStore = useEnvStore()
 const { preventLeaving } = usePreventLeavingUnsavedStore()
 const { config } = storeToRefs(useConfigStore())
-function applyLineWidthMapped(width:string, setItem:'staSize'|'staNameSize'|'staSnapSize'|'staNameSnapSize', value?:string){
+function applyLineWidthMapped(width:string, setItem:'staSize'|'staNameSize'|'staNameSSize'|'staSnapSize'|'staNameSnapSize', value?:string){
     config.value.lineWidthMapped ??= {}
     const valueNum = value ? parseFloat(value) : NaN
     const lwm = config.value.lineWidthMapped
@@ -34,17 +34,19 @@ onMounted(()=>{
     <table class="fullWidth lineWidthMapped">
         <tbody>
         <tr>
-            <td class="explain" colspan="5">
-                设置特定宽度的线路对应的<br/>车站尺寸/站名/吸附大小<br/>
-                (会被线路单独设置覆盖)
+            <td class="explain" colspan="7">
+                设置特定宽度的线路对应的<br/>车站/站名/副站名/吸附大小<br/>
+                (会被线路单独设置覆盖，留空表示不设置)
             </td>
         </tr>
         <tr>
             <th></th>
             <th>车站</th>
             <th>站名</th>
+            <th>副站名</th>
             <th>吸附</th>
             <th>站名吸附</th>
+            <th></th>
         </tr>
         <tr v-for="width in ['0.5', '0.75', '1', '1.25', '1.5', '1.75', '2']">
             <td>{{ width }}</td>
@@ -57,6 +59,10 @@ onMounted(()=>{
                     @blur="e=>applyLineWidthMapped(width, 'staNameSize', (e.target as HTMLInputElement).value)"/>
             </td>
             <td>
+                <input :value="config.lineWidthMapped[width]?.staNameSSize" placeholder="跟随站名"
+                    @blur="e=>applyLineWidthMapped(width, 'staNameSSize', (e.target as HTMLInputElement).value)"/>
+            </td>
+            <td>
                 <input :value="config.lineWidthMapped[width]?.staSnapSize" :placeholder="width"
                     @blur="e=>applyLineWidthMapped(width, 'staSnapSize', (e.target as HTMLInputElement).value)"/>
             </td>
@@ -64,9 +70,10 @@ onMounted(()=>{
                 <input :value="config.lineWidthMapped[width]?.staNameSnapSize" :placeholder="width"
                     @blur="e=>applyLineWidthMapped(width, 'staNameSnapSize', (e.target as HTMLInputElement).value)"/>
             </td>
+            <td>{{ width }}</td>
         </tr>
         <tr>
-            <td colspan="5">
+            <td colspan="7">
                 <button @click="envStore.rerender()" style="display: block;">手动触发重绘</button>
                 <div class="explain">
                     修改后需要重绘才能看到实际效果，<br/>较大的图中首次重绘可能耗时较久
@@ -75,18 +82,23 @@ onMounted(()=>{
             </td>
         </tr>
         <tr>
-            <td class="explain" colspan="5">
+            <td class="explain" colspan="7">
+                “副站名”列留空时跟随“站名”列的尺寸
+            </td>
+        </tr>
+        <tr>
+            <td class="explain" colspan="7">
                 站名在斜角的吸附行为<br/>可在“编辑器-斜向站名吸附”中调整
             </td>
         </tr>
         <tr>
-            <td class="explain" colspan="5">
+            <td class="explain" colspan="7">
                 调小车站尺寸和吸附距离可能会造成<br/>
                 换乘站脱离，请手动拼合脱离处
             </td>
         </tr>
         <tr>
-            <td class="explain" colspan="5">
+            <td class="explain" colspan="7">
                 自由点的车站团生成逻辑请在<br/>“自由区间方向”栏目中进行调整，<br/>可设置更严格的判定也可关闭
             </td>
         </tr>
