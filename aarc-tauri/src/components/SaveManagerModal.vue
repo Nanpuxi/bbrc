@@ -117,7 +117,7 @@ async function refresh() {
     }
 }
 
-// 打包导出：全部存档打包为 aarc-app-backup.zip（实现与平台分流见 backupExport.ts）
+// 打包导出：全部存档打包为按日期命名的 zip（实现与平台分流见 backupExport.ts）
 async function exportBackup() {
     if (busy.value) return
     busy.value = true

@@ -99,7 +99,7 @@ export interface SaveStorage {
   - **重命名**：行内输入或 `prompt` 式小输入框，仅改 manifest。
   - **删除**：先弹确认 Modal（标题"确认删除「名字」？"，描述"本操作不可撤销"；删除非空分组时追加一行"x个存档将变为未分组状态"，覆盖在最上层，存档与分组删除共用），确认后删文件并移出清单；禁止删除当前正在编辑的存档（按钮禁用或先切走）。
   - **搜索**：顶部搜索框按名称过滤（不区分大小写），搜索时忽略分组扁平展示。
-  - **打包导出**（2026-09-10 新增）：标题栏最右侧按钮，把全部存档打包为 `aarc-app-backup.zip`（zip 内为 `index.json` + 每个存档一个 `<存档名>.aarc.json`，与 web 端单存档导出命名一致，可直接被"导入"读回；名字里的文件系统非法字符 `\ / : * ? " < > |` 及控制字符替换为 `_`，撞名时追加 ` 2` 序号；实现见 `src/saves/backupExport.ts`）。安卓：写入公共目录 `Download/AARC/` 后调起系统分享面板（分享要求 content:// URI，私有目录文件不能直接分享，故走公共目录副本，也顺带在下载目录留底）；桌面：弹目录选择对话框，zip 写入所选目录。浏览器 dev 模式不可用（提示"仅在应用内可用"）。
+  - **打包导出**（2026-09-10 新增）：标题栏最右侧按钮，把全部存档打包为 `aarc-app-backup-<日期>.zip`（zip 内为 `index.json` + 每个存档一个 `<存档名>.aarc.json`，与 web 端单存档导出命名一致，可直接被"导入"读回；名字里的文件系统非法字符 `\ / : * ? " < > |` 及控制字符替换为 `_`，撞名时追加 ` 2` 序号；实现见 `src/saves/backupExport.ts`）。安卓：写入公共目录 `Download/AARC/` 后调起系统分享面板（分享要求 content:// URI，私有目录文件不能直接分享，故走公共目录副本，也顺带在下载目录留底）；桌面：弹目录选择对话框，zip 写入所选目录。浏览器 dev 模式不可用（提示"仅在应用内可用"）。
   - **分组**（2026-09-09 新增）：列表按组分节，组头显示组名 + 存档数，点击折叠（折叠状态存 localStorage 键 `aarc-tauri-save-groups-collapsed`，纯 UI 态）；组头提供 ↑/↓ 调序、重命名、删除（成员回未分组）；存档项的"分组"按钮打开独立 Modal（覆盖在管理器上层，标题"为「存档名」设置分组"）：现有分组 + 未分组 + 新建分组。"未分组"固定排在所有分组之后且仅在有内容时显示；脏 `groupId`（指向已删分组）渲染时兜底进未分组。
 - 样式参考本包 `Pop.vue` 的简洁风格，遮罩 + 居中卡片即可；`Esc`/点遮罩关闭。
 
@@ -146,6 +146,8 @@ export interface SaveStorage {
 6. 收尾：更新本包 README（第 6 步状态、存档位置说明）与根 `AGENTS.md` 中 aarc-tauri 的描述。
 
 ## 五、修订记录
+
+- **2026-09-24 备份文件名带日期 + 撞名序号**（§3.3）：桌面分支原本固定名 `aarc-app-backup.zip` + plugin-fs `writeFile`（无条件覆盖），两次选同一目录会把上一次的备份静默换掉（安卓走 `createNewPublicFile` 由系统追加序号，无此问题）。现按天命名 `aarc-app-backup-<yyMMdd>.zip`（复用 core `timeStr('date')`，与图片导出的日期命名同格式）；桌面在同一天重复导出时用 `fs.exists` 探测并避让成 `aarc-app-backup-<yyMMdd> (2).zip`，两边都不覆盖上一份。`fs:allow-exists` 权限此前已在 capabilities 中。
 
 - **2026-09-10 打包导出备份**（§3.3/§3.6）：存档管理器标题栏新增导出按钮，全部存档经 `fflate`（新增依赖）在 JS 侧打包为 `aarc-app-backup.zip`。安卓走 `createNewPublicFile`（Download/AARC/）+ `showShareFileAppChooser`；桌面走 `dialog.open({ directory })` + `writeFile`。capabilities 相应新增 `dialog:allow-open`、`android-fs:allow-create-new-public-file`、`android-fs:allow-show-share-file-app-chooser`。
 
