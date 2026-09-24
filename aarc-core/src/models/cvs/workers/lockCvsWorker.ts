@@ -6,6 +6,7 @@ import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { parseCollabLockKey, useCollabLockStore } from "aarc-core/models/stores/collabLockStore";
 import { useTextTagRectStore } from "aarc-core/models/stores/saveDerived/textTagRectStore";
+import { useFormalizedLineStore } from "aarc-core/models/stores/saveDerived/formalizedLineStore";
 
 export interface LockCrossMark {
     center: Coord
@@ -27,6 +28,7 @@ export const useLockCvsWorker = defineStore('lockCvsWorker', () => {
     const configStore = useConfigStore()
     const collabLockStore = useCollabLockStore()
     const textTagRectStore = useTextTagRectStore()
+    const formalizedLineStore = useFormalizedLineStore()
 
     /** 收集所有“被他人锁定且仍存在”的对象的叉标记（纯数据计算，便于测试） */
     function collectLockCrosses(): LockCrossMark[] {
@@ -77,13 +79,17 @@ export const useLockCvsWorker = defineStore('lockCvsWorker', () => {
                 const line = saveStore.getLineById(parsed.id)
                 if (!line)
                     continue
-                const pts = line.pts.map(id => saveStore.getPtById(id)).filter(p => !!p)
-                if (pts.length === 0)
+                // 每个控制点区间的中点画一个叉，标出被锁范围
+                const mids = formalizedLineStore.getLineIntervalMidpoints(line)
+                if (mids.length === 0) {
+                    // 退化线路（如只剩 1 个控制点，无区间）：退化为在控制点处画叉，保持可见性
+                    const pt = line.pts.map(id => saveStore.getPtById(id)).find(p => !!p)
+                    if (pt)
+                        marks.push({ center: [...pt.pos], arm: baseArm * 2.5, width: baseWidth * 2 })
                     continue
-                // 线的叉画在其所有点的质心处
-                const cx = pts.reduce((s, p) => s + p.pos[0], 0) / pts.length
-                const cy = pts.reduce((s, p) => s + p.pos[1], 0) / pts.length
-                marks.push({ center: [cx, cy], arm: baseArm * 2.5, width: baseWidth * 2 })
+                }
+                for (const m of mids)
+                    marks.push({ center: m, arm: baseArm * 2.5, width: baseWidth * 2 })
             }
         }
         return marks
