@@ -11,6 +11,9 @@ import { useConfigStore } from "../configStore";
 import { formalize } from "aarc-core/utils/lineUtils/formalize";
 import { adaptLegacyGetTurnRadiusOf, buildLinePathGeometry } from "aarc-core/utils/lineUtils/buildLinePathGeometry";
 import { sampleLinePath } from "aarc-core/utils/lineUtils/sampleLinePath";
+import { PathPrimitive } from "aarc-core/utils/lineUtils/linePathPrimitives";
+import { intervalMidpoints } from "aarc-core/utils/lineUtils/intervalMidpoints";
+import { turn45Ratio } from "../configStore";
 
 export interface FormalizedLine{
     lineId:number,
@@ -28,6 +31,24 @@ export interface SpanRenderInfo {
 
 export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
     const { getItem, setItem, enumerateItems, clearItems } = useKvStoreCore<FormalPt[]>()
+
+    /**
+     * 路径几何缓存条目（见 docs/sampling/interval-midpoints.md）。
+     * 几何与区间中点同条目缓存：中点由几何纯函数派生，几何在则中点零成本。
+     */
+    interface LinePathCacheEntry {
+        formalPts: FormalPt[]
+        radiusKey: string
+        prims: PathPrimitive[]
+        midpoints: Coord[]
+    }
+    /** 由存档数据派生的缓存，随 store 实例生灭；正确性由读取时的引用/快照校验保证，清缓存只是内存管理 */
+    const pathCache = new Map<number, LinePathCacheEntry>()
+
+    function clearAllItems(){
+        clearItems()
+        pathCache.clear()
+    }
 
     /** formalizedLines“选中点拖动时”的局部值（activeCvs画布中算出的，正经值可能还没更新）该值仅对activePt有效 */
     let localFormalSegs:FormalizedLine[]|null = null
@@ -122,27 +143,65 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
     }
 
     /**
+     * 取线路的 formal 点；视野外（渲染层已驱逐缓存）的线路即时 formalize，
+     * 不回写 formal 点缓存，避免污染渲染节奏
+     */
+    function resolveFormalPts(line: Line): FormalPt[] {
+        return getItem(line.id) ?? formalize(useSaveStore().getPtsByIds(line.pts))
+    }
+
+    /** 半径相关输入的快照，任一变化即令几何失效（不信任钩子、只认输入） */
+    function radiusKeyOf(cs: ReturnType<typeof useConfigStore>, line: Line): string {
+        return `${cs.config.lineTurnAreaRadius}|${cs.config.lineWidth}|${turn45Ratio}|${line.width}|${line.type}`
+    }
+
+    function ensureLinePathEntry(line: Line): LinePathCacheEntry {
+        const cs = useConfigStore()
+        const radiusKey = radiusKeyOf(cs, line)
+        const livePts = getItem(line.id)
+        const cached = pathCache.get(line.id)
+        // formal 点缓存被驱逐时 livePts 为 undefined，引用比对必失败 → 即时 formalize 重建，校验自然通过
+        if (cached && cached.radiusKey === radiusKey && cached.formalPts === livePts)
+            return cached
+        const formalPts = resolveFormalPts(line)
+        const prims = buildLinePathGeometry(formalPts, line,
+            adaptLegacyGetTurnRadiusOf(cs.getTurnRadiusOf))
+        const entry: LinePathCacheEntry = { formalPts, radiusKey, prims, midpoints: intervalMidpoints(prims) }
+        pathCache.set(line.id, entry)
+        return entry
+    }
+
+    /** 线路的路径几何（带缓存）。几何 = formal 点 + 半径来源，二者任一变化自动重建 */
+    function getLinePathGeometry(line: Line): PathPrimitive[] {
+        return ensureLinePathEntry(line).prims
+    }
+
+    /**
+     * 线路所有控制点区间的中点（带缓存，派生自 getLinePathGeometry）。
+     * 返回外层数组的浅拷贝：坐标数组均为新建，调用方对返回数组的增删改
+     * 不会影响缓存与其他消费者。
+     */
+    function getLineIntervalMidpoints(line: Line): Coord[] {
+        return [...ensureLinePathEntry(line).midpoints]
+    }
+
+    /**
      * 面向业务的线路“采样”入口：以固定间隔沿线路实际绘制轨迹生成一系列点，
      * 采样点与屏幕所见的线贴合（含圆角，复刻 linkPts 的几何）。
      *
      * 默认始终按非简化几何采样（与缩放级别无关）；如需与屏幕所见严格一致，
      * 可自行传入 simplify（对应 lineShouldSimplify() 的结果）。
-     * 几何构造与采样行走均为纯函数，本入口只负责取 formal 点与注入半径来源。
+     * 非简化几何走 getLinePathGeometry 缓存，与区间中点等消费者共享同一份几何；
+     * simplify 是临时视图态，不缓存、现构。
      */
     function sampleLineCoords(line: Line, interval: number, options?: {
         includeEnds?: boolean
         simplify?: boolean
     }): Coord[] {
-        // 视野外的线路渲染时会清掉 formalPts 缓存，此处判空并按需重新 formalize
-        let formalPts = getItem(line.id)
-        if (!formalPts) {
-            const saveStore = useSaveStore()
-            formalPts = formalize(saveStore.getPtsByIds(line.pts))
-        }
-        const cs = useConfigStore()
-        const prims = buildLinePathGeometry(formalPts, line,
-            adaptLegacyGetTurnRadiusOf(cs.getTurnRadiusOf),
-            { simplify: options?.simplify })
+        const prims = options?.simplify
+            ? buildLinePathGeometry(resolveFormalPts(line), line,
+                adaptLegacyGetTurnRadiusOf(useConfigStore().getTurnRadiusOf), { simplify: true })
+            : ensureLinePathEntry(line).prims
         return sampleLinePath(prims, interval, options?.includeEnds ?? true)
     }
 
@@ -151,9 +210,11 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
         getLinesFormalPts: getItem,
         enumerateFormalizedLines: enumerateItems,
         findAdjacentFormalPts,
-        clearItems,
+        clearItems: clearAllItems,
         setLocalFormalSegs,
         collectSpanRenderInfos,
-        sampleLineCoords
+        sampleLineCoords,
+        getLinePathGeometry,
+        getLineIntervalMidpoints
     }
 })

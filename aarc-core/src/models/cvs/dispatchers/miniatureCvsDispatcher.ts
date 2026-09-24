@@ -64,14 +64,8 @@ export const useMiniatureCvsDispatcher = defineStore('miniatureCvsDispatcher', (
         return new Blob([optimizedSvgStr], { type: 'image/svg+xml;charset=utf-8' })
     }
 
-    async function renderMiniatureCvsToSvgBlobUrl(options:{sideLength:number, lineWidth:number, lines?:Line[], filterNotOpened?:boolean}):Promise<string>{
-        const blob = await renderMiniatureCvsToSvgBlob(options)
-        return URL.createObjectURL(blob)
-    }
-
     return {
         renderMiniatureCvs,
-        renderMiniatureCvsToSvgBlob,
-        renderMiniatureCvsToSvgBlobUrl
+        renderMiniatureCvsToSvgBlob
     }
 })

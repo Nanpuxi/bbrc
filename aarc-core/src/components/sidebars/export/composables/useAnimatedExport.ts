@@ -144,15 +144,11 @@ export function useAnimatedExport() {
     }
 
     /**
-     * 创建 Blob URL 并触发下载
+     * 触发下载，并在 60 秒后复位"已导出"状态
      */
     function downloadBlob(blob: Blob, fileName: string): void {
-        const url = URL.createObjectURL(blob)
-        triggerDownload(url, fileName)
-
-        // 清理
+        triggerDownload(blob, fileName)
         setTimeout(() => {
-            URL.revokeObjectURL(url)
             exported.value = false
         }, 60000)
     }

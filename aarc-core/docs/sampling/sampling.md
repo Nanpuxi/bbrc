@@ -225,8 +225,11 @@ interface PathPrimitive {
 
 之后“第 i 段的中点”= 覆盖该区间的图元弧长范围取半，代入 `pointAtArcLength`。若未来 span 的语义细化（样式分段与几何区间解耦），此标注也是现成的挂载点。
 
+> “区间中点”作为可复用能力与缓存机制的完整设计（业务入口、失效校验、消费者示例）见同目录 `interval-midpoints.md`。
+
 ### 2.9 放置位置与依赖
 
 - 纯几何部分（图元接口与实现、`buildLinePathGeometry`、转角处理器、`sampleLinePath`、`pointAtArcLength`）不依赖 store，放 `aarc-core/src/utils/lineUtils/`（或 `models/cvs/common/`），用 vitest 做单元测试（该目录已有测试先例）。
 - 入口函数（面向业务）封装为：入参 `line: Line` + `interval`，内部 `formalize(saveStore.getPtsByIds(line.pts))` → 几何 → 采样，返回 `Coord[]`。避免把 store 依赖带进纯几何层，便于测试。
 - 测试要点：各图元的 `length/pointAt` 自洽（数值微分验证切向、抽样验证在几何上）；直线线路（间隔整除/不整除）；单转角（采样点落在圆弧上：到圆心距离 = r）；45°/135° 半径折算；自由点任意角度；环线闭合；退化段；短段 `len/2` 截断；`simplify` 模式；区间索引 → 弧长范围 → `pointAtArcLength` 的往返一致性。
+
