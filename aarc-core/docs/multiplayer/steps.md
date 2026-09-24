@@ -6,6 +6,7 @@
 - `backend-plan.md`：后端方案（透传 patch、不做解析）
 - `id-allocation.md`：ID 分配方案（方案C：负数分区，已实施）
 - `object-locking.md`：对象锁与三步操作流程分析
+- `activity-log.md`：协作面板成员列表与事件日志（设计，待实施）
 
 ## 已完成
 
@@ -78,6 +79,7 @@
   - **web 接线**（Editor.vue）：preflight `Occupied` 不再转仅浏览——`loadData(forEdit=false)`（不抢心跳）加载后 `collabSession.join` 成为协作者，加入失败回退仅浏览；所有可编辑打开都进房（首个进房者即房主）；**保存门**：`isInSession && !isOwner` 拒绝保存并提示"由房主负责保存"；`heartbeatActive` 标志精确跟踪心跳持有（协作者不持心跳、不触发 release）；**房主↔心跳同步**：非房主却持心跳 → 释放；房主无心跳（空房残留占用/继任）→ `ensureOwnerHeartbeat` 轮询 `loadStatus`，旧占用过期后借 `loadData(id, true)` 的 Initialization 接管（数据丢弃，30s 重试）；`OwnerChanged` watch 驱动接管与提示更新；会话异常结束（同步兜底失败）沿用项目惯例 2s 后刷新页面重进
   - **断线蒙层**：`pages/editors/components/CollabStatusOverlay.vue`（`isInSession && !canEdit` 时全屏盖住画布，z-index 400 低于聊天窗 499，含"离开编辑器"按钮）；离房/关档走 `leave` + `clearIdPrefix` + `clearAllLocks`（会话层 cleanupLocal 统一处理）
   - **远程 op 渲染调度**（`models/collab/remoteRenderScheduler.ts`）：数据应用即时、只有渲染被调度——大存档整帧渲染 100ms+ 且在主线程，每条远程 op 都立即渲染会打断本地操作。规则：画布按住交互中（envStore `moveStartHandler`/`movingHandler` 按住时上报）与距上次主画布渲染不足 `idleMs`（默认 2000ms，可调）时不主动渲染（用户自己的渲染会自然带出远程更新），被抑制的请求合并为一次静止后补渲染（到点重判）；远程渲染同样刷新时间戳，对方持续操作时天然节流到每 idleMs 一帧；快照整档重建走 `renderNow` 无视抑制立即呈现；渲染函数由 mainCvsDispatcher 注入（未注入时静默跳过，node 单测友好）；7 个单测钉住调度行为
+- [x] 4.9 **协作面板：成员列表与事件日志**（设计见 `activity-log.md`；纯前端，协议零改动）：core 新增 `models/collab/opSummary.ts`（`summarizeSaveDiff(diff, save)`：按顶层 key 生成"新增了车站「新宿」/删除了 2 个线路/调整了线路的顺序"等片段，用 `、` 连接，忽略 `idIncre` 噪音，识别不了兜底"进行了编辑"；`$rm`/`$upd` 名称取应用前存档）与 `models/collab/collabLogStore.ts`（环形 100 条、纯数据无副作用）；会话层 4 处挂钩——`onUserJoined`/`onUserLeft` 记日志 + `showPop` 气泡、`applyOpNow` 在应用前概括记日志（本地 op 走 `captureLocalOp` 天然不记）、`cleanupLocal` 清空；web `CollabPanel.vue` 加成员列表（房主/我徽章）与事件日志区块（贴底跟随滚动、join/leave 弱化样式），`sessionStatus` 去掉"N 人在线"计数；opSummary 9 个单测 + 会话层 4 个挂钩用例
 - [ ] 4.7 **验证**：`pnpm --filter aarc-core type-check`、`pnpm --filter aarc-web type-check`、core 单测（mock 传输接口）、`dotnet test AARC.Collab.Test`
 - [x] 4.8 **协作功能开关**（`save.meta.collabEnabled`，旧存档 normalize 默认 false）：编辑器右上角新增 `CollabPanel.vue`（按钮在聊天按钮左侧），仅存档所有者可编辑开关、其他人仅见启用状态；未启用时打开存档不加入协作房间（Occupied 回退协作前的仅浏览行为）；所有者关闭时先把开关变更作为 op 广播（meta 变更不触发画布渲染，手动 `captureLocalOp` + 限时 `flushLocalOps`）再离房，所有成员（含所有者自己）经 Editor 的 meta watch 断开并弹窗"所有者已关闭协作"（`CollabPanel.notifyCollabClosed`）；关闭导致的离房不触发"会话异常结束"刷新，非心跳持有者改提示"无法保存请刷新"
 

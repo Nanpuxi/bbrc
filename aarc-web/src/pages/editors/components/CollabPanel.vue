@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SideBar from 'aarc-core/components/common/SideBar.vue'
 import Prompt from 'aarc-core/components/common/Prompt.vue'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore'
+import { useCollabLogStore } from 'aarc-core/models/collab/collabLogStore'
 import collabIcon from '@/assets/ui/collab.svg'
 
 // 多人协作面板（参考 ChatRoom.vue）：展开按钮在聊天按钮左侧，
-// 内部只有功能开关——存档所有者可编辑，其他人仅能看到启用状态。
+// 内部有功能开关（存档所有者可编辑，其他人仅能看到启用状态）、房间内成员列表、
+// 以及协作事件日志（他人进/出房、他人的编辑概括；日志由 core collabLogStore 产生）。
 // 开关存于 save.meta.collabEnabled；启用时才加入协作房间（SignalR）。
 // 两种关闭提示（backend-plan.md §7.1 ②）：
 // - "所有者已关闭协作"：房主在面板里关协作开关（collabEnabled=false 经 op 广播），Editor 调 notifyCollabClosed
@@ -28,9 +30,12 @@ const emit = defineEmits<{
 const router = useRouter()
 const saveStore = useSaveStore()
 const collabSession = useCollabSessionStore()
+const collabLog = useCollabLogStore()
 const sidebar = useTemplateRef('sidebar')
+const logRef = useTemplateRef('log')
 const closedNoticeKind = ref<'collab' | 'room' | null>(null)
 let closedNoticeShown = false // 两种关闭提示只弹一次（先到的为准）
+const atBottom = ref(true)
 
 const enabled = computed(() => saveStore.save?.meta.collabEnabled === true)
 const canEdit = computed(() => props.isOwner && !props.viewOnly)
@@ -45,8 +50,35 @@ const sessionStatus = computed(() => {
         return '所有者已离线，等待重连'
     if (collabSession.connState !== 'online')
         return '连接已断开'
-    return `协作中（${collabSession.members.length} 人在线）`
+    return '协作中'
 })
+
+// 新日志到达且原本贴在底部时跟随滚底；用户上翻查看历史时不打断
+watch(() => collabLog.entries.length, async () => {
+    if (atBottom.value) {
+        await nextTick()
+        scrollToBottom()
+    }
+})
+
+function isScrolledToBottom(el: HTMLElement | null): boolean {
+    if (!el)
+        return true
+    return el.scrollHeight <= el.clientHeight + el.scrollTop + 2
+}
+function scrollToBottom() {
+    const el = logRef.value as HTMLElement | null
+    if (!el)
+        return
+    el.scrollTop = el.scrollHeight
+    atBottom.value = true
+}
+function checkAtBottom() {
+    atBottom.value = isScrolledToBottom(logRef.value as HTMLElement | null)
+}
+function formatTime(time: number): string {
+    return new Date(time).toLocaleTimeString()
+}
 
 function open() {
     sidebar.value?.extend()
@@ -110,6 +142,25 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
                 </span>
             </div>
             <div v-if="sessionStatus" class="sessionStatus">{{ sessionStatus }}</div>
+            <div v-if="collabSession.isInSession" class="members">
+                <div class="sectionTitle">在线成员</div>
+                <div v-for="m in collabSession.members" :key="m.userId" class="member">
+                    <span class="memberName">{{ m.userName }}</span>
+                    <span v-if="m.userId === collabSession.ownerUserId" class="badge owner">房主</span>
+                    <span v-if="m.userId === collabSession.myUserId" class="badge me">我</span>
+                </div>
+            </div>
+            <div v-if="collabSession.isInSession" class="logWrap">
+                <div class="sectionTitle">事件日志</div>
+                <div ref="log" class="log" @scroll="checkAtBottom">
+                    <div v-for="e in collabLog.entries" :key="e.id" class="logEntry" :class="e.kind">
+                        <span class="time">{{ formatTime(e.time) }}</span>
+                        <span class="userName">{{ e.userName }}</span>
+                        <span class="text">{{ e.text }}</span>
+                    </div>
+                    <div v-if="collabLog.entries.length === 0" class="emptyTip">暂无事件</div>
+                </div>
+            </div>
             <div class="tips">
                 启用后，多名用户可同时编辑本存档并实时同步；仅存档所有者可修改此开关。
             </div>
@@ -151,12 +202,19 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
 }
 .collabPanel {
     padding: 20px 10px;
+    height: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 16px;
     .header {
         font-size: 18px;
         font-weight: bold;
+    }
+    .sectionTitle {
+        font-size: 13px;
+        color: #999;
+        margin-bottom: 6px;
     }
     .row {
         display: flex;
@@ -190,6 +248,80 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
         font-size: 14px;
         color: #666;
         text-align: center;
+    }
+    .members {
+        .member {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            line-height: 1.9;
+            .memberName {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .badge {
+                flex-shrink: 0;
+                font-size: 12px;
+                border-radius: 4px;
+                padding: 0 5px;
+                color: white;
+                &.owner {
+                    background-color: #e8a33d;
+                }
+                &.me {
+                    background-color: #4a90e2;
+                }
+            }
+        }
+    }
+    .logWrap {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        .log {
+            flex: 1;
+            min-height: 120px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            .logEntry {
+                font-size: 13px;
+                line-height: 1.5;
+                word-break: break-word;
+                .time {
+                    color: #999;
+                    margin-right: 6px;
+                }
+                .userName {
+                    font-weight: bold;
+                    margin-right: 4px;
+                }
+                // 进/出房属系统事件，弱化为居中浅色斜体（对应 ChatRoom 的 system 变体）
+                &.join,
+                &.leave {
+                    text-align: center;
+                    color: #856404;
+                    font-style: italic;
+                    .userName {
+                        font-weight: normal;
+                    }
+                }
+            }
+            .emptyTip {
+                align-self: center;
+                color: #999;
+                margin-top: auto;
+                margin-bottom: auto;
+            }
+        }
     }
     .tips {
         font-size: 13px;

@@ -6,6 +6,7 @@ import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueCompo
 import { useCollabStore, collabIdCounterCap } from 'aarc-core/models/stores/collabStore'
 import { useCollabLockStore } from 'aarc-core/models/stores/collabLockStore'
 import { useCollabSessionStore, collabSessionTiming } from 'aarc-core/models/collab/collabSessionStore'
+import { useCollabLogStore } from 'aarc-core/models/collab/collabLogStore'
 import {
     CollabTransport, CollabTransportHandlers, JoinCollabRoomInfo,
     SyncCollabOpsInfo, CollabSnapshotInfo, CollabOpMsg
@@ -837,5 +838,73 @@ describe('collabSessionStore 协作会话编排', () => {
         expect(session.state).toBe('synced')
         expect(mock.requestSnapshotCalls).toBe(1)      // 非独房：请求快照（由自己的另一连接提供）
         expect(useSaveStore().save!.points.map(p => p.id)).toEqual([900])
+    })
+
+    // ---- 事件日志与进/出房气泡（activity-log.md §3.3）----
+
+    it('他人进/出房：各记一条日志并弹气泡', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        const log = useCollabLogStore()
+        await session.join(1)
+        expect(log.entries).toEqual([])   // 自己进房不记日志、不弹气泡
+
+        const popSpy = vi.spyOn(useUniqueComponentsStore(), 'showPop')
+        mock.handlers.onUserJoined({ userId: 7, userName: 'alice' })
+        expect(log.entries.map(e => [e.kind, e.userName, e.text])).toEqual([['join', 'alice', '加入了协作']])
+        expect(popSpy).toHaveBeenCalledWith('alice 加入了协作', 'info')
+
+        mock.handlers.onUserLeft({ userId: 7, userName: 'alice' })
+        expect(log.entries.map(e => [e.kind, e.userName, e.text])).toEqual([
+            ['join', 'alice', '加入了协作'],
+            ['leave', 'alice', '离开了协作'],
+        ])
+        expect(popSpy).toHaveBeenCalledWith('alice 离开了协作', 'info')
+        expect(session.members.map(m => m.userId)).toEqual([1])
+    })
+
+    it('远程 op：按应用前的存档概括成一条日志', async () => {
+        const save = createSave()
+        save.lines = [{ id: 1, name: '山手线', nameSub: '', pts: [], color: '#f00', type: 0 }] as Save['lines']
+        useSaveStore().save = save
+        const session = useCollabSessionStore()
+        const log = useCollabLogStore()
+        await session.join(1)
+
+        mock.handlers.onOp(mkOp(1, { points: { $add: [{ id: 801, pos: [0, 0], dir: 0, sta: 1, name: '新宿' }] }, idIncre: { $set: 101 } } as SaveDiff))
+        await flush()
+        mock.handlers.onOp(mkOp(2, { lines: { $rm: [1] } } as SaveDiff))
+        await flush()
+
+        expect(log.entries.map(e => `${e.userName}:${e.text}`)).toEqual(['bob:新增了车站「新宿」', 'bob:删除了线路「山手线」'])
+        expect(log.entries.every(e => e.kind === 'op')).toBe(true)
+    })
+
+    it('本地 op 不记日志（自己知道自己干了什么）', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        const log = useCollabLogStore()
+        await session.join(1)
+
+        mock.submitImpl = async () => 1
+        const save = useSaveStore().save!
+        save.points = [{ id: 7, pos: [0, 0], dir: 0, sta: 1, name: '池袋' }] as Save['points']
+        session.captureLocalOp()
+        await waitFor(() => session.pendingLocalOpCount() === 0)
+
+        expect(log.entries).toEqual([])
+    })
+
+    it('离房清空日志（日志随会话消亡）', async () => {
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        const log = useCollabLogStore()
+        await session.join(1)
+
+        mock.handlers.onUserJoined({ userId: 7, userName: 'alice' })
+        expect(log.entries.length).toBe(1)
+
+        await session.leave()
+        expect(log.entries).toEqual([])
     })
 })

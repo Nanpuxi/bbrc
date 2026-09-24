@@ -11,6 +11,8 @@ import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
 import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 import { applyRemoteSaveDiff } from "aarc-core/models/collab/remoteOpApplier";
+import { summarizeSaveDiff } from "aarc-core/models/collab/opSummary";
+import { useCollabLogStore } from "aarc-core/models/collab/collabLogStore";
 import { bumpSaveDataRevision } from "aarc-core/models/collab/saveDataRevision";
 import { applyRemoteCollabLock } from "aarc-core/models/collab/lockApplier";
 import { prepareSavePayload, reloadSaveFromSnapshot } from "aarc-core/app/editorSession";
@@ -173,6 +175,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
      */
     function applyOpNow(op: CollabOpMsg): Promise<void> {
         const diff = JSON.parse(op.patch) as SaveDiff
+        // 概括必须在应用之前生成：$rm/$upd 目标的名称应用后就查不到了
+        useCollabLogStore().add({ kind: 'op', userName: op.userName, text: summarizeSaveDiff(diff, useSaveStore().save) })
         const p = applyRemoteSaveDiff(diff)
         // 基线同步应用同一 diff：否则下次本地 capture 会把他人变更误算成本地 op
         if (opBaseline)
@@ -430,6 +434,9 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             return
         if (!members.value.some(x => x.userId === m.userId))
             members.value = [...members.value, m]
+        // 自己进房不会收到自己的 UserJoined（初始成员列表由 join 返回值直接赋值），天然不弹自己
+        useCollabLogStore().add({ kind: 'join', userName: m.userName, text: '加入了协作' })
+        useUniqueComponentsStore().showPop(`${m.userName} 加入了协作`, 'info')
     }
 
     function onUserLeft(m: CollabMemberInfo): void {
@@ -437,6 +444,8 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             return
         members.value = members.value.filter(x => x.userId !== m.userId)
         useCollabLockStore().clearLocksOfHolder(m.userName)
+        useCollabLogStore().add({ kind: 'leave', userName: m.userName, text: '离开了协作' })
+        useUniqueComponentsStore().showPop(`${m.userName} 离开了协作`, 'info')
     }
 
     function onOwnerChanged(m: CollabMemberInfo): void {
@@ -711,6 +720,7 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         lockStore.lockRequestHandler = undefined
         lockStore.lockReleaseHandler = undefined
         lockStore.clearAllLocks()
+        useCollabLogStore().clear()   // 日志随会话消亡，重进房间是全新日志
     }
 
     /**
