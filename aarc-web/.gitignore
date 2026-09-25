@@ -33,6 +33,3 @@ public/recentUpdates.json
 
 # prebuild 从仓库根复制的许可证（见 copy-license.mjs）
 public/LICENSE.txt
-
-# 客户端下载产物（见 sync-client-artifacts.mjs，由 pnpm syncClientArtifacts 生成）
-public/downloads/

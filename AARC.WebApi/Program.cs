@@ -4,6 +4,7 @@ using AARC.WebApi.Repos;
 using AARC.WebApi.Services.App;
 using AARC.WebApi.Services.App.Logging;
 using AARC.WebApi.Services.Chat;
+using AARC.WebApi.Services.Clients;
 using AARC.WebApi.Services.Files;
 using AARC.WebApi.Services.Identities;
 using AARC.WebApi.Services.Saves;
@@ -31,6 +32,8 @@ try
     builder.Services.AddRepoServices();
     //添加文件存储服务
     builder.Services.AddFilesServices();
+    //添加客户端产物下载服务
+    builder.Services.AddClientsServices();
     //添加存档处理服务
     builder.Services.AddSavesServices();
     //添加身份有关服务

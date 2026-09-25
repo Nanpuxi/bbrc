@@ -31,13 +31,16 @@ const notices: Array<{ text: string, linkText?: string, linkHref?: string, suffi
     { text: '问题反馈渠道：qq群962984700私聊群主 / 18971501210@189.cn' },
     { text: 'PC 端存档与设置存储在 %APPDATA%\\com.jowei19.aarc（即 C:\\Users\\你的用户名\\AppData\\Roaming\\com.jowei19.aarc），删除 exe 不会清除该目录，需要手动决定保留还是清理。' },
     { text: '安卓端存档存储在应用私有目录（/Android/data/com.jowei19.aarc），卸载后会一同消失，如有需要请使用“导出备份”功能保留，或访问系统文件管理进行保存。' },
+    { text: '图片导出边长上限（一般为 16000）可能依然无法绕过' },
 ]
 
 const artifacts = ref<ClientArtifact[]>()
 const loadFailed = ref(false)
 
+const apiBase = import.meta.env.VITE_ApiUrlBase ?? ''
+
 onMounted(()=>{
-    fetch('/clientArtifacts.json').then((res)=>{
+    fetch(`${apiBase}/api/clientApp/info`).then((res)=>{
         if(!res.ok)
             throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -49,11 +52,22 @@ onMounted(()=>{
 })
 
 function latestOf(type: string){
+    // 与后端 GetLatest 行为对齐：按 updatedAt 取最新，而非数组末尾
     const list = (artifacts.value ?? []).filter((x)=>x.type === type)
-    return list[list.length - 1]
+    return list.reduce<ClientArtifact | undefined>(
+        (max, x)=>(!max || x.updatedAt > max.updatedAt ? x : max),
+        undefined)
 }
-const latest = computed(()=>Object.fromEntries(artifactTypes.map((t)=>[t.type, latestOf(t.type)])))
-const availableTypes = computed(()=>artifactTypes.filter((t)=>latest.value[t.type]))
+const latest = computed(()=>{
+    const map: Record<string, ClientArtifact> = {}
+    for (const t of artifactTypes) {
+        const l = latestOf(t.type)
+        if (l)
+            map[t.type] = l
+    }
+    return map
+})
+const availableTypes = computed(()=>artifactTypes.filter((t)=>t.type in latest.value))
 
 function fmtSize(bytes: number){
     if (bytes >= 1024 * 1024 * 1024)

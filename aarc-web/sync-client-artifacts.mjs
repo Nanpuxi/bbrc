@@ -1,6 +1,6 @@
-// 从 aarc-tauri 的构建产物目录复制产物到 public/downloads 供下载：
+// 从 aarc-tauri 的构建产物目录复制产物到 AARC.WebApi/Data/ClientApp 供 WebApi 下发：
 // - exe 压缩为 zip（zipName 指定包内文件名），apk 原样复制
-// - 并追加记录到 public/clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，均为产物本体的值）
+// - 并写出元数据 json clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，均为产物本体的值）
 // 文件名带 -YYYYMMDD-HHmm 时间戳（取产物文件创建时间），多版本可共存。
 // 幂等：产物未变化（sha256 已有记录）时不复制、不追加条目。
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -12,8 +12,8 @@ import { fileURLToPath } from 'node:url'
 
 const webDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(webDir, '..')
-const downloadsDir = join(webDir, 'public', 'downloads')
-const jsonPath = join(webDir, 'public', 'clientArtifacts.json')
+const clientAppDir = join(repoRoot, 'AARC.WebApi', 'Data', 'ClientApp')
+const jsonPath = join(clientAppDir, 'clientArtifacts.json')
 
 const artifacts = [
     {
@@ -71,7 +71,7 @@ if (existsSync(jsonPath)) {
     entries = JSON.parse(readFileSync(jsonPath, 'utf8'))
 }
 
-mkdirSync(downloadsDir, { recursive: true })
+mkdirSync(clientAppDir, { recursive: true })
 
 let changedAny = false
 for (const art of artifacts) {
@@ -84,7 +84,7 @@ for (const art of artifacts) {
     const fileTime = srcStat.birthtime ?? srcStat.mtime
     const existing = entries.find((e)=>e.type === art.type && e.sha256 === srcHash)
     if (existing) {
-        const destPath = join(downloadsDir, existing.fileName)
+        const destPath = join(clientAppDir, existing.fileName)
         if (existsSync(destPath)) {
             console.log(`[syncClientArtifacts] ${art.type} 产物未更新，跳过：${existing.fileName}`)
             continue
@@ -95,11 +95,11 @@ for (const art of artifacts) {
         continue
     }
     const { destName, data } = await buildDest(art, fileTime)
-    writeFileSync(join(downloadsDir, destName), data)
+    writeFileSync(join(clientAppDir, destName), data)
     entries.push({
         type: art.type,
         fileName: destName,
-        url: `/downloads/${destName}`,
+        url: `/api/clientApp/download?type=${art.type}`,
         updatedAt: fileTime.toISOString(),
         gitCommitId,
         sizeBytes: data.length, // 展示的是实际下载文件的大小（exe 为 zip 的大小）
