@@ -91,8 +91,11 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="scss">
+@use '../../styles/safeArea.scss' as safe;
+
 .body{
-    padding: 10px;
+    padding: calc(10px + #{safe.$safe-top}) calc(10px + #{safe.$safe-right}) calc(10px + #{safe.$safe-bottom}) 10px;
+    box-sizing: border-box;
     overflow-y: auto;
     height: 100vh;
     position: relative;

@@ -60,9 +60,9 @@ defineExpose({ show })
 
 <template>
     <div v-for="box,index in boxes" :key="box.created" @click="remove(index)" class="box" :style="{ 
-        right: box.right + 'px',
+        right: `calc(${box.right}px + env(safe-area-inset-right, 0px))`,
         width: (-rightDefault) + 'px',
-        top: height*index + top + 'px'
+        top: `calc(${height*index + top}px + env(safe-area-inset-top, 0px))`
          }" :class="box.type">
         <div>
             {{ box.msg }}

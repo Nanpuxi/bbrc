@@ -1,6 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.app" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- WebView 被 inset padding 让出的条带显示为窗口背景，与白底页面保持一致 -->
+        <item name="android:windowBackground">@android:color/white</item>
         <!-- Customize your theme here. -->
     </style>
 </resources>

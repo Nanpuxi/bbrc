@@ -71,7 +71,7 @@ onMounted(()=>{
 .mainOuter{
     width: 100vw;
     position: absolute; //只能absolute不能fixed
-    top: globalValues.$topbar-height;
+    top: globalValues.$topbar-height-total;
     height: globalValues.$body-height;
     transition: 0s;
     overflow: auto;

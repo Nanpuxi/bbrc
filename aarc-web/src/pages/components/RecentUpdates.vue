@@ -213,7 +213,7 @@ onMounted(async() => {
 
 .view-update-btn {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     background-color: #ff6b6b;
