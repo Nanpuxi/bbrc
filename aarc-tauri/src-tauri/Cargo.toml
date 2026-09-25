@@ -27,3 +27,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 # 安卓公共目录（相册）写入；与前端 tauri-plugin-android-fs-api 版本必须严格一致
 tauri-plugin-android-fs = { version = "=29.0.0", features = ["legacy_storage_permission"] }
+
+# 体积优化：优先缩小 .so（APK 体积的大头）
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
