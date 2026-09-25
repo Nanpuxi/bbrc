@@ -14,6 +14,8 @@ import { userUpgradeToMemberName } from '../identities/routes/routesNames';
 import { storeToRefs } from 'pinia';
 import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig.ts';
 import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl.ts';
+import Combinations from '../components/Combinations.vue';
+import { clientDownloadName, forkAarcName } from '../etc/routes/routesNames.ts';
 
 const { setEnteredFrom } = useEnteredCanvasFromStore()
 const userInfoStore = useUserInfoStore()
@@ -69,12 +71,23 @@ onMounted(()=>{
 <div class="marginedSection">
     <SearchSaveEntrance></SearchSaveEntrance>
 </div>
+<div v-if="!isFork">
+    <Combinations></Combinations>
+    <p class="gotoDownload">
+        <RouterLink :to="{name: clientDownloadName}">前往本地运行版下载页</RouterLink>
+        或者
+        <RouterLink :to="{name: forkAarcName}">根据你的需求定制</RouterLink>
+    </p>
+</div>
 <div v-if="!isFork" class="poker-frame">
     <a href="/#/derive-metroshuttle">
         <img class="poker-card" alt="metroshuttle"
             :src="convertToProxyUrlIfNeeded(`http://ms.jowei19.com/card-images/static/shanghai-longterm/station-12.webp`, 'icon')"/>
     </a>
 </div>
+<p class="gotoDownload">
+    <a href="/#/derive-metroshuttle">了解新游戏</a>
+</p>
 <div class="marginedSection">
     <DonorList></DonorList>
 </div>
@@ -204,9 +217,17 @@ onMounted(()=>{
     }
 }
 
+.gotoDownload {
+    text-align: center;
+    a {
+        color: cornflowerblue;
+        text-decoration: underline;
+    }
+}
+
 .poker-frame {
     width: 160px;
-    margin: 50px auto;
+    margin: 50px auto 10px;
         // 扑克牌长宽比，圆角取短边（宽度）的 10%，竖直半径换算为高度的百分比
         aspect-ratio: 5 / 7;
         overflow: hidden;

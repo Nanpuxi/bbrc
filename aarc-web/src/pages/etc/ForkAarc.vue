@@ -2,6 +2,7 @@
 import { guideInfo } from 'aarc-core/app/guideInfo';
 import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl';
 import { onMounted, ref } from 'vue';
+import Combinations from '../components/Combinations.vue';
 
 const gitUrl = 'https://gitee.com/au114514/aarc'
 const exampleUrl = 'http://aarc.maritel.jowei19.com'
@@ -26,6 +27,12 @@ onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
                 <a class="btn" :href="exampleUrl" target="_blank" rel="noopener">私服示范站点</a>
             </div>
         </header>
+
+        <p style="text-align: center;">
+            本系统由两部分组成，可自由组合替换
+        </p>
+
+        <Combinations />
 
         <section class="section features">
             <div class="feature">
