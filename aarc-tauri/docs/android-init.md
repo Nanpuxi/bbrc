@@ -156,3 +156,13 @@ sdkmanager 输出里的 `Failed to upload metrics: Failed to connect to https://
   - 验证签名：`~/Library/Android/sdk/build-tools/<版本>/apksigner verify --print-certs <apk>`
   - **keystore 与密码必须安全备份**（丢失则永远无法以同一身份发布更新，应用商店会拒收）；团队协作时通过安全渠道分发，不要进任何仓库/聊天记录
 - **真机回归重点**：取色器显示（依赖 `@aurouscia/au-color-picker` 版本对齐，其 scoped CSS 的 `data-v` 哈希须与组件 JS 一致）、导出/存档的 fs 落盘（Android 走应用私有目录/SAF，行为与桌面不同）、`window.confirm/alert` 行为、触屏下右键菜单交互。编辑器 UI 未做触屏适配，功能可用但体验是桌面版原样。
+
+## 七、gen/android 的手工定制（**不要轻易重新 init**）
+
+`gen/android/` 里除图标（3.3）外还有以下**手工定制**，`tauri android init` 重建工程时会按模板覆盖：
+
+- **`app/src/main/java/com/jowei19/aarc/MainActivity.kt`（安全区内缩）**：`onCreate` 里在根 view（`android.R.id.content`）上 `setOnApplyWindowInsetsListener`，把 `systemBars() or displayCutout()` insets 以 padding 形式消费并返回 `WindowInsetsCompat.CONSUMED`。效果：WebView 视口整体收缩到安全区内，CSS fixed/absolute 贴边元素与按画布 JS 坐标定位的浮层都天然避让状态栏/刘海/手势条；同时 insets 不再传给 WebView，CSS 的 `env(safe-area-inset-*)` 恒为 0，避免与原生 padding 双重内缩。同处还用 `WindowInsetsControllerCompat` 强制 `isAppearanceLightStatusBars/isAppearanceLightNavigationBars = true`（应用不做深色模式、页面白底，深色系统主题下需深色图标才可见）。
+- **`app/src/main/res/values/themes.xml` 与 `values-night/themes.xml`（白底窗口背景）**：`android:windowBackground` 设为白色。WebView 被 inset padding 让出的条带露出的是窗口背景，须与白底页面一致；night 同样白底（应用不做深色模式）。
+- **配套约束（不在 gen/ 内）**：`aarc-tauri/index.html` 的 viewport meta **不得**加 `viewport-fit=cover`（当前即不带）——Android 侧靠原生 padding 内缩，CSS env() 必须为 0；iOS 下 WKWebView 默认视口即落在安全区内，同样无需 cover。
+
+**恢复方式**：以上定制随 `gen/android/` 一起入库（见六），万一误执行 init，可用 `git diff` 逐文件恢复，并记得重跑 `pnpm gen:icons`（3.3）。非必要（如升级 tauri-cli 必须重建模板）不要重新 init。

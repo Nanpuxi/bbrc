@@ -14,7 +14,7 @@ pnpm --filter aarc-tauri build
 安卓（详见 `docs/android-init.md`）：
 
 ```sh
-pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标）
+pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标；gen/ 有手工定制，非必要勿重跑 init，见 docs/android-init.md 七）
 pnpm --filter aarc-tauri android:dev             # 连接设备/模拟器的 dev 模式
 pnpm --filter aarc-tauri android:build           # debug APK（universal，全 ABI）
 pnpm --filter aarc-tauri android:build:release   # release APK（按 ABI 分包；需先配签名）

@@ -1,7 +1,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- 不加 viewport-fit=cover：安卓侧由 MainActivity 把 insets 原生内缩（见 gen/android），
+         iOS 下 WKWebView 默认视口即落在安全区内；CSS 里的 env(safe-area-inset-*) 会取 0，不会二次内缩 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta http-equiv="cache-control" content="no-cache" />
     <title>AARC</title>
   </head>
