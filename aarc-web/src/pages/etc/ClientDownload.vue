@@ -75,7 +75,10 @@ function fmtSize(bytes: number){
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 function fmtTime(iso: string){
-    return iso.slice(0, 19).replace('T', ' ')
+    // updatedAt 为 UTC ISO 字符串，按本地时间显示
+    const d = new Date(iso)
+    const p = (n: number)=>String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 const { showPop } = useUniqueComponentsStore()
