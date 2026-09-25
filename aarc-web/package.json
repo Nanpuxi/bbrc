@@ -47,6 +47,7 @@
     "@aurouscia/signalr-comment-fixer": "^1.0.0",
     "@types/node": "^26.4.1",
     "@vitejs/plugin-vue": "^6.0.8",
+    "archiver": "^8.0.0",
     "execa": "^9.6.1",
     "sass": "^1.103.1",
     "tsx": "^4.23.13",

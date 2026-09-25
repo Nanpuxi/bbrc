@@ -28,6 +28,9 @@ const notices: Array<{ text: string, linkText?: string, linkHref?: string, suffi
     },
     { text: '仅从你信任的网站/个人那里获取 exe 或 apk，来源不明的不要点开，谨防恶意病毒软件。' },
     { text: '由于作者缺少苹果开发者资质，暂不提供 mac 和 iOS 版，有需要请自行编译。' },
+    { text: '问题反馈渠道：qq群962984700私聊群主 / 18971501210@189.cn' },
+    { text: 'PC 端存档与设置存储在 %APPDATA%\\com.jowei19.aarc（即 C:\\Users\\你的用户名\\AppData\\Roaming\\com.jowei19.aarc），删除 exe 不会清除该目录，需要手动决定保留还是清理。' },
+    { text: '安卓端存档存储在应用私有目录（/Android/data/com.jowei19.aarc），卸载后会一同消失，如有需要请使用“导出备份”功能保留，或访问系统文件管理进行保存。' },
 ]
 
 const artifacts = ref<ClientArtifact[]>()

@@ -1,10 +1,12 @@
-// 从 aarc-tauri 的构建产物目录复制 exe/apk 到 public/downloads，
-// 并追加记录到 public/clientArtifacts.json（更新时间、git提交ID、文件大小、sha256）。
-// 文件名带 -YYYYMMDD-HHmm 时间戳，多版本可共存。
+// 从 aarc-tauri 的构建产物目录复制产物到 public/downloads 供下载：
+// - exe 压缩为 zip（zipName 指定包内文件名），apk 原样复制
+// - 并追加记录到 public/clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，均为产物本体的值）
+// 文件名带 -YYYYMMDD-HHmm 时间戳（取产物文件创建时间），多版本可共存。
 // 幂等：产物未变化（sha256 已有记录）时不复制、不追加条目。
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execSync } from 'node:child_process'
+import { ZipArchive } from 'archiver'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,6 +20,7 @@ const artifacts = [
         type: 'exe',
         src: join(repoRoot, 'aarc-tauri', 'src-tauri', 'target', 'release', 'app.exe'),
         baseName: 'aarc',
+        zipName: 'aarc.exe',
     },
     {
         type: 'apk',
@@ -33,6 +36,26 @@ function sha256Of(path){
 function fmtStamp(d){
     const p = (n)=>String(n).padStart(2, '0')
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
+}
+
+// 最小封装：把单个文件打成 zip，返回 Buffer
+function zipAsBuffer(name, srcPath){
+    return new Promise((resolve, reject)=>{
+        const archive = new ZipArchive({ zlib: { level: 9 } })
+        const chunks = []
+        archive.on('data', (c)=>chunks.push(c))
+        archive.on('end', ()=>resolve(Buffer.concat(chunks)))
+        archive.on('error', reject)
+        archive.file(srcPath, { name })
+        archive.finalize()
+    })
+}
+
+async function buildDest(art, fileTime){
+    const ext = art.zipName ? '.zip' : (art.type === 'exe' ? '.exe' : '.apk')
+    const destName = `${art.baseName}-${fmtStamp(fileTime)}${ext}`
+    const data = art.zipName ? await zipAsBuffer(art.zipName, art.src) : readFileSync(art.src)
+    return { destName, data }
 }
 
 let gitCommitId = ''
@@ -57,31 +80,30 @@ for (const art of artifacts) {
         continue
     }
     const srcStat = statSync(art.src)
-    const srcSize = srcStat.size
     const srcHash = sha256Of(art.src)
     const fileTime = srcStat.birthtime ?? srcStat.mtime
     const existing = entries.find((e)=>e.type === art.type && e.sha256 === srcHash)
     if (existing) {
         const destPath = join(downloadsDir, existing.fileName)
-        if (existsSync(destPath) && statSync(destPath).size === srcSize) {
+        if (existsSync(destPath)) {
             console.log(`[syncClientArtifacts] ${art.type} 产物未更新，跳过：${existing.fileName}`)
             continue
         }
-        copyFileSync(art.src, destPath)
+        writeFileSync(destPath, (await buildDest(art, fileTime)).data)
         changedAny = true
         console.log(`[syncClientArtifacts] ${art.type} 产物文件缺失，已按记录的文件名补齐：${existing.fileName}`)
         continue
     }
-    const destName = `${art.baseName}-${fmtStamp(fileTime)}${art.type === 'exe' ? '.exe' : '.apk'}`
-    copyFileSync(art.src, join(downloadsDir, destName))
+    const { destName, data } = await buildDest(art, fileTime)
+    writeFileSync(join(downloadsDir, destName), data)
     entries.push({
         type: art.type,
         fileName: destName,
         url: `/downloads/${destName}`,
         updatedAt: fileTime.toISOString(),
         gitCommitId,
-        sizeBytes: srcSize,
-        sha256: srcHash,
+        sizeBytes: data.length, // 展示的是实际下载文件的大小（exe 为 zip 的大小）
+        sha256: srcHash, // 产物本体的 sha256（zip 为包内 exe 的）
     })
     changedAny = true
     console.log(`[syncClientArtifacts] ${art.type} 产物已更新：${destName}`)
