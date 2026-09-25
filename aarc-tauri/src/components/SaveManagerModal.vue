@@ -503,6 +503,9 @@ defineExpose({ open })
 .mask {
     position: fixed;
     inset: 0;
+    // 卡片居中，但横屏时上下仍可能贴进状态栏/手势条，用安全区 padding 收缩居中区域
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    box-sizing: border-box;
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 100000;
     display: flex;

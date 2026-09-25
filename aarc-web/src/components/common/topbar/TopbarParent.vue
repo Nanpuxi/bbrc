@@ -54,6 +54,7 @@ function toggleFold(){
 
 <style scoped lang="scss">
 @use '@/styles/globalValues';
+@use 'aarc-core/styles/safeArea.scss' as safe;
 
 $topbar-logo-area-width : 110px;
 
@@ -99,7 +100,9 @@ $topbar-logo-area-width : 110px;
     top: 0px;
     left: 0px;
     right: 0px;
-    height: globalValues.$topbar-height;;
+    height: globalValues.$topbar-height-total;
+    padding: safe.$safe-top safe.$safe-right 0 safe.$safe-left;
+    box-sizing: border-box;
     z-index: 1000;
     display: flex;
     justify-content: left;
@@ -111,14 +114,14 @@ $topbar-logo-area-width : 110px;
     top: 0px;
     left: 0px;
     right: 0px;
-    height: globalValues.$topbar-height;;
+    height: globalValues.$topbar-height-total;
     z-index: 900;
     box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.7);
 }
 
 .right{
     position: absolute;
-    right: 10px;
+    right: calc(10px + #{safe.$safe-right});
     display: flex;
     justify-content: right;
     gap: 7px;

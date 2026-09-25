@@ -1,5 +1,10 @@
+@use 'aarc-core/styles/safeArea.scss' as safe;
+
 $default-transition-time: 0.15s;
 
 $mainDivLRMargin: 20px;
 $topbar-height: 50px;
-$body-height: calc(100vh - $topbar-height);
+// 顶栏整体下移一个 safe-area-inset-top（viewport-fit=cover 后避让 iOS 状态栏），
+// 内容区偏移统一用它，与 TopbarParent 的实际占位保持一致
+$topbar-height-total: calc(#{$topbar-height} + #{safe.$safe-top});
+$body-height: calc(100vh - #{$topbar-height} - #{safe.$safe-top});

@@ -484,8 +484,8 @@ onBeforeUnmount(()=>{
 }
 .chatRoomWrap{
     position: fixed;
-    top: 10px;
-    right: 10px;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
     z-index: 499;
 }
 </style>

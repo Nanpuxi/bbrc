@@ -535,7 +535,7 @@ defineExpose({ startCreating })
 
 .save-order-btn {
     position: fixed;
-    bottom: 30px;
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     z-index: 100;
