@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "node scripts/gen-git-info.mjs && vite",
     "dev-host": "node scripts/gen-git-info.mjs && vite --host",
+    "prebuild": "node scripts/copy-license.mjs",
     "build": "node scripts/gen-git-info.mjs && vite build",
     "type-check": "vue-tsc --noEmit",
     "gen:icons": "node scripts/gen-icons.mjs",

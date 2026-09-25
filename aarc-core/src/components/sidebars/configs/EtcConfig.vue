@@ -7,8 +7,6 @@ import { storeToRefs } from 'pinia';
 import { useNameEditStore } from 'aarc-core/models/stores/nameEditStore';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo';
-import { getGitInfo } from 'aarc-core/utils/gitInfo/gitInfoGet';
-import { GitInfo } from 'aarc-core/utils/gitInfo/gitInfo';
 
 const saveStore = useSaveStore()
 const envStore = useEnvStore() //envStore.rerender() 默认会自动造成“阻止未保存离开”
@@ -31,13 +29,9 @@ function visibilityChangedHandler(){
         visibilityChangedTimes.value += 1
     }
 }
-const gitInfo = ref<GitInfo>()
 
 onMounted(()=>{
     document.addEventListener('visibilitychange', visibilityChangedHandler)
-    getGitInfo().then((info)=>{
-        gitInfo.value = info
-    })
 })
 onUnmounted(()=>{
     document.removeEventListener('visibilitychange', visibilityChangedHandler)
@@ -132,24 +126,12 @@ onUnmounted(()=>{
             <button class="lite" @click="configStore.writeConfigToSave();console.log({...saveStore.save})">打印存档到控制台</button>
         </td>
     </tr>
-    <tr v-if="gitInfo">
-        <td colspan="2" class="gitInfo">
-            <div>
-                分支 {{ gitInfo.branchName }}
-                <span class="ver">{{ gitInfo.commitId }}</span>
-            </div>
-            <div>
-                构建于
-                <span class="ver">{{ gitInfo.builtAt }}</span>
-            </div>
-        </td>
-    </tr>
 </tbody></table>
 </ConfigSection>
 </template>
 
 <style scoped lang="scss">
-.browserInfo, .gitInfo{
+.browserInfo{
     text-align: left;
     &>div{
         margin: 10px 0px 10px 0px;

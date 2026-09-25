@@ -19,6 +19,7 @@ import EtcConfig from './configs/EtcConfig.vue';
 import FreeSegmentConfig from './configs/FreeSegmentConfig.vue';
 import ColorsConfig from './configs/ColorsConfig.vue';
 import DataSourcesConfig from './configs/DataSourcesConfig.vue';
+import AboutConfig from './configs/AboutConfig.vue';
 
 const sidebar = useTemplateRef('sidebar')
 defineExpose({
@@ -62,6 +63,8 @@ defineExpose({
 <FreeSegmentConfig></FreeSegmentConfig>
 
 <EtcConfig></EtcConfig>
+
+<AboutConfig></AboutConfig>
 
 </SideBar>
 </template>
