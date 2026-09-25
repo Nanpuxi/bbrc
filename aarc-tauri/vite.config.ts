@@ -17,6 +17,11 @@ export default defineConfig({
   server: {
     host: devHost || '127.0.0.1',
     port: 5174,
+    watch: {
+      // android dev 时 gradle 会向 src-tauri/gen 写构建产物，
+      // chokidar watch 到被占用的 .so 会以 EBUSY 直接崩掉 vite
+      ignored: ['**/node_modules/**', '**/.git/**', '**/src-tauri/**']
+    },
     cors: {
       origin: devHost ? [...localOrigins, `http://${devHost}:5174`] : localOrigins,
       credentials: true

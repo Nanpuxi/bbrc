@@ -22,7 +22,6 @@ function git(args) {
 }
 
 function writeGitInfo(resObj) {
-    console.log(resObj)
     writeFileSync(resPath, JSON.stringify(resObj, undefined, 4))
 }
 

@@ -22,7 +22,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "android:init": "tauri android init",
-    "android:dev": "tauri android dev",
+    "android:dev": "node scripts/android-dev.mjs",
     "android:build": "tauri android build --apk --debug",
     "android:build:release": "tauri android build --apk --split-per-abi"
   },
