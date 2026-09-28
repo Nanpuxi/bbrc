@@ -1,8 +1,8 @@
-﻿using EzPinyin;
+using EzPinyin;
 using System.Text;
 using Pinyin;
 
-namespace AARC.WebApi.Utils
+namespace AARC.Utils
 {
     public static class PinyinConverter
     {
