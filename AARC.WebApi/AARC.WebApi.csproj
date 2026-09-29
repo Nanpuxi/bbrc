@@ -65,7 +65,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AARC.Diff\AARC.Diff.csproj" />
-    <ProjectReference Include="..\AARC.Utils\AARC.Utils.csproj" />
   </ItemGroup>
 
 </Project>

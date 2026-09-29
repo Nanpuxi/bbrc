@@ -5,7 +5,6 @@ WORKDIR /src
 # 复制解决方案和项目文件
 COPY AARC.slnx .
 COPY AARC.Diff/AARC.Diff.csproj AARC.Diff/
-COPY AARC.Utils/AARC.Utils.csproj AARC.Utils/
 COPY AARC.WebApi/AARC.WebApi.csproj AARC.WebApi/
 
 # 还原依赖
@@ -13,7 +12,6 @@ RUN dotnet restore AARC.WebApi/AARC.WebApi.csproj
 
 # 复制源码并构建
 COPY AARC.Diff/ AARC.Diff/
-COPY AARC.Utils/ AARC.Utils/
 COPY AARC.WebApi/ AARC.WebApi/
 RUN dotnet build AARC.WebApi/AARC.WebApi.csproj -c Release -o /app/build
 RUN dotnet publish AARC.WebApi/AARC.WebApi.csproj -c Release -o /app/publish
