@@ -8,7 +8,12 @@ import { useResourceAccessStore } from "aarc-core/models/stores/utils/resourceAc
 import { useResetterStore } from "aarc-core/models/stores/utils/resetterStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
 import { useMainCvsDispatcher } from "aarc-core/models/cvs/dispatchers/mainCvsDispatcher";
+import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
+import { initAfterRemoteSaveApplied } from "aarc-core/models/collab/remoteOpApplier";
+import { bumpSaveDataRevision } from "aarc-core/models/collab/saveDataRevision";
 import { coordRound } from "aarc-core/utils/coordUtils/coordRound";
+import { useCvsBlocksControlStore } from "aarc-core/models/cvs/common/cvs";
+import { nextTick } from "vue";
 
 /**
  * 编辑器会话入口（decoupling-step17.md 工作包 C）。
@@ -70,6 +75,33 @@ export async function loadSaveIntoEditor(raw: unknown, opts: LoadSaveOptions): P
 /** 卸载编辑器会话：注销“主画布渲染完成”回调等 core 侧清理 */
 export function disposeEditor(): void {
     useMainCvsDispatcher().initAfterMainCvsRendered(undefined)
+    initAfterRemoteSaveApplied(undefined)
+}
+
+/**
+ * 协作快照整档装填（collabSession 新客初始化 / Gap 重建用）：
+ * 以房主快照为底替换当前存档——normalize → 重建派生态 → undo 基线重建。
+ * 与 loadSaveIntoEditor 的差异：跳过数据源自动更新与图标预加载
+ * （快照来自已在编辑中的房主，数据源合并结果已含在其内；图标随渲染懒加载），
+ * 也不触碰 visitorMode 等宿主层装配。
+ */
+export function reloadSaveFromSnapshot(raw: unknown): void {
+    const saveStore = useSaveStore()
+    const resetterStore = useResetterStore()
+    const undoStore = useUndoStore()
+    saveStore.save = normalizeSave(raw)
+    bumpSaveDataRevision()  // 整档替换属真实数据变化：递增数据版本（未保存判据）
+    resetterStore.resetDerivedStores()
+    saveStore.ensureLinesOrdered()
+    // undo 基线：整档替换后历史不可信，重建基线
+    undoStore.clear()
+    undoStore.push(saveStore.save)
+    // 快照整档重建必须立即呈现（蒙层期间用户在等），无视活跃期抑制
+    // 先刷新画布 block 状态（否则画布不存在），下一个 tick 再进行渲染
+    useCvsBlocksControlStore().refreshBlocks()
+    nextTick(()=>{
+        useRemoteRenderScheduler().renderNow()
+    })
 }
 
 /**

@@ -41,6 +41,7 @@ core 不直接持有以下能力，全部由宿主提供。下列"web 实现"均
 | "未保存离开"路由守卫 | `initRouteGuardRegistrar(registrar)`（`utils/eventUtils/preventLeavingUnsaved.ts:9`）；`window.onbeforeunload` 部分由 core 自理 | `Editor.vue:60`，`router.beforeEach` |
 | 主画布渲染完成回调 | `mainCvsDispatcher.initAfterMainCvsRendered(cb)`（`models/cvs/dispatchers/mainCvsDispatcher.ts:69`），宿主用它做"阻止离开 + 心跳"（undo 入栈由 core 在 `notifyMainCvsRendered` 内自理，先于宿主回调执行）；未注入被调用时 `console.warn`（每次注册周期仅警告一次） | `Editor.vue:294` 注册，`:422` 离开编辑器时经 `disposeEditor()` 注销 |
 | 图标收藏夹（**双向回调**） | `userFileFavoriteStore`（`models/stores/utils/userFileFavoriteStore.ts`）：宿主调 `initOpenFavoritesSidebar(cb)` 注册"打开侧栏"实现（未注入则相关入口隐藏，被调用时仅 `console.warn`）；消费方可用 `openFavoritesSidebar(intent)` 传入一次性 `onSelected` 回调与 `fileType` 过滤；宿主在用户选中文件时调 `notifyFileSelected(file, contentUrl)`（`contentUrl` 为宿主拼好的按 uniqueName 的绝对固定链接，core 不感知拼法；存量资源无 uniqueName 时为 undefined）——优先消费一次性回调，否则回退到全局 `onFavoriteFileSelected`（由 core 的 `iconStore.ts:168` 赋值） | `components/common/userFile/UserFileFavorites.vue`（`open`/`select`） |
+| 多人协作传输 | `initCollabTransport(t)`（`models/collab/collabTransport.ts`）：实现 `CollabTransport`（房间/op/锁/快照请求 + 事件回调），快照 payload 压缩是传输层内部细节；不在 `initCoreHostServices` 聚合内，需单独注入；未注入则 `collabSessionStore.join` 报错 | `app/com/collabSignalrStore.ts`（SignalR `/collab` + HTTP 快照直传，LZString 压缩），`App.vue` `initWebCollabTransport()` 注入 |
 
 **弹窗 / 等待遮罩的行为约定**（任何宿主的 pop/wait 实现都必须遵循）：
 

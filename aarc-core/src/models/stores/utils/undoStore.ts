@@ -32,6 +32,16 @@ export const useUndoStore = defineStore('undo', ()=>{
         urPatches.push(state)
     }
 
+    // 协作场景：远程变更应用到 save 后调用，
+    // 让后续 push 以新状态为基线计算 diff，远程变更不会进入本地 undo 栈
+    function syncBaseline(state: Save){
+        if(!urPatches){
+            initUndo(state)
+            return
+        }
+        urPatches.syncBaseline(state)
+    }
+
     async function undo(){
         if(!urPatches || !canUndo.value)
             return
@@ -73,6 +83,7 @@ export const useUndoStore = defineStore('undo', ()=>{
         canUndo: computed(()=>canUndo.value),
         canRedo: computed(()=>canRedo.value),
         push,
+        syncBaseline,
         undo,
         redo,
         clear

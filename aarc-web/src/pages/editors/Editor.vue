@@ -37,6 +37,11 @@ import SavingDisabledWarning from './components/SavingDisabledWarning.vue';
 import { useSavesRoutesJump } from '../saves/routes/routesJump';
 import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom';
 import { useSignalrStore } from '@/app/com/signalrStore';
+import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore';
+import { initAfterRemoteSaveApplied } from 'aarc-core/models/collab/remoteOpApplier';
+import { hasUnsavedSaveDataRevision, markSaveDataSaved } from 'aarc-core/models/collab/saveDataRevision';
+import CollabStatusOverlay from './components/CollabStatusOverlay.vue';
+import CollabPanel from './components/CollabPanel.vue';
 import { useKickedFromCanvasStore } from '@/app/globalStores/kickedFromCanvas';
 import { KICK_PROMPT_WAIT_MS } from '@/pages/chat/consts';
 import { throttle } from '@/utils/lang/throttle';
@@ -73,6 +78,7 @@ const userInfoStore = useUserInfoStore()
 const signalrStore = useSignalrStore()
 const kickedFromCanvasStore = useKickedFromCanvasStore()
 const chatRoom = useTemplateRef('chatRoom')
+const collabPanel = useTemplateRef('collabPanel')
 const { loadedSave } = storeToRefs(useLoadedSave())
 const loadComplete = ref(false)
 const mainCvsDispatcher = useMainCvsDispatcher()
@@ -85,7 +91,7 @@ const savingDisabledWarningStore = useSavingDisabledWarningStore()
 
 const saveStatus = ref<SaveDto>()
 const chatEnabled = computed(() => saveStore.save?.meta.chatEnabled === true)
-const chatCanEnable = computed(() => {
+const isSaveOwner = computed(() => {
     const currentUserId = userInfoStore.userInfo?.id
     return !!currentUserId && currentUserId === ownerUserInfo.value?.userId
 })
@@ -135,26 +141,27 @@ async function load() {
             loadError.value = '根据权限设置，无法查看本存档'
             return
         }
-        if(preRes.status == SavePreflightStatus.ViewOnly || preRes.status == SavePreflightStatus.Occupied){
+        if(preRes.status == SavePreflightStatus.ViewOnly){
             if(!viewOnly.value){
                 console.log('根据preflight结果，已设为viewOnly模式')
                 viewOnly.value = true
             }
-            if(preRes.status == SavePreflightStatus.ViewOnly){
-                savingDisabledWarningStore.setWarning('当前为仅浏览模式，无法保存更改', true)
-            }
-            else if(preRes.status == SavePreflightStatus.Occupied){
-                savingDisabledWarningStore.setWarning(`当前有其他用户在编辑，无法保存更改\n占用者：${preRes.editingByUserName ?? '??'}`)
-                savingDisabledWarningStore.editingUserId = preRes.editingByUserId ?? 0
-            }
+            savingDisabledWarningStore.setWarning('当前为仅浏览模式，无法保存更改', true)
         }
+        // Occupied（他人在编辑）时的协作判定（backend-plan §7.1）：协作房间只能由存档所有者开启，
+        // 房间存在 ⟺ 持有心跳者在房内协作。开关开 + preflight 报告房间活跃 → 以协作者身份加入；
+        // 开关开但无房间 → 持有心跳者是独占编辑的 solo 用户（如非所有者先进入占用心跳），
+        // 此时开房/加入均无意义且会错误接管保存权 → 回退协作前的仅浏览；
+        // 开关关或未启用协作 → 仅浏览；房间加入失败时也回退仅浏览
 
         await checkLoginLeftTime(userInfo)
         
         const notOwner = !userInfo.id || userInfo.id !== ownerUserInfo.value?.userId
         let resp
         try{
-            const loadForEdit = !viewOnly.value
+            // Occupied 时不能用 forEdit 加载（会触发 Initialization 心跳抢占）：
+            // 协作者不触碰心跳，加载数据后通过协作房间同步编辑内容
+            const loadForEdit = !viewOnly.value && preRes.status != SavePreflightStatus.Occupied
             resp = await api.save.loadData(saveIdNum.value, loadForEdit)
         }
         catch{
@@ -162,6 +169,15 @@ async function load() {
         }
         try{
             const obj = resp ? JSON.parse(resp) : undefined
+            const collabJoinable = obj?.meta?.collabEnabled === true && preRes.collabRoomActive === true
+            if(preRes.status == SavePreflightStatus.Occupied && !collabJoinable){
+                if(!viewOnly.value){
+                    console.log('他人编辑中且未启用多人协作，已设为viewOnly模式')
+                    viewOnly.value = true
+                }
+                savingDisabledWarningStore.setWarning(`当前有其他用户在编辑，无法保存更改\n占用者：${preRes.editingByUserName ?? '??'}`)
+                savingDisabledWarningStore.editingUserId = preRes.editingByUserId ?? 0
+            }
             //浏览模式且不是所有者：文案即屏蔽理由，三处可各给各的，这里暂时共用
             await loadSaveIntoEditor(obj, {
                 visitorMode: viewOnly.value || notOwner,
@@ -171,6 +187,8 @@ async function load() {
                 onDataSourceEvent: dataSourceEventLoggers
             })
             loadComplete.value = true
+            // 数据版本基线：此刻加载的数据即云端状态；其后协作追赶应用的 op 才算未保存改动
+            markSaveDataSaved()
         }catch{
             showPop('存档损坏，请联系管理员', 'failed')
             return
@@ -179,7 +197,14 @@ async function load() {
             preventLeavingDisabled.value = true //浏览模式，不阻止未保存退出
         }
         else{
-            startHeartbeat()
+            if(preRes.status != SavePreflightStatus.Occupied)
+                startHeartbeat() // loadData(forEdit) 已完成 Initialization 心跳
+            // 仅当存档启用了多人协作功能时才加入协作房间（开关见 CollabPanel）；
+            // Occupied 时只有"开关开 + 房间活跃"才会走到这里（无房间已在上方回退仅浏览，不会误开房）；
+            // 非所有者在 preflight 报告无活跃房间时也不尝试进房：服务器必拒绝（仅存档所有者可开房），
+            // 徒增一次 SignalR 连接建立，且失败会误触发"会话异常结束"刷新
+            if(saveStore.save?.meta.collabEnabled === true && (!notOwner || preRes.collabRoomActive === true))
+                await joinCollabRoom()
         }
         // 加载完成后获取状态（warn/rule信息）
         const statusRes = await api.save.loadStatus(saveIdNum.value, true)
@@ -219,6 +244,17 @@ const { preventLeaving, releasePreventLeaving } = preventLeaveStore
 const { showUnsavedWarning, preventLeavingDisabled } = storeToRefs(preventLeaveStore)
 let lastSavedTime = 0
 async function saveData(mustBackup:boolean):Promise<boolean>{
+    //协作会话的保存门：保存责任人 = 房主（心跳持有者）
+    if(collabSession.isInSession){
+        if(!collabSession.isOwner){
+            showPop('多人协作中，由房主负责保存', 'failed')
+            return false
+        }
+        if(!heartbeatActive){
+            showPop('正在接管保存权，请稍后再试', 'failed')
+            return false
+        }
+    }
     if(lastSavedTime + 1000 > Date.now()){
         console.warn('保存过于频繁（1秒内），已忽略本次保存请求')
         return false
@@ -255,8 +291,10 @@ async function saveData(mustBackup:boolean):Promise<boolean>{
     }
     if(resp){
         releasePreventLeaving()
+        markSaveDataSaved() // 数据版本基线：当前数据已落库，之后的版本递增才算未保存
         chatRoom.value?.resetSaveReminderTimer()
         showPop('保存成功', 'success')
+        collabSession.notifySaved() // 协作中我是房主：广播"已保存"，其他人弹窗
 
         //次要任务：更新缩略图，无论是否成功都不影响主流程
         const miniCvs = miniatureCvsDispatcher.renderMiniatureCvs({sideLength: 256, lineWidth: 2})
@@ -299,16 +337,39 @@ async function checkLoginLeftTime(userInfo:HttpUserInfo){
 function setLeavingPreventing(){
     //将“主画布重新渲染”当成“存档信息变化”，当主画布重新渲染时，阻止用户离开/刷新页面/关闭页面
     //（undo 入栈已由 core 在 notifyMainCvsRendered 内处理）
+    // 保存责任人 = 房主（见下方协作接线）：协作中的非房主既不显示保存按钮也不阻止离开，
+    // 未保存标记仅由房主承担（协作者的更改经 op 同步给房主保存）
+    const preventLeavingIfSaveResponsible = () => {
+        if(!collabSession.isInSession || collabSession.isOwner)
+            preventLeaving()
+    }
+    // 协作会话内"渲染 ≠ 改动"：补渲染迟到（远程 op 的渲染被节流推迟到保存之后）、
+    // 图标/参考图加载完成等都会触发无关渲染，须以数据版本为准，避免未保存标记被重新置位
+    const preventLeavingIfUnsavedAndResponsible = () => {
+        if(collabSession.isInSession && !hasUnsavedSaveDataRevision())
+            return
+        preventLeavingIfSaveResponsible()
+    }
     mainCvsDispatcher.initAfterMainCvsRendered(() =>{
         if(savingDisabledWarningStore.needToWarn){
             savingDisabledWarningStore.onFirstEdit()
         }
-        preventLeaving()
+        preventLeavingIfUnsavedAndResponsible()
         heartbeatOnEdit?.()
+    })
+    // 远程 op 数据应用即时、渲染被 remoteRenderScheduler 节流（≤idleMs/交互结束才补渲染）——
+    // 未保存标记直接跟随数据应用（保存按钮/红点即时出现），不等被推迟的那次渲染
+    initAfterRemoteSaveApplied(() => {
+        if(savingDisabledWarningStore.needToWarn){
+            savingDisabledWarningStore.onFirstEdit()
+        }
+        preventLeavingIfSaveResponsible() // 远程 op 应用即真实数据变化（版本号已递增）
     })
 }
 
 let heartbeatTimer = 0
+// 心跳当前是否由我持有（协作协作者不持有心跳；onBeforeUnmount 据此决定是否释放）
+let heartbeatActive = false
 const heartbeatFailWarnMs = 6 * 60 * 1000 // 距上次成功心跳超过该时长后再失败则弹出警告
 const showHeartbeatFailWarn = ref(false)
 const heartbeatStolenWarn = ref(false) // true：心跳已被他人接管；false：网络问题导致多次失败
@@ -347,6 +408,7 @@ async function isHeartbeatStolen():Promise<boolean>{
 let heartbeatOnEdit: (() => void) | undefined
 function startHeartbeat(){
     // 开始心跳续约周期（不需要立即执行一次，因为loadData相当于已经执行过一次）
+    heartbeatActive = true
     heartbeatStatusStore.markSuccess()
     heartbeatTimer = window.setInterval(async()=>{
         await renewHeartbeat()
@@ -358,6 +420,7 @@ function startHeartbeat(){
 }
 function endHeartbeat(){
     // 结束心跳续约周期
+    heartbeatActive = false
     window.clearInterval(heartbeatTimer)
     document.removeEventListener('visibilitychange', onVisibleHeartbeat)
 }
@@ -366,6 +429,232 @@ function onVisibleHeartbeat(){
     if(document.visibilityState === 'visible')
         renewHeartbeat()
 }
+
+// ---- 多人协作接线（步骤四 4.6）----
+// 规则：保存责任人 = 房主（collabSession.isOwner）；房主 = 心跳持有者，二者保持同步——
+// 是房主但没心跳 → ensureOwnerHeartbeat 轮询接管；不是房主却有心跳 → 释放
+const collabSession = useCollabSessionStore()
+let leavingEditor = false // 卸载中的 leave 不触发"会话异常结束"处理
+let collabWarningSet = false // 当前警告条是本模块设置的（clearWarning 才不误清别的警告）
+let ownerHeartbeatRetryTimer: number|undefined
+
+async function joinCollabRoom(){
+    if(await tryJoinCollabRoom())
+        return
+    // 加入失败（无权限/房间满/服务器不支持等）：回退仅浏览
+    console.error('[协作]加入房间失败，回退仅浏览')
+    viewOnly.value = true
+    preventLeavingDisabled.value = true
+    savingDisabledWarningStore.setWarning('加入协作房间失败，已转为仅浏览（刷新可重试）', true)
+    showPop('加入协作房间失败', 'failed')
+}
+
+/** 加入协作房间；失败返回 false（调用方决定回退策略） */
+async function tryJoinCollabRoom(): Promise<boolean>{
+    try{
+        await collabSession.join(saveIdNum.value)
+    }catch(e){
+        const msg = e instanceof Error ? e.message : String(e)
+        if(msg.includes('仅存档所有者可开启协作')){
+            // 预期拒绝（backend-plan §7.1）：协作开关开着但房间未启动（所有者不在线）。
+            // 非所有者不启动协作机制：已持心跳（非 Occupied 正常打开）按普通编辑继续；
+            // 未持心跳（如 Occupied 回退加载）维持下方"回退仅浏览"逻辑
+            if(heartbeatActive){
+                console.info('[协作]协作房间未启动（所有者不在线），以普通编辑模式继续')
+                updateCollabWarning()
+                return true
+            }
+        }
+        console.error('[协作]加入房间失败', e)
+        return false
+    }
+    if(collabSession.isOwner){
+        // 通常心跳已在 loadData(forEdit) 时持有；空房但心跳未过期被他人残留占用时走接管
+        await ensureOwnerHeartbeat()
+    }
+    else if(heartbeatActive){
+        // 防御：协作者不持有心跳（如 loadData 意外给了心跳），释放让房主接管
+        endHeartbeat()
+        api.save.heartbeatRelease(saveIdNum.value).catch(()=>{})
+    }
+    if(!collabSession.isOwner){
+        // 以协作者身份进房：保存责任在房主，清掉进房前可能残留的未保存标记
+        // （不显示保存按钮、不阻止离开；房主侧不受此影响）
+        releasePreventLeaving()
+    }
+    updateCollabWarning()
+    return true
+}
+
+// ---- 协作功能开关（CollabPanel 触发，存于 save.meta.collabEnabled）----
+let disablingCollabLocally = false // 本地开关触发的关闭（区别于远程 op 应用导致的关闭）
+
+async function enableCollab(){
+    const save = saveStore.save
+    if(!save)
+        return
+    save.meta.collabEnabled = true
+    preventLeaving()
+    // 先持久化开关、成功后再开房：他人加载存档靠存档内的 collabEnabled 判定能否协作，
+    // 若先开房后保存，期间加载的人看到旧值会回退仅浏览。
+    // saveData 有 1 秒节流，刚保存过则稍候，避免节流误伤导致开房被拦
+    const throttleWaitMs = lastSavedTime + 1000 - Date.now()
+    if(throttleWaitMs > 0)
+        await new Promise(r => window.setTimeout(r, throttleWaitMs))
+    if(!(await saveData(false))){
+        save.meta.collabEnabled = false
+        showPop('保存失败，无法启用多人协作', 'failed')
+        return
+    }
+    if(!(await tryJoinCollabRoom())){
+        save.meta.collabEnabled = false
+        showPop('启动多人协作失败', 'failed')
+    }
+}
+
+async function disableCollab(){
+    if(!window.confirm('确认关闭多人协作？所有协作成员将被断开'))
+        return
+    const save = saveStore.save
+    if(!save || disablingCollabLocally)
+        return
+    disablingCollabLocally = true
+    const wasInSession = collabSession.isInSession
+    try{
+        save.meta.collabEnabled = false
+        preventLeaving()
+        // 先把开关变更作为 op 广播给房间内其他成员（他们据此断开并提示），再离房。
+        // meta 变更不触发画布渲染，须手动 capture；flush 设超时兜底，失败则其他成员随离房兜底
+        collabSession.captureLocalOp()
+        await Promise.race([collabSession.flushLocalOps(), new Promise(r => window.setTimeout(r, 5000))])
+        await collabSession.leave()
+        if(wasInSession)
+            collabPanel.value?.notifyCollabClosed()
+        // 持久化开关状态（尽力：无心跳时服务器拒绝，静默失败）
+        if(!(await saveData(false)))
+            showPop('关闭状态未能保存到云端，刷新后可能恢复为启用', 'warning')
+    }
+    finally{
+        disablingCollabLocally = false
+    }
+}
+
+/** 协作被所有者关闭/房间被关后即将强跳首页：解除未保存离开拦截并禁止重新置位——
+ * 离房后 isInSession 转 false，渲染回调会把拦截按普通编辑重新置位（回归默认行为），
+ * 导致协作者点"我知道了"跳转被路由守卫拦下。仅对无法再保存的用户（协作者等未持心跳者）生效；
+ * 房主仍保留拦截，以免丢失自己可保存的改动 */
+function releaseLeavingBeforeForcedLeave(){
+    if(heartbeatActive)
+        return
+    releasePreventLeaving()
+    preventLeavingDisabled.value = true
+}
+
+/** 远程 op 应用导致开关被关（他端所有者关闭）：断开连接并弹窗提示 */
+async function handleCollabDisabledRemotely(){
+    if(disablingCollabLocally)
+        return // 本地开关触发的关闭走 disableCollab 的主动流程
+    if(!collabSession.isInSession)
+        return // 未在会话中（如启动失败回退），无需处理
+    await collabSession.leave()
+    releaseLeavingBeforeForcedLeave()
+    collabPanel.value?.notifyCollabClosed()
+}
+
+watch(() => saveStore.save?.meta.collabEnabled, (now, was) => {
+    if(was === true && now === false)
+        void handleCollabDisabledRemotely()
+})
+
+// 房间被关闭（backend-plan.md §7.1 ②③：房主关房或断网超宽限期）：弹窗并跳首页。
+// 同一会话先收到"已关闭协作"时（meta op 先行应用，collabEnabled 已 false）以前者为准，不重复弹
+watch(() => collabSession.roomClosedNotice, () => {
+    if(collabSession.roomClosedNotice === 0)
+        return
+    releaseLeavingBeforeForcedLeave()
+    if(saveStore.save?.meta.collabEnabled === false)
+        collabPanel.value?.notifyCollabClosed()
+    else
+        collabPanel.value?.notifyRoomClosed()
+})
+
+/** 房主但没有心跳：等旧占用者心跳过期后借 loadData(forEdit) 的 Initialization 副作用接管（数据丢弃） */
+async function ensureOwnerHeartbeat(){
+    window.clearTimeout(ownerHeartbeatRetryTimer)
+    if(!collabSession.isInSession || !collabSession.isOwner || heartbeatActive)
+        return
+    const status = await api.save.loadStatus(saveIdNum.value, false)
+    if(!collabSession.isInSession || !collabSession.isOwner || heartbeatActive)
+        return // 等待期间状态已变（离房/卸任/已接管）
+    const holder = status?.editingByUserId
+    if(!holder || holder === userInfoStore.userInfo?.id){
+        try{
+            await api.save.loadData(saveIdNum.value, true)
+            startHeartbeat()
+            updateCollabWarning()
+            return
+        }catch{ /* 抢占竞态失败（他人抢先初始化），走重试 */ }
+    }
+    // 旧房主心跳有效期 10 分钟，期间每 30 秒探测一次
+    ownerHeartbeatRetryTimer = window.setTimeout(()=>{ void ensureOwnerHeartbeat() }, 30*1000)
+}
+
+/** 协作状态下的保存提示：协作者显示"由房主保存"；继任房主显示"接管中" */
+function updateCollabWarning(){
+    if(!collabSession.isInSession)
+        return
+    if(!collabSession.isOwner){
+        const ownerName = collabSession.members.find(m => m.userId === collabSession.ownerUserId)?.userName ?? '??'
+        savingDisabledWarningStore.setWarning(`多人协作中：由房主 ${ownerName} 负责保存`)
+        collabWarningSet = true
+    }
+    else if(!heartbeatActive){
+        savingDisabledWarningStore.setWarning('你已继任房主，正在接管保存权（旧占用过期后自动生效）')
+        collabWarningSet = true
+    }
+    else if(collabWarningSet){
+        savingDisabledWarningStore.clearWarning()
+        collabWarningSet = false
+    }
+}
+
+watch(() => collabSession.isOwner, () => {
+    if(!collabSession.isInSession)
+        return
+    // OwnerChanged：我继任房主 → 接管心跳与保存权；房主换成他人 → 更新提示
+    if(!collabSession.isOwner){
+        // 保存责任已移交他人：解除未保存标记（保存按钮回"离开"、不阻止离开），
+        // 继任侧由后续编辑/远程 op 按需重新置位
+        releasePreventLeaving()
+    }
+    void ensureOwnerHeartbeat()
+    updateCollabWarning()
+})
+watch(() => collabSession.isInSession, (inSession, wasInSession) => {
+    if(inSession || !wasInSession)
+        return
+    // 进房从未到达过稳态（如被"仅存档所有者可开启协作"拒绝、房间已满）：不算"会话异常结束"，
+    // 不刷新页面，由调用方自己的回退逻辑处理
+    if(!collabSession.hasEverSynced())
+        return
+    if(collabWarningSet){
+        savingDisabledWarningStore.clearWarning()
+        collabWarningSet = false
+    }
+    // 房间被房主关闭（含断网超宽限期）：弹窗+跳首页由 roomClosedNotice watch 编排，不刷新
+    if(collabSession.roomClosedNotice > 0)
+        return
+    // 所有者关闭协作导致的离房：不刷新（弹窗已提示）；非心跳持有者此后无法保存，给出警告
+    if(saveStore.save?.meta.collabEnabled === false){
+        if(!heartbeatActive && !viewOnly.value)
+            savingDisabledWarningStore.setWarning('多人协作已关闭，当前更改无法保存，请刷新页面', true)
+        return
+    }
+    // 会话异常结束（同步兜底失败等，handleSyncExhausted 已弹窗提示）：
+    // 本地存档已与房间脱节，继续编辑无意义，沿用项目惯例刷新页面重进
+    if(!leavingEditor && loadComplete.value && !isDemo.value)
+        window.setTimeout(()=>window.location.reload(), 2000)
+})
 
 watch(props, async()=>{
     // 一旦画布id发生变化，刷新浏览器（否则无法保证状态清理干净）
@@ -420,13 +709,17 @@ onBeforeMount(async()=>{
     hiddenLongWatcher.startWatching()
 })
 onBeforeUnmount(()=>{
+    leavingEditor = true
+    window.clearTimeout(ownerHeartbeatRetryTimer)
+    // 仅在“我持有心跳”时释放（协作协作者从不持有心跳，不能误调 release）
+    const releaseHeartbeat = heartbeatActive
     endHeartbeat()
-    if(!isDemo.value && !viewOnly.value && !loadError.value){
-        // 仅在“非浏览模式”，且已经成功加载存档的情况下，才释放心跳
+    if(releaseHeartbeat){
         api.save.heartbeatRelease(saveIdNum.value)
            .then(()=>{console.log('心跳释放成功')})
            .catch((e)=>{console.error('心跳释放失败', e)})
     }
+    void collabSession.leave() // 协作会话清理（含离房通知、清锁、清前缀；未在会话中则直返）
     disposeEditor()
     topbarShow.value = true
     saveShortcutListener.dispose()
@@ -447,6 +740,7 @@ onBeforeUnmount(()=>{
     </div>
     <Cvs v-if="loadComplete"></Cvs>
     <Menu v-if="loadComplete" @save-data="saveData" @leave="goBackToWhereWeEntered"></Menu>
+    <CollabStatusOverlay @leave="goBackToWhereWeEntered"></CollabStatusOverlay>
     <UnsavedLeavingWarning v-if="showUnsavedWarning" :release="releasePreventLeaving"
         :save="async()=>{ await saveData(false) }" @ok="showUnsavedWarning=false"></UnsavedLeavingWarning>
     <HiddenLongWarnPrompt v-if="showHiddenLongWarn" @ok="showHiddenLongWarn=false"></HiddenLongWarnPrompt>
@@ -456,7 +750,8 @@ onBeforeUnmount(()=>{
     <div class="cache-preventer"><input :id="cachePreventerInputId"/></div>
     <DontUseWeirdBrowser></DontUseWeirdBrowser>
     <div v-if="loadComplete && !isNaN(saveIdNum)" class="chatRoomWrap">
-        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :saveIdDisplay="saveId" :enabled="chatEnabled" :isOwner="chatCanEnable" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
+        <CollabPanel ref="collabPanel" :isOwner="isSaveOwner" :viewOnly="viewOnly" @enable="enableCollab" @disable="disableCollab" />
+        <ChatRoom ref="chatRoom" :saveId="saveIdNum" :saveIdDisplay="saveId" :enabled="chatEnabled" :isOwner="isSaveOwner" :viewOnly="viewOnly" @enable="enableChat" @disable="disableChat" @kicked="onKicked" @save="handleSaveAndKick" />
     </div>
     <UserFileFavorites ref="userFileFavorites" />
 </template>
@@ -487,5 +782,8 @@ onBeforeUnmount(()=>{
     top: calc(10px + env(safe-area-inset-top, 0px));
     right: calc(10px + env(safe-area-inset-right, 0px));
     z-index: 499;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
 }
 </style>

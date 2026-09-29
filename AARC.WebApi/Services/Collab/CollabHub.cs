@@ -1,0 +1,284 @@
+using AARC.Collab;
+using AARC.WebApi.Models.Db.Context;
+using AARC.WebApi.Models.DbModels.Enums;
+using AARC.WebApi.Models.DbModels.Enums.AuthGrantTypes;
+using AARC.WebApi.Models.DbModels.Identities;
+using AARC.WebApi.Services.Identities.AuthGrants;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using System.IdentityModel.Tokens.Jwt;
+
+namespace AARC.WebApi.Services.Collab
+{
+    /// <summary>
+    /// 多人实时协作 Hub（端点 /collab）：只负责鉴权、参数校验、限流、调用管理器、广播；无状态。
+    /// 房间状态全部在 CollabRoomManager 中；广播一律在房间 SyncRoot 锁外进行。
+    /// </summary>
+    [Authorize]
+    public class CollabHub : Hub
+    {
+        private readonly AarcContext _db;
+        private readonly ILogger<CollabHub> _logger;
+        private readonly CollabRoomManager _rooms;
+        private readonly AuthGrantCheckService _authGrantCheckService;
+        private const string TokenBucketKey = "collabTokenBucket";
+
+        public CollabHub(AarcContext db, ILogger<CollabHub> logger, CollabRoomManager rooms,
+            AuthGrantCheckService authGrantCheckService)
+        {
+            _db = db;
+            _logger = logger;
+            _rooms = rooms;
+            _authGrantCheckService = authGrantCheckService;
+        }
+
+        public override async Task OnConnectedAsync()
+        {
+            _logger.LogInformation("[CollabHub] 连接建立 connectionId={ConnectionId}, user={UserName}", Context.ConnectionId, Context.User?.Identity?.Name ?? "?");
+            await base.OnConnectedAsync();
+        }
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            _logger.LogInformation("[CollabHub] 连接断开 connectionId={ConnectionId}, reason={Reason}", Context.ConnectionId, exception?.Message ?? "无");
+            // 移出所有房间：清该连接全部锁并逐条广播 LockReleased、广播 UserLeft、房主继任广播 OwnerChanged、空房回收
+            var leaves = _rooms.LeaveAllRooms(Context.ConnectionId);
+            foreach (var (saveId, res) in leaves)
+                await BroadcastLeave(saveId, res);
+            await base.OnDisconnectedAsync(exception);
+        }
+
+        /// <summary>
+        /// 加入协作房间：校验存档编辑权限（与编辑器打开存档同一标准）；分配 id 前缀（租约制，离房回收）。
+        /// 重复加入幂等（已加入时返回原前缀）。
+        /// 仅存档所有者可创建房间（backend-plan.md §7.1）：房间不存在时非所有者被拒绝
+        /// （其他人进入不启动协作机制，按协作前的原有行为打开存档）；房间已存在时任何
+        /// 有编辑权限者可加入为协作者。CollabException 转 HubException——SignalR 默认不透传
+        /// 普通异常的消息，客户端需据此区分"预期拒绝（不启动协作）"与"真失败"。
+        /// </summary>
+        public async Task<JoinCollabRoomResult> JoinRoom(int saveId)
+        {
+            var user = GetCurrentUser();
+            _authGrantCheckService.CheckFor(AuthGrantOn.Save, saveId, (byte)AuthGrantTypeOfSave.Edit, false,
+                user.Id, user.Type >= UserType.Admin, user.Type >= UserType.Member);
+            var saveOwnerId = _db.Saves
+                .Where(x => x.Id == saveId && !x.Deleted)
+                .Select(x => (int?)x.OwnerUserId)
+                .FirstOrDefault() ?? 0;
+            JoinCollabRoomResult result;
+            CollabMemberDto? newMember;
+            try
+            {
+                result = _rooms.JoinRoom(saveId, user.Id, user.Name, Context.ConnectionId, saveOwnerId, out newMember);
+            }
+            catch (CollabException e)
+            {
+                throw new HubException(e.Message);
+            }
+            await Groups.AddToGroupAsync(Context.ConnectionId, RoomGroupName(saveId));
+            if (newMember is not null)
+                await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("UserJoined", newMember);
+            // 房主宽限期内重连（§7.1 ③）：通知其他成员重走快照流程
+            if (result.OwnerReconnected)
+                await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("OwnerReconnected", saveId);
+            _logger.LogInformation("[CollabHub] 加入房间 saveId={SaveId}, user={UserName}, prefix={IdPrefix}", saveId, user.Name, result.IdPrefix);
+            return result;
+        }
+
+        /// <summary>
+        /// 离开协作房间：移出成员与 group、释放该连接全部锁。房主走本方法视为"主动关房信号"
+        /// （backend-plan.md §7.1 ③ 判定依据）：关闭整个房间并广播 RoomClosed（继任路径保留但暂不使用）
+        /// </summary>
+        public async Task LeaveRoom(int saveId)
+        {
+            var res = _rooms.LeaveRoom(saveId, Context.ConnectionId);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, RoomGroupName(saveId));
+            if (res is not null)
+                await BroadcastLeave(saveId, res);
+        }
+
+        /// <summary>
+        /// 房主主动关房（backend-plan.md §7.1 ②）：仅房主可调用，幂等（房间不存在时静默成功）。
+        /// 回收房间与快照缓存，向全房间广播 RoomClosed（含房主自己的其他连接）。
+        /// </summary>
+        public async Task CloseRoom(int saveId)
+        {
+            var user = GetCurrentUser();
+            bool closed;
+            try
+            {
+                closed = _rooms.CloseRoom(saveId, user.Id);
+            }
+            catch (CollabException e)
+            {
+                throw new HubException(e.Message);
+            }
+            if (closed)
+                await Clients.Group(RoomGroupName(saveId)).SendAsync("RoomClosed", saveId);
+            _logger.LogInformation("[CollabHub] 关闭协作房间 saveId={SaveId}, user={UserName}", saveId, user.Name);
+        }
+
+        /// <summary>
+        /// 提交一条协作操作：锁内分配 Seq + 入队，锁外广播给其他成员；返回值即 ack
+        /// </summary>
+        public async Task<long> SubmitOp(int saveId, string opId, string patch, long baseSeq)
+        {
+            var user = GetCurrentUser();
+            if (user.Type < UserType.Member)
+                throw new RqEx("仅正式用户可提交协作操作");
+            Throttle();
+            if (string.IsNullOrEmpty(patch))
+                throw new RqEx("patch 不能为空");
+            if (patch.Length > _rooms.Options.MaxPatchLength)
+                throw new RqEx("patch 过大");
+            var op = _rooms.AppendOp(saveId, user.Id, user.Name, opId, patch, baseSeq);
+            await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("ReceiveOp", op);
+            return op.Seq;
+        }
+
+        /// <summary>
+        /// 增量补齐：返回 Seq > afterSeq 的全部操作；队列已被修剪时 Gap = true。
+        /// 不要求调用者是成员（重连竞态下允许先 Sync 后 Join）
+        /// </summary>
+        public Task<SyncCollabOpsResult> SyncOps(int saveId, long afterSeq)
+        {
+            GetCurrentUser();
+            return Task.FromResult(_rooms.SyncOps(saveId, afterSeq));
+        }
+
+        /// <summary>
+        /// 对象锁仲裁（first-write-wins）：获得锁则向其他人广播 LockAcquired 并返回 true；
+        /// 被他人持有返回 false（不广播）；同一持有者重复加锁幂等返回 true
+        /// </summary>
+        public async Task<bool> AcquireLock(int saveId, string key)
+        {
+            var user = GetCurrentUser();
+            Throttle();
+            if (string.IsNullOrWhiteSpace(key))
+                throw new RqEx("锁键不能为空");
+            var acquired = _rooms.TryAcquireLock(saveId, user.Id, user.Name, Context.ConnectionId, key);
+            if (acquired)
+            {
+                await Clients.OthersInGroup(RoomGroupName(saveId))
+                    .SendAsync("LockAcquired", new CollabLockDto { Key = key, Holder = user.Name });
+            }
+            return acquired;
+        }
+
+        /// <summary>
+        /// 释放本连接持有的锁并广播 LockReleased；不持有该锁时静默忽略
+        /// </summary>
+        public async Task ReleaseLock(int saveId, string key)
+        {
+            GetCurrentUser();
+            Throttle();
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+            if (_rooms.ReleaseLock(saveId, Context.ConnectionId, key))
+                await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("LockReleased", key);
+        }
+
+        /// <summary>
+        /// 请求存档快照（新成员初始化/重建兜底）：优先转发给现任房主的其他连接；
+        /// 房主无存活连接（断网宽限期）时转发给房间内其他成员兜底（§7.1 ③）；
+        /// 请求者自己从不接收转发（自举无意义，房主重建兜底靠其他成员）
+        /// </summary>
+        public async Task RequestSnapshot(int saveId)
+        {
+            var user = GetCurrentUser();
+            var providerConnections = _rooms.GetSnapshotProviderConnectionIds(saveId, user.Id, Context.ConnectionId);
+            if (providerConnections.Count == 0)
+                throw new RqEx("暂无可提供快照的成员，请稍后重试");
+            _logger.LogInformation("[CollabHub] 转发快照请求 saveId={SaveId}, from={UserName}", saveId, user.Name);
+            await Clients.Clients(providerConnections).SendAsync("SnapshotRequested", saveId);
+        }
+
+        /// <summary>
+        /// 房主宣布已保存：校验房主身份后向房间内其他人广播 Saved（轻量通知，服务器不落库、不校验存档）。
+        /// 绕过节流：仅房主可调用且客户端保存路径已有 1 秒节流，通知被限流误伤只会白丢
+        /// </summary>
+        public async Task NotifySaved(int saveId)
+        {
+            var user = GetCurrentUser();
+            if (_rooms.GetOwnerConnectionIds(saveId, user.Id).Count == 0)
+                throw new RqEx("仅房主可宣布保存");
+            _logger.LogInformation("[CollabHub] 房主宣布已保存 saveId={SaveId}, user={UserName}", saveId, user.Name);
+            await Clients.OthersInGroup(RoomGroupName(saveId)).SendAsync("Saved", user.Name);
+        }
+
+        // 断连/离房后的锁外广播：清锁逐条 LockReleased → UserLeft → 房主变更 OwnerChanged。
+        // §7.1：房主断连宽限期广播 OwnerOffline；房主主动离开/宽限超时关房广播 RoomClosed（后两者互斥）
+        private async Task BroadcastLeave(int saveId, CollabLeaveResult res)
+        {
+            var group = RoomGroupName(saveId);
+            if (res.RoomClosed)
+            {
+                await Clients.Group(group).SendAsync("RoomClosed", saveId);
+                return;
+            }
+            if (res.OwnerOffline)
+            {
+                await Clients.Group(group).SendAsync("OwnerOffline", saveId);
+                return;
+            }
+            foreach (var l in res.ReleasedLocks)
+                await Clients.Group(group).SendAsync("LockReleased", l.Key);
+            if (res.LeftMember is not null)
+                await Clients.Group(group).SendAsync("UserLeft", res.LeftMember);
+            if (res.NewOwner is not null)
+                await Clients.Group(group).SendAsync("OwnerChanged", res.NewOwner);
+        }
+
+        private static string RoomGroupName(int saveId) => saveId.ToString();
+
+        // Hub 层每连接令牌桶限流（SubmitOp 与 AcquireLock/ReleaseLock 共用同一桶）
+        private void Throttle()
+        {
+            if (!Context.Items.TryGetValue(TokenBucketKey, out var obj) || obj is not ConnectionTokenBucket bucket)
+            {
+                bucket = new ConnectionTokenBucket(
+                    _rooms.Options.RateLimitPerSecond, _rooms.Options.RateLimitBurst);
+                Context.Items[TokenBucketKey] = bucket;
+            }
+            if (!bucket.TryTake())
+                throw new RqEx("操作过于频繁，请稍后再试");
+        }
+
+        private User GetCurrentUser()
+        {
+            var user = TryGetCurrentUserInfo();
+            if (user is null)
+                throw new RqEx("请登录后重试");
+            return user;
+        }
+
+        private User? TryGetCurrentUserInfo()
+        {
+            var userIdClaim = Context.User?.Claims
+                .FirstOrDefault(x => x.Type.Contains(JwtRegisteredClaimNames.NameId));
+            if (userIdClaim is null || !int.TryParse(userIdClaim.Value, out int userId))
+                return null;
+
+            return _db.Users.FirstOrDefault(x => x.Id == userId && !x.Deleted);
+        }
+
+        private sealed class ConnectionTokenBucket(double ratePerSecond, int burst)
+        {
+            private double _tokens = burst;
+            private DateTime _lastRefill = DateTime.UtcNow;
+            public bool TryTake()
+            {
+                lock (this)
+                {
+                    var now = DateTime.UtcNow;
+                    _tokens = Math.Min(burst, _tokens + (now - _lastRefill).TotalSeconds * ratePerSecond);
+                    _lastRefill = now;
+                    if (_tokens < 1)
+                        return false;
+                    _tokens -= 1;
+                    return true;
+                }
+            }
+        }
+    }
+}

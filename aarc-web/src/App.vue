@@ -10,6 +10,7 @@ import { onMounted, useTemplateRef } from 'vue';
 import { useApiStore } from './app/com/apiStore';
 import { UserFileType } from '@/app/com/apiGenerated';
 import { initCoreHostServices } from 'aarc-core/app/hostServices';
+import { initWebCollabTransport } from './app/com/collabSignalrStore';
 import { useRouter } from 'vue-router';
 import { aboutName } from './pages/identities/routes/routesNames';
 import { forkAarcName } from './pages/etc/routes/routesNames';
@@ -48,6 +49,7 @@ onMounted(()=>{
             type: UserFileType.LineStyle
         })
     })
+    initWebCollabTransport()
 })
 </script>
 

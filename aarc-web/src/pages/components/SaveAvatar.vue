@@ -5,6 +5,7 @@ import defaultMini from '@/assets/defaultMini.svg'
 import iconLock from '@/assets/ui/lock.svg';
 import iconPen from '@/assets/ui/pen.svg';
 import iconWarn from '@/assets/ui/warn.svg';
+import iconCollab from '@/assets/ui/collab.svg';
 import WarnRulePrompts from '@/pages/editors/components/WarnRulePrompts.vue';
 import UserFavoriteStar from './UserFavoriteStar.vue';
 import { useEditorsRoutesJump } from '../editors/routes/routesJump';
@@ -37,6 +38,7 @@ interface SaveAvatarStatus{
     icon: string
     text: string
     color: string
+    iconFilter?: string
     clickBehavior: 'refuse'|'wait'|'edit'
 }
 const status = computed<SaveAvatarStatus|undefined>(()=>{
@@ -48,7 +50,10 @@ const status = computed<SaveAvatarStatus|undefined>(()=>{
     }
     else if(s.allowRequesterEdit){
         // 允许当前用户编辑（但实际让不让编辑由“是否他人在编辑”决定）
-        if(s.editingByUserId && s.editingByUserId != userInfo.value.id)
+        if(s.collabEnabled)
+            // 当前存在活跃协作房间：进入即加入协作（无论他人在房间内是否正在编辑）
+            res = { icon: iconCollab, text: '可协作', color: 'rgb(74, 144, 226)', clickBehavior: 'edit', iconFilter: 'brightness(100)' }
+        else if(s.editingByUserId && s.editingByUserId != userInfo.value.id)
             res = { icon: iconPen, text: '占用中', color: 'rgb(212, 160, 23)', clickBehavior: 'wait'}
         else
             res = { icon: iconPen, text: '可编辑', color: 'rgb(39, 174, 96)', clickBehavior: 'edit' }
@@ -151,7 +156,7 @@ const sDisplay = computed(()=>{
     <img v-if="hasWarn" class="save-avatar-warn" :src="iconWarn" @click.stop/>
     <WarnRulePrompts :save-status="promptSaveStatus" mode="navigate" @navigate="navigateToEditor"></WarnRulePrompts>
     <div v-if="status && !hideStatus" class="save-avatar-status" :style="{backgroundColor: status.color}" @click.stop="handleStatusClick">
-        <img :src="status.icon"/>
+        <img :src="status.icon" :style="{filter: status.iconFilter}"/>
         <div>{{ status.text }}</div>
     </div>
 </div>

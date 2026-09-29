@@ -1,6 +1,7 @@
 import { ControlPoint, ControlPointLink, ControlPointSta } from "aarc-core/models/save";
 import { FreePtClusterMode } from "aarc-core/models/config";
 import { Coord } from 'aarc-core/models/coord';
+import { KeyedArrDiff, PropDiff, SaveDiff } from "aarc-core/models/save/saveDiff";
 import { coordDistSq, coordDistSqLessThan } from "aarc-core/utils/coordUtils/coordDist";
 import { coordAdd, coordSub } from "aarc-core/utils/coordUtils/coordMath";
 import { computeFreeSnapCandidatesMulti, type PtDirectionInfo } from "aarc-core/utils/snapUtils/snapInterPtFree";
@@ -431,6 +432,40 @@ export interface KeyedPatchItem<T> {
 export interface SavePatch {
     points?: KeyedPatchItem<ControlPoint>[]
     lines?: KeyedPatchItem<unknown>[]
+}
+
+/**
+ * 把协作 diff（SaveDiff，见 models/save/saveDiff.ts）转换为 cluster 恢复所需的 SavePatch 视图。
+ * restoreWithPatch/decideClusterRestoreStrategy 只读取条目的 id、new 是否为 undefined 以及数组长度，
+ * 因此转换时 old/new 的内容用占位对象即可。
+ * - points/lines 为原子替换（$set/$del）或非 keyed 节点时返回 undefined（调用方保守全量重建）
+ * - diff 未触及 points/lines 时返回空对象（恢复策略为 preserve）
+ * - $seq 被跳过：邻接表与 cluster 和点的排列顺序无关
+ */
+export function saveDiffToSavePatch(diff: SaveDiff): SavePatch | undefined {
+    const patch: SavePatch = {}
+    for (const key of ['points', 'lines'] as const) {
+        const node = diff[key] as PropDiff | undefined
+        if (!node)
+            continue
+        if ('$set' in node || '$del' in node)
+            return undefined
+        const keyed = node as KeyedArrDiff
+        if (!('$add' in keyed) && !('$rm' in keyed) && !('$upd' in keyed) && !('$seq' in keyed))
+            return undefined
+        const items: KeyedPatchItem<ControlPoint>[] = []
+        for (const id of keyed.$rm ?? [])
+            items.push({ id: id as number, old: {} as ControlPoint })
+        for (const item of keyed.$add ?? [])
+            items.push({ id: (item as ControlPoint).id, new: item as ControlPoint })
+        for (const upd of keyed.$upd ?? [])
+            items.push({ id: upd.id as number, new: {} as ControlPoint })
+        if (key === 'points')
+            patch.points = items
+        else
+            patch.lines = items
+    }
+    return patch
 }
 
 export type ClusterRestoreStrategy = 'preserve' | 'incremental' | 'rebuild'

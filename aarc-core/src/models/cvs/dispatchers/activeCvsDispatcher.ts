@@ -20,6 +20,8 @@ import { ControlPointDir, Line } from "aarc-core/models/save";
 import { usePointLinkStore } from "aarc-core/models/stores/pointLinkStore";
 import { useSelectionCvsWorker } from "../workers/selectionCvsWorker";
 import { useSelectionStore } from "aarc-core/models/stores/selectionStore";
+import { useLockCvsWorker } from "../workers/lockCvsWorker";
+import { useCollabLockStore } from "aarc-core/models/stores/collabLockStore";
 import { computed } from "vue";
 
 
@@ -30,6 +32,7 @@ export const useActiveCvsDispatcher = defineStore('activeCvsDispatcher', ()=>{
     const lineExtendStore = useLineExtendStore()
     const pointLinkStore = usePointLinkStore()
     const selectionStore = useSelectionStore()
+    const collabLockStore = useCollabLockStore()
 
     const canvasIdPrefix = 'active'
     const { getCtx } = useCvs(canvasIdPrefix)
@@ -43,6 +46,7 @@ export const useActiveCvsDispatcher = defineStore('activeCvsDispatcher', ()=>{
     const { renderOneTextTag } = useTextTagCvsWorker()
     const { renderDiscardArea } = useDiscardAreaCvsWorker()
     const { renderSelection } = useSelectionCvsWorker()
+    const { renderLockCrosses } = useLockCvsWorker()
 
     const { getActivePtOpsAvoidance } = storeToRefs(envStore)
     getActivePtOpsAvoidance.value = renderActiveCvs
@@ -51,6 +55,7 @@ export const useActiveCvsDispatcher = defineStore('activeCvsDispatcher', ()=>{
     const noNeedActiveCvs = computed(()=>{
         const sel = selectionStore.enabled || selectionStore.selected.size > 0
         return !sel && !envStore.somethingActive && !pointLinkStore.isCreating
+            && !collabLockStore.hasOtherLocks // 他人锁定的对象要在本层画红叉
     })
 
     function renderActiveCvs(){
@@ -132,6 +137,7 @@ export const useActiveCvsDispatcher = defineStore('activeCvsDispatcher', ()=>{
         }
         renderDiscardArea(ctx)
         renderSelection(ctx)
+        renderLockCrosses(ctx) // 被他人锁定的对象画红叉
         const cursorStronger = envStore.activePt && selectionStore.selected.has(envStore.activePt)
         renderCursor(ctx, cursorStronger)
         return lineExtendWays

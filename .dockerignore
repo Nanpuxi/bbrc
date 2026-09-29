@@ -41,3 +41,5 @@ docker-compose*
 
 # Local data files
 AARC.WebApi/Data/
+
+temp-build/

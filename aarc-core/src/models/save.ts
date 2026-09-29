@@ -282,6 +282,8 @@ export interface SaveMetaData{
     dataSourcesVersion?: number,
     /** 是否启用聊天功能 */
     chatEnabled?: boolean,
+    /** 是否启用多人协作功能（仅启用时才会加入该存档的协作房间） */
+    collabEnabled?: boolean,
     autoUpdateCloudSvg?: {
         enabled?: boolean
     }

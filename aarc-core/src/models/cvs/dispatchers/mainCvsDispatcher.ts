@@ -25,6 +25,8 @@ import { Context as SvgCanvasContext } from '@aurouscia/svgcanvas';
 import { optimizeSvg } from "aarc-core/utils/svgUtils/optimizeSvg";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { useUndoStore } from "aarc-core/models/stores/utils/undoStore";
+import { useCollabSessionStore } from "aarc-core/models/collab/collabSessionStore";
+import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
 import { getCoreConfig } from "aarc-core/app/coreConfig";
 
 
@@ -77,8 +79,11 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
         // 先把当前状态压入 undo 栈，再调宿主回调（decoupling-step17 工作包 C2；
         // 原在宿主回调内最后执行，回调内各项互相独立，顺序无关）
         const save = saveStore.save
-        if(save)
+        if(save){
             useUndoStore().push(save)
+            // 协作会话的本地 op 捕获（未在会话中时为一次状态检查后直返）
+            useCollabSessionStore().captureLocalOp()
+        }
         if(afterMainCvsRendered.value){
             afterMainCvsRendered.value()
         }else if(!afterMainCvsRenderedWarned){
@@ -152,6 +157,10 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
             const tEnd = logRendering ? timestampMS():0
             console.log(`[${tEnd - tStart}ms] <主画布渲染>----------`)
         }
+        if(!options.ctx){
+            // 主画布整帧渲染完成（导出等指定独立 ctx 的分支不算）
+            useRemoteRenderScheduler().notifyMainCvsRenderedNow()
+        }
         if(!suppressRenderedCallback)
             notifyMainCvsRendered()
     }
@@ -196,6 +205,8 @@ export const useMainCvsDispatcher = defineStore('mainCvsDispatcher', ()=>{
             suppressRenderedCallback:true
         })
     })
+    // 协作远程 op 的调度渲染入口（渲染函数注入给 remoteRenderScheduler）
+    useRemoteRenderScheduler().initRemoteRenderScheduler(()=>renderMainCvs({}))
     function renderGridForExport(ctx: CvsContext, level?: ExportGridLevel){
         if(!level)
             return

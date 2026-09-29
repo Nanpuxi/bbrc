@@ -14,8 +14,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(vue@3.5.42(typescript@6.0.3))
       '@aurouscia/au-undo-redo':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.1.0
+        version: 1.1.0
       '@aurouscia/keyboard-shortcut':
         specifier: ^3.0.0
         version: 3.0.0
@@ -254,8 +254,8 @@ packages:
     peerDependencies:
       vue: ^3.5.34
 
-  '@aurouscia/au-undo-redo@1.0.2':
-    resolution: {integrity: sha512-qj4RCsz2vTPDPi9lkuHWdTXjiN/RIedbA0GPIE0C79wX7/t56rBV5W/j3T/GltyNLr2wkcq+Xx1uGcLawmxLbw==}
+  '@aurouscia/au-undo-redo@1.1.0':
+    resolution: {integrity: sha512-MQG9hnl6IbJiZpoK0pem1Pj9Nmo9lr9J6vIYXEyCaROUh9ngbPEABI2zRbYN+hmMBh74WmPDFgrqzoG2tyRl9Q==}
 
   '@aurouscia/image-compress@0.2.0':
     resolution: {integrity: sha512-hGhMpH9RoAHXKWXaWSa85iFl20PSk4ifMll8YUmxWiOVnYjjGQi0PmoLTH2BH7wT1fbVMvFDUkpPxqDg6XEU1g==}
@@ -2558,7 +2558,7 @@ snapshots:
       color-convert: 3.1.3
       vue: 3.5.42(typescript@6.0.3)
 
-  '@aurouscia/au-undo-redo@1.0.2':
+  '@aurouscia/au-undo-redo@1.1.0':
     dependencies:
       fast-deep-equal: 3.1.3
       rfdc: 1.4.1

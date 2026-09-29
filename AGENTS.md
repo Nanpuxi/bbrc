@@ -3,6 +3,8 @@
 ## 项目结构
 
 - `AARC.WebApi/`：ASP.NET Core 后端（解决方案入口 `AARC.slnx`）
+- `AARC.Collab/`：多人协作核心类库（房间管理器、DTO、`CollabException`，零外部依赖）；SignalR Hub 与快照 Controller 胶水层留在 `AARC.WebApi/Services/Collab/`
+- `AARC.Collab.Test/`：协作核心并发语义测试（xUnit）
 - `AARC.Diff/`、`AARC.Diff.Test/`：C# diff 类库及其测试
 - `aarc-core/`：前端编辑器核心包（见下文"前端 workspace"）
 - `aarc-web/`：前端站点包（见下文"前端 workspace"），内含 `docs/decoupling.md`（core/web 拆分方案与进度）
@@ -26,10 +28,9 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --urls "http://localhost:5250"
 
 对 cs 文件或 csproj 文件进行任何改动后，运行 `dotnet build` 确保没有构建问题
 
-如果 `dotnet build` 因 dll/exe 被正在运行的 WebApi 进程或 Visual Studio 锁定而失败，可改为输出到临时目录验证，验证完成后清理：
+输出到临时目录验证，该目录已 ignore，验证完成后无需清理：
 ```bash
 dotnet build AARC.WebApi/AARC.WebApi.csproj -o temp-build
-rm -rf temp-build
 ```
 
 如果发生了 api 变动：需要运行`gen-ts-client.ps1`或`gen-ts-client.sh`，以重新生成ts客户端代码
@@ -77,3 +78,9 @@ pnpm --filter aarc-core type-check   # 改动 aarc-core 后
 - 如果遇到冲突，手动解决（关于逻辑的冲突尽量 upstream 优先、关于样式冲突的尽量本地优先）并告知用户有哪些改动丢失，询问需不需要补回来
 - 如果没有冲突，则合并完成后 push 当前分支
 - push 完分支后，进入 aarc-web 目录，运行 `pnpm build`
+
+## 子代理
+
+仅在“了解情况编写文档”时才可以使用子代理功能
+
+实现代码时禁止使用

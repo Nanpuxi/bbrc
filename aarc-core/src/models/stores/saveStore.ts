@@ -5,6 +5,7 @@ import { ensureValidCvsSize } from "../save/valid/cvsSize";
 import { Coord } from "../coord";
 import { isSameCoord } from "aarc-core/utils/sgn";
 import { useConfigStore } from "./configStore";
+import { useCollabStore } from "./collabStore";
 import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
 import { indicesInArray, pullAllByPred, removeAllByIndices, removeAllByPred } from "aarc-core/utils/lang/indicesInArray";
 import { coordAdd } from "aarc-core/utils/coordUtils/coordMath";
@@ -283,6 +284,9 @@ export const useSaveStore = defineStore('save', () => {
     function getNewId() {
         if(!save.value)
             throw Error("找不到存档")
+        const collabId = useCollabStore().nextCollabId()
+        if(collabId !== null)
+            return collabId
         return save.value.idIncre++
     }
     function getPtById(id:number){
