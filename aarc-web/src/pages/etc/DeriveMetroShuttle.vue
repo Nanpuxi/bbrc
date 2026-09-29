@@ -4,7 +4,7 @@ import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl'
 import copy from 'copy-to-clipboard'
 
 const gameUrl = 'http://ms.jowei19.com'
-const gitUrl = 'https://gitee.com/au114514/metro-shuttle'
+const rulesUrl = 'http://ms.jowei19.com/#/rules'
 const qqGroup = '1082281846'
 
 function cardImg(path: string) {
@@ -36,11 +36,11 @@ async function copyQQGroup() {
             <h1 class="hero-title">MetroShuttle</h1>
             <p class="hero-subtitle">属于地铁爱好者的 UNO</p>
             <p class="hero-desc">
-                一款网页端 2-10 人实时对战卡牌游戏，卡牌即为地铁线网中的换乘站。拥有同一线路的卡牌可以“接上”或是成为“顺子”。玩家需要合理规划打出和留存的手牌，在与其他玩家的复杂博弈中取得优势。
+                一款网页端 2-6 人实时对战卡牌游戏，卡牌即为地铁线网中的换乘站。拥有同一线路的卡牌可以“接上”或是成为“顺子”。玩家需要合理规划打出和留存的手牌，在与其他玩家的复杂博弈中取得优势。
             </p>
             <div class="hero-actions">
-                <a class="btn primary" :href="gameUrl" target="_blank" rel="noopener">前往游玩</a>
-                <a class="btn" :href="gitUrl" target="_blank" rel="noopener">代码仓库</a>
+                <a class="btn primary" :href="rulesUrl" target="_blank" rel="noopener">规则介绍</a>
+                <a class="btn" :href="gameUrl" target="_blank" rel="noopener">前往游玩</a>
                 <a class="btn" @click="copyQQGroup">加入 QQ 群 {{ qqGroup }}</a>
             </div>
         </header>
