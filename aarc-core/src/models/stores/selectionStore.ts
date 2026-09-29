@@ -10,6 +10,7 @@ import { coordAdd, coordSub } from "aarc-core/utils/coordUtils/coordMath";
 import { isFocusingInput } from "aarc-core/utils/domUtils/focusingInput";
 import { useCvsFrameStore } from "./cvsFrameStore";
 import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocalConfig";
+import { useOnDetectStore } from "./saveDerived/saveDerivedDerived/onDetectStore";
 
 type SelectionTarget = ControlPoint|TextTag
 export const useSelectionStore = defineStore('selection', ()=>{
@@ -22,6 +23,8 @@ export const useSelectionStore = defineStore('selection', ()=>{
     const showedControl = ref(false)
     const selCursor = ref<Coord>()
     const saveStore = useSaveStore()
+    const onDetectStore = useOnDetectStore()
+    const editorLocalConfig = useEditorLocalConfigStore()
     const { save } = storeToRefs(saveStore)
     const { enumerateTextTagRects } = useTextTagRectStore()
     
@@ -35,8 +38,13 @@ export const useSelectionStore = defineStore('selection', ()=>{
         const radiusSq = radius ** 2
         for(const p of save.value?.points ?? []){
             if(coordDistSqLessThan(coord, p.pos, radiusSq)){
-                if(mode.value == 'add')
+                if(mode.value == 'add'){
+                    //配置为“不添加到选区”时，跳过锁定线路上的点；减选不过滤，便于把已锁定的存量选中项刷出
+                    if(editorLocalConfig.selectionLockedBehavior == 'exclude'
+                        && onDetectStore.ptLockedByLines(p.id))
+                        continue
                     selected.value.add(p)
+                }
                 else if(mode.value == 'sub')
                     selected.value.delete(p)
             }

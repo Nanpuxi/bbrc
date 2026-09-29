@@ -28,7 +28,7 @@ const { creatingLinkType } = storeToRefs(pointLinkStore)
 const stashStore = useStashStore()
 const nameSearchStore = useNameSearchStore()
 const { showPop } = useUniqueComponentsStore()
-const { duplicateNameDistThrs, selectionSize, blankClickBehavior } = storeToRefs(useEditorLocalConfigStore())
+const { duplicateNameDistThrs, selectionSize, blankClickBehavior, selectionLockedBehavior } = storeToRefs(useEditorLocalConfigStore())
 const { visitorMode } = storeToRefs(useMainCvsDispatcher())
 const mustBackup = defineModel<boolean>()
 
@@ -143,7 +143,7 @@ defineExpose({
             </div>
         </template>
     </ToolItem>
-    <ConfigSection title="批量选择功能设置（新）">
+    <ConfigSection title="批量选择功能设置">
         <table style="width: 100%;"><tbody>
             <tr>
                 <td>选区大小</td>
@@ -160,6 +160,15 @@ defineExpose({
                         <option value="exitAlways">总是退出</option>
                         <option value="exitWhenGrouped">选区组时退出</option>
                         <option value="none">不退出</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td>线路锁定<br/>状态处理</td>
+                <td>
+                    <select v-model="selectionLockedBehavior">
+                        <option value="exclude">不添加到选区</option>
+                        <option value="include">可添加到选区</option>
                     </select>
                 </td>
             </tr>

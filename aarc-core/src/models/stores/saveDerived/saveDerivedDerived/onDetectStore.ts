@@ -175,5 +175,5 @@ export const useOnDetectStore = defineStore('onDetect', ()=>{
         })
         return onTextTag;
     }
-    return { onPt, onLine, onStaName, onLineExtendBtn, onTextTag }
+    return { onPt, onLine, onStaName, onLineExtendBtn, onTextTag, ptLockedByLines }
 })

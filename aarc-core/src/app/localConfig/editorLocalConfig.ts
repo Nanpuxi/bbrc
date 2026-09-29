@@ -7,6 +7,8 @@ import { ControlPointSta } from "aarc-core/models/save";
 export const cvsRenderResolutionRatioLimits = { min: 0.5, max: 2 }
 export const selectionSizeLimits = { min: 0.3, max: 2 }
 export type BlankClickBehavior = 'none'|'exitAlways'|'exitWhenGrouped'
+/** 批量选择时如何处理锁定线路上的点：exclude=不添加到选区 */
+export type SelectionLockedBehavior = 'exclude'|'include'
 export type TextTagClickMode = 'rect'|'anchor'|'rectAndAnchor'
 /** 一键拼音转换的处理方式 */
 export type PinyinBatchMode = 'none'|'skipExist'|'overwrite'
@@ -26,6 +28,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     //无持久化值时的默认值：手机端为1，其他端为0.8（persist 会在有值时覆盖）
     const selectionSize = ref<number>(useBrowserInfoStore().isMobile ? 1 : 0.8)
     const blankClickBehavior = ref<BlankClickBehavior>('exitWhenGrouped')
+    const selectionLockedBehavior = ref<SelectionLockedBehavior>('exclude')
     const cvsRenderResolutionRatio = ref<number>(2)
     const lineExtendSta = ref<ControlPointSta|undefined>(undefined)
     const textTagClickMode = ref<TextTagClickMode>('rect')
@@ -72,6 +75,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         gridLabelSize,
         selectionSize,
         blankClickBehavior,
+        selectionLockedBehavior,
         cvsRenderResolutionRatio,
         lineExtendSta,
         textTagClickMode,
