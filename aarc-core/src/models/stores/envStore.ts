@@ -615,6 +615,7 @@ export const useEnvStore = defineStore('env', ()=>{
                     activePt.value.name = undefined
                     activePt.value.nameS = undefined
                     activePt.value.nameP = undefined
+                    activePt.value.pinyinConvertPreset = undefined
                     saveStore.disposedStaNameOf(activePt.value.id)
                     activePt.value = undefined
                 }
@@ -851,6 +852,7 @@ export const useEnvStore = defineStore('env', ()=>{
             if(onlyDelNameIfSelectedName && activePtType.value === 'name'){
                 activePt.value.name = undefined
                 activePt.value.nameS = undefined
+                activePt.value.pinyinConvertPreset = undefined
             }else{
                 saveStore.removePt(activePt.value.id);
             }

@@ -18,7 +18,7 @@
 |---|---|---|
 | `uniqueComponents.initCallbacks({popCallback, waitCallback})` | `app/globalStores/uniqueComponents.ts:11` | `App.vue:26-33` |
 | `initCloudSvgUploader(uploader)` | `models/save/cloudSvgOps.ts:8` | `App.vue:34-37` |
-| `initPinyinConvertProvider(provider)` | `components/composables/usePinyinConvert.ts:11` | `App.vue:38` |
+| ~~`initPinyinConvertProvider(provider)`~~ | 已删除（2026-09 拼音转换改为 core 本地实现 `components/composables/pinyinConverter.ts`，不再需要宿主注入） | ~~`App.vue:38`~~ |
 | `initSaveInfoProvider(provider)` | `components/sidebars/export/composables/useImageExport.ts:15` | `App.vue:39` |
 | `initSiteLinks({about, forkAarc})` | `app/siteLinks.ts:9` | `App.vue:40-43` |
 | `initRouteGuardRegistrar(registrar)` | `utils/eventUtils/preventLeavingUnsaved.ts:9` | `Editor.vue:60` |
@@ -77,7 +77,7 @@ core 的 `models/types/apiShapes.ts` 是 web 侧 `apiGenerated.ts`（NSwag 生�
 |---|---|---|
 | `App.vue:39` `initSaveInfoProvider(saveId => api.save.loadInfo(saveId))` | 生成 → core | `SaveDto`（core 只用 `name`） |
 | `UserFileFavorites.vue:45` `onFavoriteFileSelected(file)` | 生成 → core | `UserFileDto`（core 只用 `displayName`/`urlOriginal`） |
-| `App.vue:38` `initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))` | core → 生成 | `PinyinConvertRequest`（core 构造的请求必须能传给生成的 client）+ `PinyinConvertOptions`/`PinyinCaseType`/`PinyinVariantType` |
+| ~~`App.vue:38` `initPinyinConvertProvider(req => api.saveUtils.pinyinConvert(req))`~~ | ~~core → 生成~~ | 已随拼音转换本地化删除（2026-09）：`PinyinConvertRequest`/`PinyinConvertOptions` 不再存在，`PinyinCaseType`/`PinyinVariantType` 移至 `pinyinConverter.ts` |
 
 风险：后端 DTO 删改 core **未使用**的字段时零告警（正确，正是投影的意义）；但若 core 使用的字段被删改，目前依赖注入点恰好走到才报错——`onFavoriteFileSelected` 的赋值经 ref 间接传递，报错位置不直观。显式断言可把全部漂移集中到一处、在 type-check 时即暴露。
 
@@ -94,11 +94,11 @@ type AssertAssignableTo<Target, Source extends Target> = Source
 
 export type SaveDtoAssert = AssertAssignableTo<CoreSaveDto, GenSaveDto>              // 生成 ⊇ core 投影
 export type UserFileDtoAssert = AssertAssignableTo<CoreUserFileDto, GenUserFileDto>
-export type PinyinConvertRequestAssert = AssertAssignableTo<GenPinyinConvertRequest, CorePinyinConvertRequest>  // core 投影 ⊆ 生成
+// PinyinConvertRequestAssert 已随拼音转换本地化删除（2026-09）
 ```
 
 - 不被任何模块 import 也可被 vue-tsc 检查到（include 整个 src）；实际已按设想由 `apiStore.ts:6` `import "./apiShapesAssert"` 显式引入。
-- 数值 enum 的双向兼容（`PinyinCaseType` 等）靠 TS number 互赋规则，无需断言；若未来改成 string enum 会在上述约束处报错，符合预期。
+- ~~数值 enum 的双向兼容（`PinyinCaseType` 等）靠 TS number 互赋规则，无需断言~~（2026-09：拼音 enum 已移入 core 的 `pinyinConverter.ts`，不再参与投影断言）。
 - 已做负向验证：故意声明错误形状（`name?: number`）可在 type-check 报 TS2344、错误定位在断言处。注意反方向"窄投影赋给宽生成类型"不构成有效断言——两侧字段全可选时互相天然可赋。
 
 ### 2.2 工作包 B：CoreHostServices 聚合入口
@@ -110,7 +110,7 @@ export interface CoreHostServices {
     pop: PopCallback                  // 复用 uniqueComponents 既有类型
     wait: WaitCallback
     cloudSvgUploader?: CloudSvgUploader  // 可选（2026-09 改）：不注入则"云端SVG"配置区隐藏
-    pinyinConvert?: PinyinConvertProvider  // 可选（2026-09 改）：不注入则转换按钮与配置区隐藏
+    // pinyinConvert 已删除（2026-09 拼音转换改为 core 本地实现，不再需要宿主注入）
     saveInfo?: SaveInfoProvider         // 可选（2026-09 改）：不注入则导出文件名退化为存档id
     siteLinks?: SiteLinks             // 可选：不注入则链接隐藏（现状语义）
     routeGuardRegistrar?: RouteGuardRegistrar  // 可选：无路由的宿主（tauri 初期）不注入

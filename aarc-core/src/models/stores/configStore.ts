@@ -95,6 +95,7 @@ export const configDefault:Config = {
     textTagForTerrain:{},
 
     pinyinConvert:{},
+    pinyinConvertPresets:[],
 
     configVersion:0
 }
@@ -111,6 +112,7 @@ export const useConfigStore = defineStore('config', ()=>{
         Object.assign(config.value, sc)
         normalizeSnapRayAngles()
         normalizeTextTagConfigs()
+        normalizePinyinConvertPresets()
     }
     function writeConfigToSave(){
         const configNow = deepClone(config.value)
@@ -134,6 +136,7 @@ export const useConfigStore = defineStore('config', ()=>{
         }
         normalizeSnapRayAngles()
         normalizeTextTagConfigs()
+        normalizePinyinConvertPresets()
         console.log('写入后的配置：', deepClone(config.value))
     }
 
@@ -149,6 +152,18 @@ export const useConfigStore = defineStore('config', ()=>{
             return
         }
         config.value[key] = raw.map(v => String(v))
+    }
+
+    /** 确保 pinyinConvertPresets 为数组，且每项都有可就地编辑的 convert 对象 */
+    function normalizePinyinConvertPresets(){
+        const raw = config.value.pinyinConvertPresets
+        if(!Array.isArray(raw)){
+            config.value.pinyinConvertPresets = []
+            return
+        }
+        config.value.pinyinConvertPresets = raw
+            .filter(p=>!!p && typeof p.name === 'string')
+            .map(p=>({ name: p.name, convert: p.convert && typeof p.convert === 'object' ? p.convert : {} }))
     }
 
     /**

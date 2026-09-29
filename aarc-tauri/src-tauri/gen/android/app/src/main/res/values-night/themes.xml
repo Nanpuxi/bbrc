@@ -1,6 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.app" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- 与 values/themes.xml 一致：应用不做深色模式，inset 条带也用白底 -->
+        <item name="android:windowBackground">@android:color/white</item>
         <!-- Customize your theme here. -->
     </style>
 </resources>

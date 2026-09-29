@@ -1,65 +1,47 @@
-import { PinyinConvertRequest } from "aarc-core/models/types/apiShapes";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { storeToRefs } from "pinia";
 import { computed, ref, Ref } from "vue";
-
-/** 拼音转换实现，由宿主注入（web 用后端 HTTP 接口） */
-export type PinyinConvertProvider = (req: PinyinConvertRequest) => Promise<string|null|undefined>
-
-let provider: PinyinConvertProvider | undefined
-
-export function initPinyinConvertProvider(p: PinyinConvertProvider) {
-    provider = p
-}
-
-/** 宿主是否已注入拼音转换实现；未注入时 core 隐藏相关入口 */
-export function hasPinyinConvertProvider(): boolean {
-    return !!provider
-}
+import { convertPinyinLocal, toPinyinOptions, type PinyinConvertOptions } from "./pinyinConverter";
+import { resolvePinyinConvert } from "aarc-core/models/pinyinPreset";
+import { useUniqueComponentsStore } from "aarc-core/app/globalStores/uniqueComponents";
 
 type TargetRef = Ref<string|undefined|null>
-export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void)=>{
+/**
+ * @param getPresetRef 返回当前站名/标签引用的拼音转换预设名。
+ * undefined 表示跟随存档默认设置，null 表示此项不转换。
+ * 必须在调用时读取（选项面板会就地改同一个活对象，且 targetPtId 会变），所以传闭包而不是值。
+ */
+export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void, getPresetRef?:()=>string|null|undefined)=>{
     const { config } = storeToRefs(useConfigStore())
+    const { showPop } = useUniqueComponentsStore()
     const overridingForSource = ref<string>()
     const overridingToDest = ref<string>()
     const overridingReady = computed<boolean>(()=>!!source.value && overridingForSource.value === source.value)
-    const rules = computed<{[key:string]:string}>(()=>{
-        const res:{[key:string]:string} = {}
-        const str = config.value.pinyinConvert?.rules
-        if(str){
-            const lines = str.split('\n')
-            for(const line of lines){
-                const kv = line.split(/[:：]/, 2)
-                if(kv.length === 2){
-                    res[kv[0]] = kv[1]
-                }
-            }
-        }
-        return res
+    const options = computed<PinyinConvertOptions|undefined>(()=>{
+        const c = resolvePinyinConvert(
+            getPresetRef?.(),
+            config.value.pinyinConvertPresets,
+            config.value.pinyinConvert)
+        if(!c)
+            return undefined
+        return toPinyinOptions(c)
     })
+    const pinyinBlocked = computed(()=>getPresetRef !== undefined && !options.value)
     async function convertPinyin(){
         if(!source.value)
             return
+        const opt = options.value
+        if(!opt){
+            showPop('此项设置为不转换', 'info')
+            return
+        }
         let res:string|undefined|null
         if(overridingReady.value && overridingToDest.value){
-            //若现在已经是二次点击，则无需重新用http获取
+            //若现在已经是二次点击，则无需重新转换
             res = overridingToDest.value
         }
         else{
-            if(!provider){
-                console.error('拼音转换实现未注入')
-                return
-            }
-            const c = config.value.pinyinConvert
-            res = await provider({
-                text: source.value,
-                options:{
-                    rules: rules.value,
-                    spaceBetweenChars: c?.spaceBetweenChars,
-                    caseType: c?.caseType,
-                    variantType: c?.variantType
-                }
-            })
+            res = await convertPinyinLocal(source.value, opt)
         }
         const apply = ()=>{
             overridingForSource.value = undefined
@@ -89,6 +71,7 @@ export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=
     }
     return {
         convertPinyin,
-        pinyinOverriding: overridingReady
+        pinyinOverriding: overridingReady,
+        pinyinBlocked
     }
 }

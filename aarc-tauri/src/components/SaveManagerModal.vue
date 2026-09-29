@@ -13,6 +13,7 @@ import deleteIcon from '../assets/ui/delete.svg';
 import moveUpIcon from '../assets/ui/moveUp.svg';
 import moveDownIcon from '../assets/ui/moveDown.svg';
 import backupIcon from '../assets/ui/backup.svg';
+import importIcon from '../assets/ui/import.svg';
 
 const props = defineProps<{
     currentSaveId: string
@@ -116,12 +117,66 @@ async function refresh() {
     }
 }
 
-// 打包导出：全部存档打包为 aarc-app-backup.zip（实现与平台分流见 backupExport.ts）
+// 打包导出：全部存档打包为按日期命名的 zip（实现与平台分流见 backupExport.ts）
 async function exportBackup() {
     if (busy.value) return
     busy.value = true
     try {
         await exportSavesBackup()
+    } finally {
+        busy.value = false
+    }
+}
+
+// 基础检查：按 core models/save.ts 的 Save 接口校验必填顶层字段的存在与类型。
+// 应用写盘的文件总是规范化后的完整 Save 对象，明显不是工程文件（任意 json）可据此拒绝
+function looksLikeSave(data: unknown): boolean {
+    if (typeof data !== 'object' || data === null || data instanceof Array)
+        return false
+    const o = data as Record<string, unknown>
+    return typeof o.idIncre === 'number'
+        && o.points instanceof Array
+        && o.lines instanceof Array
+        && o.textTags instanceof Array
+        && o.cvsSize instanceof Array
+        && typeof o.config === 'object' && o.config !== null
+        && typeof o.meta === 'object' && o.meta !== null
+}
+
+// 导入：选择设备上的单个存档 json（即备份 zip 里的 <存档名>.aarc.json），解析后存为新存档并切入。
+// 用隐藏 input[type=file] 而非 dialog+fs：浏览器 dev / 桌面 / 安卓 webview 通用，
+// 且不受 plugin-fs scope 限制（安卓 SAF 返回的 content:// 路径 plugin-fs 读不了）
+const fileInput = ref<HTMLInputElement>()
+async function importSaveFile(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    input.value = '' // 重置以便再次选中同一文件
+    if (!file || busy.value) return
+    busy.value = true
+    try {
+        let data: unknown
+        try {
+            data = JSON.parse(await file.text())
+        } catch {
+            showPop('文件不是有效的 JSON', 'failed')
+            return
+        }
+        if (!looksLikeSave(data)) {
+            showPop('该文件不是本软件的工程文件', 'failed')
+            return
+        }
+        const existingNames = new Set(saves.value.map(x => x.name))
+        const baseName = file.name.replace(/(\.aarc)?\.json$/i, '') || '导入存档'
+        let name = baseName
+        for (let i = 2; existingNames.has(name); i++)
+            name = `${baseName} ${i}`
+        const id = newSaveId()
+        await saveStorage.store(id, name, data)
+        emit('select', id, name)
+        close()
+    } catch (err) {
+        console.warn('[存档] 导入失败', err)
+        showPop('导入失败', 'failed')
     } finally {
         busy.value = false
     }
@@ -329,8 +384,14 @@ defineExpose({ open })
         <div class="card">
             <div class="titleRow">
                 <div class="title">存档管理器</div>
-                <button class="lite backupBtn" title="打包导出备份（zip）" :disabled="busy"
-                    @click="exportBackup"><img :src="backupIcon" /></button>
+                <div class="titleBtns">
+                    <button class="lite" title="导入 json 存档文件" :disabled="busy"
+                        @click="fileInput?.click()"><img :src="importIcon" /></button>
+                    <button class="lite" title="打包导出备份（zip）" :disabled="busy"
+                        @click="exportBackup"><img :src="backupIcon" /></button>
+                </div>
+                <input ref="fileInput" type="file" accept="application/json,.json" class="fileInput"
+                    @change="importSaveFile" />
             </div>
             <div class="searchBar">
                 <input v-model="searchText" placeholder="按名称搜索存档" />
@@ -442,6 +503,9 @@ defineExpose({ open })
 .mask {
     position: fixed;
     inset: 0;
+    // 卡片居中，但横屏时上下仍可能贴进状态栏/手势条，用安全区 padding 收缩居中区域
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    box-sizing: border-box;
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 100000;
     display: flex;
@@ -466,35 +530,42 @@ defineExpose({ open })
     font-weight: bold;
     text-align: center;
 }
-// 标题行：标题保持居中，导出按钮绝对定位到最右侧
+// 标题行：标题保持居中，导入/导出按钮组绝对定位到最右侧
 .titleRow {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    .backupBtn {
+    .titleBtns {
         position: absolute;
         right: 0;
-        display: inline-flex;
-        padding: 3px;
-        border-radius: 3px;
-        transition: 200ms;
-        &:not(:disabled):hover {
-            background-color: #eee;
-        }
-        img {
-            width: 16px;
-            height: 16px;
-        }
-        &:disabled {
-            cursor: not-allowed;
+        display: flex;
+        gap: 4px;
+        button {
+            display: inline-flex;
+            padding: 3px;
+            border-radius: 3px;
+            transition: 200ms;
+            &:not(:disabled):hover {
+                background-color: #eee;
+            }
             img {
-                opacity: 0.3;
+                width: 16px;
+                height: 16px;
             }
-            &:hover {
-                text-decoration: none;
+            &:disabled {
+                cursor: not-allowed;
+                img {
+                    opacity: 0.3;
+                }
+                &:hover {
+                    text-decoration: none;
+                }
             }
         }
+    }
+    .fileInput {
+        display: none;
     }
 }
 .searchBar {

@@ -159,6 +159,8 @@ onUnmounted(()=>{
 </template>
 
 <style scoped lang="scss">
+@use '../styles/safeArea.scss' as safe;
+
 $btn-size: 36px;
 $gap: 10px;
 $dist-from-edge: 5px;
@@ -166,8 +168,8 @@ $dist-from-edge: 5px;
 .anotherMenu{
     z-index: 498;
     position: fixed;
-    right: $dist-from-edge;
-    bottom: $dist-from-edge;
+    right: calc(#{$dist-from-edge} + #{safe.$safe-right});
+    bottom: calc(#{$dist-from-edge} + #{safe.$safe-bottom});
     display: flex;
     gap: $gap;
     .anotherMenuColumn{
@@ -198,7 +200,7 @@ $dist-from-edge: 5px;
     }
 }
 .anotherMenuFolded{
-    right: -($btn-size + $dist-from-edge);
+    right: calc(0px - #{$btn-size} - #{$dist-from-edge} - #{safe.$safe-right});
     .anotherMenuColumn:first-child{
         opacity: 0.6;
     }
@@ -212,8 +214,8 @@ $dist-from-edge: 5px;
 .menu{
     z-index: 1002;
     position: fixed;
-    bottom: $dist-from-edge;
-    left: $dist-from-edge;
+    bottom: calc(#{$dist-from-edge} + #{safe.$safe-bottom});
+    left: calc(#{$dist-from-edge} + #{safe.$safe-left});
     display: flex;
     flex-direction: column;
     gap: $gap;

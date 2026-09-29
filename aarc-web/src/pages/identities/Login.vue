@@ -264,6 +264,8 @@ button.logout{
     bottom: 0px;
     left: 0px;
     right: 0px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
 }
 .loginInfo{
     background-color: white;
@@ -273,8 +275,8 @@ button.logout{
     text-align: center;
     position: fixed;
     margin: 0px;
-    left:10px;
-    bottom: 10px;
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0px 0px 8px 0px gray;
     border-radius: 5px;
 }

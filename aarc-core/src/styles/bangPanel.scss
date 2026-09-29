@@ -75,6 +75,14 @@
                 line-height: 12px;
             }
         }
+        &.pinyinBlocked{
+            img{
+                opacity: .3;
+            }
+            &:hover{
+                background-color: white;
+            }
+        }
     }
     .duplicateBtn{
         $size:10px;

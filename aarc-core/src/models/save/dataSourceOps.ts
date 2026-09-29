@@ -216,6 +216,10 @@ export async function autoUpdateDataSources(
     for (const ds of dss) {
         if (!ds.autoUpdate) continue
         opts?.onLoad?.(ds)
+        if(ds.type.toLowerCase() == 'colorsets'){ // 暂时停用颜色库
+            opts?.onError?.(ds, '颜色库暂时停用')
+            continue;
+        }
         const result = await fetchDataSource(ds.url, { isColorSet: ds.type === 'colorSets' })
         if (!result.ok || result.data === undefined) {
             opts?.onError?.(ds, result.errmsg || '未知错误')

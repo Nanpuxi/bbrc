@@ -1,0 +1,20 @@
+[
+  {
+    "type": "apk",
+    "fileName": "aarc-arm64-20260926-0103.apk",
+    "url": "/downloads/aarc-arm64-20260926-0103.apk",
+    "updatedAt": "2026-09-25T17:03:35.993Z",
+    "gitCommitId": "c21dcb1b63165183eedc3bd21db77257c973b56e",
+    "sizeBytes": 9505056,
+    "sha256": "a42a4a539a9a7103258db30263e697b5d6d3d3723d7c1469a733b8589526d82a"
+  },
+  {
+    "type": "exe",
+    "fileName": "aarc-20260925-2247.zip",
+    "url": "/downloads/aarc-20260925-2247.zip",
+    "updatedAt": "2026-09-25T14:47:02.082Z",
+    "gitCommitId": "0d3f3a8ef54118520c2b5320db0f385f950d9928",
+    "sizeBytes": 3816321,
+    "sha256": "57b62788568b57debbc6a486022f0759e9e0f427e445766bd15eabafc1cff7a5"
+  }
+]

@@ -9,9 +9,12 @@ import { writeFile } from '@tauri-apps/plugin-fs'
 import { isAndroid, createNewPublicImageFile, writeFile as afsWriteFile, scanPublicFile } from 'tauri-plugin-android-fs-api'
 import { FileSaver } from 'aarc-core/components/sidebars/export/composables/useImageExport'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
+import { safeFileNamePart } from './fsFileName'
 
 const ALBUM_NAME = 'AARC'
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i
+const EXT_RE = /\.([a-z0-9]+)$/i
+const FALLBACK_BASE = 'aarc导出'
 const EXT_MIME: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -30,6 +33,13 @@ function errMsg(e: unknown): string {
     return e instanceof Error ? e.message : String(e)
 }
 
+/** 拆分主干与扩展名，只清洗主干（扩展名由 core 按导出格式拼好，原样保留） */
+function safeName(fileName: string): string {
+    const ext = EXT_RE.exec(fileName)?.[0] ?? ''
+    const base = ext ? fileName.slice(0, -ext.length) : fileName
+    return `${safeFileNamePart(base, FALLBACK_BASE)}${ext}`
+}
+
 async function saveToAlbum(blob: Blob, fileName: string): Promise<boolean> {
     const pop = useUniqueComponentsStore().showPop
     if (!IMAGE_EXT.test(fileName)) {
@@ -46,13 +56,23 @@ async function saveToAlbum(blob: Blob, fileName: string): Promise<boolean> {
     return true
 }
 
-export const tauriFileSaver: FileSaver = async (blob, fileName) => {
+export const tauriFileSaver: FileSaver = async (blob, rawFileName) => {
+    // 存档名可含文件系统非法字符，会让 Windows 侧对话框构建失败（且不报错），先清洗
+    const fileName = safeName(rawFileName)
     try {
         if (isAndroid())
             return await saveToAlbum(blob, fileName)
-        const path = await save({ defaultPath: fileName })
-        if (!path)
+        const ext = EXT_RE.exec(fileName)?.[1]?.toLowerCase()
+        const path = await save({
+            defaultPath: fileName,
+            // 给出过滤器，Windows 据此补全/校验扩展名
+            filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined
+        })
+        if (!path) {
+            // 系统对话框把"构建失败"和"用户取消"折叠成同一个 null，JS 侧无法区分，只留日志线索
+            console.warn('另存为未返回路径（用户取消，或系统对话框创建失败）', fileName)
             return false // 用户主动取消，不提示
+        }
         const data = new Uint8Array(await blob.arrayBuffer())
         await writeFile(path, data)
         return true

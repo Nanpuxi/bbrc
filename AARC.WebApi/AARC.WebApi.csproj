@@ -17,8 +17,6 @@
 	<PackageReference Include="FCloud3.Sso" Version="3.0.0" />
 	<PackageReference Include="MailKit" Version="4.17.0" />
 	<PackageReference Include="AutoMapper" Version="16.2.0" />
-	<PackageReference Include="csharp-pinyin" Version="1.0.1" />
-	<PackageReference Include="EzPinyin" Version="1.1.2" />
 	<PackageReference Include="LZStringCSharp" Version="1.4.0" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
 	<PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.11" />
@@ -54,6 +52,15 @@
     <None Update="Data\SqliteFiles\此处用于存储sqlite文件.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Data\ClientApp\**">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Remove="Data\ClientApp\clientDownloadStats.json" />
+    <Content Update="Data\ClientApp\clientArtifacts.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Remove="Data\ClientApp\clientDownloadStats.json" />
   </ItemGroup>
 
   <ItemGroup>

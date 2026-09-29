@@ -84,6 +84,7 @@ export interface Config{
     textTagForTerrain:TextTagPerTypeGlobalConfig
 
     pinyinConvert:PinyinConvertConfig
+    pinyinConvertPresets:PinyinConvertPreset[]
 
     configVersion:number
 }
@@ -127,7 +128,19 @@ export type PinyinConvertConfig = {
     rules?:string,
     caseType?:number,
     variantType?:number,
-    spaceBetweenChars?:boolean
+    spaceBetweenChars?:boolean,
+    /** 单字ü的写法（PinyinUStyle）；缺省 2（V，绿→lv） */
+    uStyle?:number,
+    /** 韵母üe的写法（PinyinUStyle）；缺省 0（U，略→lue） */
+    ueStyle?:number
+}
+/**
+ * 具名拼音转换预设。ControlPoint/TextTag 通过 name 引用它；
+ * convert 是完全独立的一份设置，不与存档默认 Config.pinyinConvert 做字段级合并。
+ */
+export type PinyinConvertPreset = {
+    name:string
+    convert:PinyinConvertConfig
 }
 /**
  * 站名“地毯”（文字描边基底）配置，ControlPoint.nameCarpet 与全局 Config.staNameCarpet 共用。

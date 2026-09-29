@@ -92,6 +92,8 @@ onMounted(()=>{
     margin: 20px;
     z-index: 20001;
     position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 .closeBtn{
     display: block;

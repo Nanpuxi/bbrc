@@ -14,7 +14,7 @@ pnpm --filter aarc-tauri build
 安卓（详见 `docs/android-init.md`）：
 
 ```sh
-pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标）
+pnpm --filter aarc-tauri android:init            # 首次：生成 gen/android 工程（之后需重跑 gen:icons 同步图标；gen/ 有手工定制，非必要勿重跑 init，见 docs/android-init.md 七）
 pnpm --filter aarc-tauri android:dev             # 连接设备/模拟器的 dev 模式
 pnpm --filter aarc-tauri android:build           # debug APK（universal，全 ABI）
 pnpm --filter aarc-tauri android:build:release   # release APK（按 ABI 分包；需先配签名）
@@ -73,12 +73,12 @@ pnpm --filter aarc-tauri gen:icons
 
 - `siteLinks`：不注入则"关于页/私服案例"链接隐藏（tauri 本就不需要）。
 - `routeGuardRegistrar`：tauri 无前端路由，可不注入；`window.onbeforeunload` 部分 core 自理。
-- `pinyinConvert` / `saveInfo`：不注入则拼音转换按钮与"站名拼音转换"配置区隐藏；导出文件名退化为存档 id，不阻断导出。
+- `saveInfo`：不注入则导出文件名退化为存档 id，不阻断导出。（拼音转换已于 2026-09 改为 core 本地实现，无需注入、自动可用。）
 - `cloudSvgUploader`：不注入则"云端SVG"配置区整体隐藏；minimal 阶段也可注入 noop/本地保存占位，tauri 阶段换 fs 实现。
 - `initOpenFavoritesSidebar`：不注入则"添加资源"按钮隐藏（被调用时仅 `console.warn`）。
 - `fileSaver`：core 默认用浏览器 `<a download>` 下载兜底，tauri webview 下不可靠，**本包已注入原生实现**：`src/fileSaver.ts`（`main.ts` 经 `isTauri()` 判断仅在 tauri 环境注入，浏览器 dev 仍走默认下载）。实现按平台分流：
   - **安卓**：图片（png/jpeg/webp/gif，gif/apng 导出的文件名也在此列）经 `tauri-plugin-android-fs` 的 MediaStore API 写入系统相册 `Pictures/AARC/`（子目录名即相册名）；不支持进相册的格式（svg、txt 等）用 Pop 报错，不落盘。权限：`android-fs:allow-create-new-public-image-file` + `android-fs:allow-write-file`（见 `src-tauri/capabilities/default.json`）；插件 feature `legacy_storage_permission` 仅为 Android 9 及以下补 `WRITE_EXTERNAL_STORAGE`
-  - **桌面（Win/Mac）**：plugin-dialog `save` 弹"另存为" + plugin-fs `writeFile` 写盘，对话框选中的路径自动进入 fs 运行时 scope
+  - **桌面（Win/Mac）**：plugin-dialog `save` 弹"另存为" + plugin-fs `writeFile` 写盘，对话框选中的路径自动进入 fs 运行时 scope。导出名先经 `src/fsFileName.ts` 的 `safeFileNamePart` 清洗（非法字符→`_`、去结尾点/空格、限长、避开 Windows 保留名），并传 `filters` 让系统补全扩展名——存档名是用户输入，含 `\ / : * ? " < > |` 等字符时 Windows 的 `IFileDialog::SetFileName` 会失败，而 rfd 把对话框构建失败与用户取消折叠成同一个 `null`（JS 侧不可区分），表现为"点了没反应也不报错"，故 `!path` 分支留 `console.warn` 线索。安卓同用清洗后的名字，避免名字里的 `/` 改变相册子目录。
 
 ### 三、运行时环境约束（tauri webview 需处理）
 

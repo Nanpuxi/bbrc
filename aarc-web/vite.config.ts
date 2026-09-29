@@ -69,6 +69,11 @@ export default defineConfig(({ mode }) => {
               return 'au'
             if (id.includes('svgo'))
               return 'svgo'
+            // 拼音词典经动态 import 懒加载，独立命名 chunk，不并入初始 libs chunk
+            if (id.includes('pinyin-pro'))
+              return 'pinyin'
+            if (id.includes('to-jyutping') || id.includes('jyutping-data'))
+              return 'jyutping'
             if (id.includes('node_modules'))
               return 'libs'
           }

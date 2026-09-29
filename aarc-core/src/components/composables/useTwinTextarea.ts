@@ -10,6 +10,8 @@ export function useTwinTextarea(options:{
         apply:()=>void,
         endEditing:()=>void,
         pinyinConvert:()=>Promise<void>,
+        /** 此项被设为“不转换”时，tab 自动转换静默跳过（不打扰用户） */
+        pinyinBlocked?:Ref<boolean>,
         mainInput:Ref<HTMLTextAreaElement|null>,
         subInput:Ref<HTMLTextAreaElement|null>
     }){
@@ -69,7 +71,7 @@ export function useTwinTextarea(options:{
             if(mainInput.value === activeEle){
                 subInput.value?.focus()
                 if(editorLocalConfig.tabForPinyinConvert){
-                    if(!sub.value?.trim() && main.value?.trim()){
+                    if(!options.pinyinBlocked?.value && !sub.value?.trim() && main.value?.trim()){
                         options.pinyinConvert().then(()=>{
                             options.apply()
                         })

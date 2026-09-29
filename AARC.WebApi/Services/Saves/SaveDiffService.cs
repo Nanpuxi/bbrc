@@ -90,8 +90,20 @@ public class SaveDiffService(
                 new LongArrayConfig(["pointLinks"], PtLinkEqMark),
                 new LongArrayConfig(["config", "snapRayAngles"], x => x.ToString()),
                 new LongArrayConfig(["config", "snapRayAnglesForFree"], x => x.ToString()),
+                new LongArrayConfig(["config", "pinyinConvertPresets"], PresetNameMark)
             ]
         };
+
+        static string PresetNameMark(JsonElement preset)
+        {
+            if (preset.TryGetProperty("name", out JsonElement name))
+            {
+                if (name.ValueKind != JsonValueKind.String)
+                    throw new InvalidOperationException("pinyinConvertPreset的name属性非string");
+                return name.GetString()!;
+            }
+            throw new InvalidOperationException("pinyinConvertPreset的name属性缺失");
+        }
 
         static string PtLinkEqMark(JsonElement link)
         {

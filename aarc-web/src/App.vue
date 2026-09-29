@@ -35,7 +35,6 @@ onMounted(()=>{
             const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
             return res === true
         },
-        pinyinConvert: req => api.saveUtils.pinyinConvert(req),
         saveInfo: saveId => api.save.loadInfo(saveId),
         siteLinks: {
             about: router.resolve({ name: aboutName }).href,
@@ -73,7 +72,7 @@ onMounted(()=>{
 .mainOuter{
     width: 100vw;
     position: absolute; //只能absolute不能fixed
-    top: globalValues.$topbar-height;
+    top: globalValues.$topbar-height-total;
     height: globalValues.$body-height;
     transition: 0s;
     overflow: auto;

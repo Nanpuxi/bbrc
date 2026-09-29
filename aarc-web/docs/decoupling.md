@@ -80,7 +80,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 - `uniqueComponents.initCallbacks`（Pop/Wait，App.vue 注册）
 - `initCloudSvgUploader`（svg 云上传，App.vue 注册，见 §3.1"保存/上传"行）✅ 新增
-- `initPinyinConvertProvider`（拼音转换，App.vue 注册，见 §3.4）✅ 新增
+- ~~`initPinyinConvertProvider`（拼音转换，App.vue 注册，见 §3.4）✅ 新增~~（2026-09 拼音转换改为 core 本地实现 `pinyinConverter.ts`，注入接口已删除）
 - `initSaveInfoProvider`（存档信息，App.vue 注册，见 §3.4）✅ 新增
 - `setCurrentSaveIdRaw`（当前存档 id，Editor.vue 用 `watch(props.saveId)` 设置，见 §3.1"路由参数/守卫"行）✅ 新增
 - `initRouteGuardRegistrar`（"阻止未保存离开"的路由守卫注册，Editor.vue 以 `router.beforeEach` 实现，见 §3.1"路由参数/守卫"行）✅ 新增
@@ -101,9 +101,10 @@ AARC/                          # 仓库根（现有后端不动）
 
 `apiStore.ts` + `apiGenerated.ts` 是最大的共享热点（web 侧合计 60+ 处引用）。~~两阶段处理~~ **已一次性解决（2026-02）**：
 
-- 闭包内三处实际发 HTTP 的调用均已注入化（均由宿主 `App.vue` 注册实现）：`cloudSvgOps.ts`（svg 上传，`initCloudSvgUploader`，见 §3.1"保存/上传"行）、`usePinyinConvert.ts`（拼音转换，`initPinyinConvertProvider`）、`useImageExport.ts`（存档信息，`initSaveInfoProvider`）。
-- 闭包对 `apiGenerated.ts` 的 5 处 DTO/枚举 import（`iconStore`、`userFileFavoriteStore`、`PinyinConvertConfig`、`usePinyinConvert`、`useImageExport`）已改为从 core 自有的 `models/types/apiShapes.ts` 导入——该文件声明 `SaveDto`/`UserFileDto` 的**字段子集投影**（仅 core 实际读写的字段：`SaveDto` 只留 `name`，`UserFileDto` 只留 `displayName`/`urlOriginal`）与形状一致的 `PinyinConvertRequest`/`PinyinConvertOptions`/`PinyinCaseType`/`PinyinVariantType`（拼音转换的字段全部被用到，无法精简）。兼容性由 TS 结构化类型在注入/接线点静态验证（生成类型字段更多可赋给窄投影；数值 enum 借 number 互赋规则兼容）。
-- **至此 api 层（apiStore + apiGenerated）整体退出闭包、归属 web**，无需再拆分 DTO 与 Client。后端 DTO 变更时若形状漂移，`App.vue` 注入点会编译报错。tauri 阶段只需实现三个 provider 接口（svg 上传/拼音转换/存档信息）。
+- 闭包内曾有三处实际发 HTTP 的调用（均由宿主 `App.vue` 注册实现）：`cloudSvgOps.ts`（svg 上传，`initCloudSvgUploader`，见 §3.1"保存/上传"行）、~~`usePinyinConvert.ts`（拼音转换，`initPinyinConvertProvider`）~~（2026-09 已本地化，见下）、`useImageExport.ts`（存档信息，`initSaveInfoProvider`）。
+- **拼音转换本地化（2026-09，见 `aarc-core/docs/pinyin.md`）**：转换逻辑移植为 core 自包含实现 `components/composables/pinyinConverter.ts`（词典 `pinyin-pro`/`to-jyutping` 经动态 import 懒加载，离线可用），web/tauri 零接线；`PinyinConvertRequest`/`PinyinConvertOptions` 已从 apiShapes 删除，`PinyinCaseType`/`PinyinVariantType` 移至 `pinyinConverter.ts`。
+- 闭包对 `apiGenerated.ts` 的 DTO/枚举 import（原 5 处；其中拼音两处已随本地化移除）已改为从 core 自有的 `models/types/apiShapes.ts` 导入——该文件声明 `SaveDto`/`UserFileDto` 的**字段子集投影**（仅 core 实际读写的字段：`SaveDto` 只留 `name`，`UserFileDto` 只留 `displayName`/`urlOriginal`）。兼容性由 TS 结构化类型在注入/接线点静态验证（生成类型字段更多可赋给窄投影；数值 enum 借 number 互赋规则兼容）。
+- **至此 api 层（apiStore + apiGenerated）整体退出闭包、归属 web**，无需再拆分 DTO 与 Client。后端 DTO 变更时若形状漂移，`App.vue` 注入点会编译报错。tauri 阶段只需实现两个 provider 接口（svg 上传/存档信息），拼音转换已在 core 本地化、无需接线。
 
 ---
 

@@ -242,7 +242,7 @@ async function loadAll() {
 
     <div v-for="ds in save?.dataSources" :key="ds.id" class="dsItem">
         <div class="dsHead">
-            <span class="dsName">{{ ds.name || '未命名' }}</span>
+            <span class="dsName">{{ ds.type == 'colorSets' ? '暂时停用' : (ds.name || '未命名') }}</span>
             <span class="dsType">{{ typeLabel[ds.type] }}</span>
         </div>
         <div class="dsUrl">{{ ds.url }}</div>

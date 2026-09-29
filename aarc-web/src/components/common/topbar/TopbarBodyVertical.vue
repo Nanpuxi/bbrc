@@ -77,6 +77,7 @@ let swl: SwipeListener|undefined
 
 <style scoped lang="scss">
 @use '@/styles/globalValues';
+@use 'aarc-core/styles/safeArea.scss' as safe;
 
 $topbar-body-vert-width: 180px;
 .notifExists{
@@ -94,7 +95,8 @@ $topbar-body-vert-width: 180px;
     box-shadow: 0px 0px 12px 0px black;
     background-color: white;
     z-index: 960;
-    padding-top: globalValues.$topbar-height;
+    padding-top: globalValues.$topbar-height-total;
+    padding-right: safe.$safe-right;
     display: flex;
     flex-direction: column;
     user-select: none;

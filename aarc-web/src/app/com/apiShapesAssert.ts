@@ -8,17 +8,12 @@
  * 方向说明：
  * - AssertAssignableTo<Core, Gen>：生成类型必须可赋给 core 投影（生成 ⊇ 投影），
  *   覆盖 SaveDto（App.vue initSaveInfoProvider）、UserFileDto（UserFileFavorites.vue onFavoriteFileSelected）
- * - AssertAssignableTo<Gen, Core>：core 构造的请求必须可赋给生成类型（投影 ⊆ 生成），
- *   覆盖 PinyinConvertRequest（App.vue initPinyinConvertProvider）
- * - 数值 enum（PinyinCaseType/PinyinVariantType）借 TS number 互赋规则天然兼容，
- *   已随 PinyinConvertRequest 的断言间接覆盖
  */
 
-import type { SaveDto as GenSaveDto, UserFileDto as GenUserFileDto, PinyinConvertRequest as GenPinyinConvertRequest } from "./apiGenerated";
-import type { SaveDto as CoreSaveDto, UserFileDto as CoreUserFileDto, PinyinConvertRequest as CorePinyinConvertRequest } from "aarc-core/models/types/apiShapes";
+import type { SaveDto as GenSaveDto, UserFileDto as GenUserFileDto } from "./apiGenerated";
+import type { SaveDto as CoreSaveDto, UserFileDto as CoreUserFileDto } from "aarc-core/models/types/apiShapes";
 
 type AssertAssignableTo<Target, Source extends Target> = Source
 
 export type SaveDtoAssert = AssertAssignableTo<CoreSaveDto, GenSaveDto>
 export type UserFileDtoAssert = AssertAssignableTo<CoreUserFileDto, GenUserFileDto>
-export type PinyinConvertRequestAssert = AssertAssignableTo<GenPinyinConvertRequest, CorePinyinConvertRequest>

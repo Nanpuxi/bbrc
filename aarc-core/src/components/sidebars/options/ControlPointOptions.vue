@@ -25,6 +25,10 @@ const colorProcStore = useColorProcStore()
 const cs = useConfigStore()
 
 const editing = ref<ControlPoint>()
+const pinyinPresetRefStale = computed(()=>{
+    const ref = editing.value?.pinyinConvertPreset
+    return typeof ref === 'string' && !cs.config.pinyinConvertPresets.some(p=>p.name===ref)
+})
 const showLineSplitMenu = ref(false)
 const splittableLinesHere = ref<Line[]>([])
 const showLineMergeMenu = ref(false)
@@ -359,6 +363,26 @@ defineExpose({
                         </td>
                     </tr>
                 </tbody></table>
+            </div>
+            <h2>拼音转换</h2>
+            <div class="optionSection">
+                <table class="fullWidth"><tbody>
+                    <tr>
+                        <td>设置</td>
+                        <td>
+                            <select v-model="editing.pinyinConvertPreset">
+                                <option :value="undefined">跟随存档默认</option>
+                                <option :value="null">不转换</option>
+                                <option v-if="pinyinPresetRefStale" :value="editing.pinyinConvertPreset">预设已失效</option>
+                                <option v-for="p in cs.config.pinyinConvertPresets" :key="p.name" :value="p.name">{{ p.name }}</option>
+                            </select>
+                        </td>
+                    </tr>
+                </tbody></table>
+                <div class="smallNote" style="text-align: center;">
+                    此项决定本点副站名用哪份设置做拼音转换<br/>
+                    预设可在“设置-站名拼音转换”中新建
+                </div>
             </div>
             <h2>拆分线路</h2>
             <div class="optionSection">

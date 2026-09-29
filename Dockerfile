@@ -78,3 +78,8 @@ EXPOSE 8081
 
 # 启动应用
 ENTRYPOINT ["dotnet", "AARC.WebApi.dll"]
+
+# 客户端下载量统计（Data/ClientApp/clientDownloadStats.json）保存在容器层内，
+# 容器重建/重新创建后会重置为 0。
+# 如需长期统计，运行时 bind mount 该文件（宿主上先创建好一个内容为 {} 的文件）：
+#   docker run ... -v /宿主路径/clientDownloadStats.json:/app/Data/ClientApp/clientDownloadStats.json ...

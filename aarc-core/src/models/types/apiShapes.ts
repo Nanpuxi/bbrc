@@ -18,27 +18,3 @@ export interface UserFileDto {
     displayName?: string | undefined;
     urlOriginal?: string | undefined;
 }
-
-export enum PinyinCaseType {
-    Pascal = 0,
-    AllUpper = 1,
-    AllLower = 2,
-    FirstUpper = 3,
-}
-
-export enum PinyinVariantType {
-    Mandarin = 0,
-    Cantonese = 1,
-}
-
-export interface PinyinConvertOptions {
-    rules?: { [key: string]: string; } | undefined;
-    caseType?: PinyinCaseType;
-    variantType?: PinyinVariantType;
-    spaceBetweenChars?: boolean;
-}
-
-export interface PinyinConvertRequest {
-    text?: string | undefined;
-    options?: PinyinConvertOptions | undefined;
-}

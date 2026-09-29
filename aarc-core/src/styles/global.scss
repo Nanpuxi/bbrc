@@ -5,6 +5,7 @@
 @use './options.scss';
 @use './arrangableList.scss';
 @use './bangPanel.scss';
+@use './safeArea.scss' as safe;
 
 *{
     margin: 0px;
@@ -218,7 +219,7 @@ button.lite{
 .statusDisplay{
     z-index: 999;
     position: fixed;
-    bottom: 15px;
+    bottom: calc(15px + #{safe.$safe-bottom});
     left: 0px;
     right: 0px;
     width: fit-content;

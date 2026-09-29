@@ -1,0 +1,7 @@
+// 移动端安全区（刘海/状态栏/底部手势条）内缩距离。
+// 宿主 viewport meta 必须带 viewport-fit=cover，否则 env() 恒为 0；
+// 桌面/非边到边环境下 env() 也为 0，加这些变量的 calc 退化为原值，行为不变。
+$safe-top: env(safe-area-inset-top, 0px);
+$safe-bottom: env(safe-area-inset-bottom, 0px);
+$safe-left: env(safe-area-inset-left, 0px);
+$safe-right: env(safe-area-inset-right, 0px);
