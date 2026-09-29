@@ -711,6 +711,46 @@ describe('collabSessionStore 协作会话编排', () => {
         await waitFor(() => session.pendingLocalOpCount() === 0)
     })
 
+    it('重连：服务器重启房间重建（水位回退）→ 重置水位/缓冲/标记，以本地状态为底继续', async () => {
+        const ls = stubLocalStorage()
+        useSaveStore().save = createSave()
+        const session = useCollabSessionStore()
+        await session.join(1)  // 房主独房
+
+        // 应用两个远程 op，水位推进到 2；模拟保存（标记=2）
+        mock.handlers.onOp(mkOp(1, ptAdd(801)))
+        mock.handlers.onOp(mkOp(2, ptAdd(802)))
+        await waitFor(() => session.currentSeq() === 2)
+        session.notifySaved()
+        expect(ls.get('aarc-collab-saved-seq:1')).toBe('2')
+        // 一个已 ack 但广播还没回来的本人 op（ack 的是 seq 5，中间隔着他人 op，
+        // pendingOwnSeqs={5}，水位不推进）
+        mock.submitImpl = async () => 5
+        await session.submitOp(ptAdd(803))
+        expect(session.currentSeq()).toBe(2)
+
+        mock.handlers.onReconnecting()
+        // 服务器重启：内存清空，房主重连重新开房（fresh room：水位 0、仅自己）
+        mock.joinImpl = async () => ({
+            latestSeq: 0, idPrefix: 5, ownerUserId: 1,
+            members: [{ userId: 1, userName: 'me' }],
+            locks: [],
+            myConnectionCount: 1,
+        })
+        mock.handlers.onReconnected()
+        await waitFor(() => session.state === 'synced')
+
+        expect(session.currentSeq()).toBe(0)              // 水位已重置为新房水位
+        expect(ls.get('aarc-collab-saved-seq:1')).toBe('0')  // 标记重写为新房基线
+        expect(mock.syncOpsCalls).toEqual([])             // 不做增量补齐（旧 seq 已无意义）
+        // 本地状态原样保留（含重启前已应用的远程 op）
+        expect(useSaveStore().save!.points.map(p => p.id)).toEqual(expect.arrayContaining([801, 802]))
+        // 新房 seq 从 1 重新开始：后续 op 不再被旧水位误判为"重复"而跳过
+        mock.handlers.onOp(mkOp(1, ptAdd(901)))
+        await waitFor(() => session.currentSeq() === 1)
+        expect(useSaveStore().save!.points.map(p => p.id)).toContain(901)
+    })
+
     // ---- 独房重进（刷新页面，§7.1 ③配套）：不请求快照，按保存点水位从队列重建 ----
 
     function stubLocalStorage(initial: Record<string, string> = {}) {
@@ -720,6 +760,7 @@ describe('collabSessionStore 协作会话编排', () => {
             setItem: (k: string, v: string) => { data.set(k, v) },
             removeItem: (k: string) => { data.delete(k) },
         })
+        return data
     }
 
     it('join：独房刷新重进 + 保存点标记（未保存过=0）→ 从队列恢复全部编辑，不请求快照', async () => {

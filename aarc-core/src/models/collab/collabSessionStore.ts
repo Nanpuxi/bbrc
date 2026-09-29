@@ -31,6 +31,8 @@ import rfdc from "rfdc";
  * - 同步期/追赶期的 ReceiveOp 一律按 seq 缓冲去重，snapshot/SyncOps 之后统一重放
  * - 稳态下收到 seq 跳号的 op（乱序/丢失）→ 触发 catchUp（SyncOps 增量补齐）
  * - SyncOps 报 Gap（队列被修剪）→ 快照整档重建（reloadSaveFromSnapshot）
+ * - 重连后发现房间水位回退（res.latestSeq < lastSeq，即服务器重启重建了房间）→
+ *   旧水位/已 ack seq/缓冲 op 全部失效，重置水位以本地状态为底继续（此时必是房主独房）
  * - 快照轮询超时 → 重新 RequestSnapshot（此时房主可能已继任换人），多轮失败则退会话
  * - 前缀种子在同步完成后扫描（seed 只增不减：同前缀重连用 max(本地, 扫描)，
  *   防止复用已删除元素的 id）
@@ -499,7 +501,21 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
             members.value = res.members
             ownerOffline.value = !isOwner.value && res.ownerOffline === true
             alone = res.members.every(m => m.userId === myUserId.value)
-            if (res.latestSeq > lastSeq) {
+            if (res.latestSeq < lastSeq) {
+                // 房间水位回退 ⇒ 服务器侧房间已被重建（服务端重启内存清空等）：新房 seq
+                // 从 0 重新计数，旧的本地水位/已 ack seq/缓冲 op 全部失效。能走到这里
+                // 的只会是房主（房间不存在时非 owner 重进被拒），本地状态即房间内最完整
+                // 副本——重置水位以本地为底继续；未 ack 本地 op 由下方 flushLocalOps
+                // 重发获得新 seq。保存点水位标记同步重写：此后队列里的 op 全是重建后
+                // 重放的未保存编辑，刷新重进时需要全部恢复（重启前已 ack 未保存的编辑
+                // 随旧队列丢失，属已知取舍）
+                console.warn(`[协作]房间水位回退（${lastSeq} → ${res.latestSeq}），服务器侧房间已重建，重置水位以本地状态为底`)
+                lastSeq = res.latestSeq
+                pendingOwnSeqs.clear()
+                opBuffer.clear()
+                writeSavedSeqMarker(sid, res.latestSeq)
+            }
+            else if (res.latestSeq > lastSeq) {
                 if (alone)
                     await catchUpWhenAlone()
                 else
