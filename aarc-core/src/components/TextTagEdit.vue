@@ -25,7 +25,8 @@ const inputPlaceholder = computed<string|undefined>(()=>{
     return "请输入文本"
 })
 
-const { convertPinyin, pinyinOverriding } = usePinyinConvert(textMain, textSub, ()=>textTagEditStore.applyText())
+const { convertPinyin, pinyinOverriding, pinyinBlocked } = usePinyinConvert(textMain, textSub, ()=>textTagEditStore.applyText(),
+    ()=>textTagEditStore.target?.pinyinConvertPreset)
 async function convertPinyinCall(){
     await convertPinyin()
 }
@@ -48,6 +49,7 @@ const {
     apply: textTagEditStore.applyText,
     endEditing: textTagEditStore.endEditing,
     pinyinConvert: convertPinyin,
+    pinyinBlocked,
     mainInput,
     subInput,
 })
@@ -83,7 +85,7 @@ onUnmounted(()=>{
         <div @click="envStore.duplicateTextTag();textTagEditStore.endEditing()" class="duplicateBtn sqrBtn withShadow">
             <div class="dupA"></div><div class="dupB"></div>
         </div>
-        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
+        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding, pinyinBlocked}">
             <img v-if="!pinyinOverriding" :src="pinyinConvertImg"/>
             <div v-else>再次<br/>点击</div>
         </div>

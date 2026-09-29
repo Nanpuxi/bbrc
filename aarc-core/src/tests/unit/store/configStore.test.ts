@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestPinia } from '../../helpers/piniaTestHelper'
 import { useConfigStore, turn45Ratio } from 'aarc-core/models/stores/configStore'
+import { useSaveStore } from 'aarc-core/models/stores/saveStore'
 import { LineType } from 'aarc-core/models/save'
 
 describe('configStore - getTurnRadiusOf', () => {
@@ -153,5 +154,65 @@ describe('configStore - 文本标签倍率清洗', () => {
     expect(cs.config.textTagPlain.fontSize).toBeUndefined()
     expect(cs.config.textTagForLine.subFontSize).toBeUndefined()
     expect(cs.config.textTagForTerrain.fontSize).toBeUndefined()
+  })
+})
+
+describe('configStore - 拼音转换预设', () => {
+  beforeEach(() => {
+    createTestPinia()
+  })
+
+  function saveWithConfig(config: any) {
+    return {
+      idIncre: 1000,
+      points: [],
+      lines: [],
+      textTags: [],
+      cvsSize: [1000, 1000],
+      meta: { textTagIconsVersion: 1 },
+      config
+    }
+  }
+
+  it('老存档没有 pinyinConvertPresets 键时补齐为空数组', () => {
+    const saveStore = useSaveStore()
+    const cs = useConfigStore()
+    saveStore.save = saveWithConfig({ pinyinConvert: { caseType: 1 } }) as any
+    cs.readConfigFromSave()
+    expect(cs.config.pinyinConvertPresets).toEqual([])
+    expect(cs.config.pinyinConvert.caseType).toBe(1)
+  })
+
+  it('读入时清洗非法项，并保证每项有可就地编辑的 convert 对象', () => {
+    const saveStore = useSaveStore()
+    const cs = useConfigStore()
+    saveStore.save = saveWithConfig({
+      pinyinConvertPresets: [
+        { name: '粤语', convert: { variantType: 1 } },
+        { convert: { caseType: 2 } },
+        null,
+        { name: '缺convert' }
+      ]
+    }) as any
+    cs.readConfigFromSave()
+    expect(cs.config.pinyinConvertPresets).toEqual([
+      { name: '粤语', convert: { variantType: 1 } },
+      { name: '缺convert', convert: {} }
+    ])
+  })
+
+  it('非数组的 pinyinConvertPresets 回退为空数组', () => {
+    const cs = useConfigStore()
+    cs.importConfig({ pinyinConvertPresets: { name: '粤语' } } as any)
+    expect(cs.config.pinyinConvertPresets).toEqual([])
+  })
+
+  it('importConfig 带入的预设数组不被裁掉', () => {
+    const cs = useConfigStore()
+    cs.importConfig({
+      pinyinConvertPresets: [{ name: '粤语', convert: { variantType: 1 } }]
+    } as any)
+    expect(cs.config.pinyinConvertPresets).toHaveLength(1)
+    expect(cs.config.pinyinConvertPresets[0].convert.variantType).toBe(1)
   })
 })

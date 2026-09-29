@@ -456,6 +456,7 @@ export const useSaveStore = defineStore('save', () => {
                 pt.name = undefined
                 pt.nameS = undefined
                 pt.nameP = undefined
+                pt.pinyinConvertPreset = undefined
                 disposedStaNameOf.value(pt.id)
             }
             line.pts.splice(afterIdx+1, 0, ptId)

@@ -20,6 +20,10 @@ const picker1 = useTemplateRef('picker1')
 const picker2 = useTemplateRef('picker2')
 
 const editing = ref<TextTag>()
+const pinyinPresetRefStale = computed(()=>{
+    const ref = editing.value?.pinyinConvertPreset
+    return typeof ref === 'string' && !cs.config.pinyinConvertPresets.some(p=>p.name===ref)
+})
 function startEditing(tag: TextTag) {
     editing.value = tag
     if(tag.forId && tag.padding === undefined)
@@ -243,6 +247,18 @@ defineExpose({
                             <div class="smallNote">当前：{{ editing.zIndex ?? 0 }}</div>
                             <div class="smallNote" v-if="editing.sunken">“置底”的标签仍整体<br/>位于线路下方</div>
                         </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>拼音<br/>转换</td>
+                    <td>
+                        <select v-model="editing.pinyinConvertPreset">
+                            <option :value="undefined">跟随存档默认</option>
+                            <option :value="null">不转换</option>
+                            <option v-if="pinyinPresetRefStale" :value="editing.pinyinConvertPreset">预设已失效</option>
+                            <option v-for="p in cs.config.pinyinConvertPresets" :key="p.name" :value="p.name">{{ p.name }}</option>
+                        </select>
+                        <div class="smallNote">此项决定本标签的副文本<br/>用哪份设置做拼音转换</div>
                     </td>
                 </tr>
                 <tr v-if="editing.forId">

@@ -8,6 +8,8 @@
  * 粤语取无调号 jyutping；ü 记法后处理为 EzPinyin 风格（女→nv、略→lue）。
  */
 
+import type { PinyinConvertConfig } from "aarc-core/models/config";
+
 export enum PinyinCaseType {
     Pascal = 0,
     AllUpper = 1,
@@ -54,6 +56,18 @@ export function parsePinyinRules(str?: string): { [key: string]: string } {
         }
     }
     return res
+}
+
+/** 把一份设置（存档默认或某个预设）转成转换入参 */
+export function toPinyinOptions(c: PinyinConvertConfig): PinyinConvertOptions {
+    return {
+        rules: parsePinyinRules(c.rules),
+        spaceBetweenChars: c.spaceBetweenChars,
+        caseType: c.caseType,
+        variantType: c.variantType,
+        uStyle: c.uStyle,
+        ueStyle: c.ueStyle
+    }
 }
 
 interface PinyinSegment {

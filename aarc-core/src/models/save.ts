@@ -37,6 +37,8 @@ export interface ControlPoint{
     sta:ControlPointSta
     name?:string
     nameS?:string
+    /** 拼音转换预设名（Config.pinyinConvertPresets）；undefined=使用存档默认设置，null=不转换 */
+    pinyinConvertPreset?:string|null
     nameP?:Coord
     nameSize?:number
     /** 副站名尺寸；0/undefined 时跟随上级（cluster→线路推导），全部未设置时跟随 nameSize */
@@ -157,6 +159,8 @@ export interface TextTag{
     forId?:number
     text?:string
     textS?:string
+    /** 拼音转换预设名（Config.pinyinConvertPresets）；undefined=使用存档默认设置，null=不转换 */
+    pinyinConvertPreset?:string|null
     textOp?:TextOptions
     textSOp?:TextOptions
     padding?:number

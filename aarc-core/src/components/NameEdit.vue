@@ -16,7 +16,8 @@ const saveStore = useSaveStore();
 const nameEditStore = useNameEditStore()
 const nameSearchStore = useNameSearchStore()
 const { nameMain, nameSub, editing, edited, targetPtId } = storeToRefs(nameEditStore)
-const { convertPinyin, pinyinOverriding } = usePinyinConvert(nameMain, nameSub, ()=>nameEditStore.applyName())
+const { convertPinyin, pinyinOverriding, pinyinBlocked } = usePinyinConvert(nameMain, nameSub, ()=>nameEditStore.applyName(),
+    ()=>saveStore.getPtById(targetPtId.value ?? -1)?.pinyinConvertPreset)
 const mainInput = useTemplateRef('nameMainInput')
 const subInput = useTemplateRef('nameSubInput')
 const nameEditorDiv = useTemplateRef('nameEditorDiv')
@@ -35,6 +36,7 @@ const {
     apply: nameEditStore.applyName,
     endEditing: nameEditStore.endEditing,
     pinyinConvert: convertPinyin,
+    pinyinBlocked,
     mainInput,
     subInput,
 })
@@ -104,7 +106,7 @@ const sameNameAndFarEnough = computed(()=>{
         v-if="sameNameAndFarEnough" title="这个站名已经在地图内出现过">
             ⚠️
         </div>
-        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
+        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding, pinyinBlocked}">
             <img v-if="!pinyinOverriding" :src="pinyinConvertImg"/>
             <div v-else>再次<br/>点击</div>
         </div>

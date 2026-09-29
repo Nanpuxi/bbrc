@@ -1,5 +1,8 @@
 import { Line, Save, StyleSlice, TimeSlice, LineStyle, LineTimeInfo, ControlPoint, ControlPointDir, ControlPointSta } from 'aarc-core/models/save'
 import { configDefault } from 'aarc-core/models/stores/configStore'
+import rfdc from 'rfdc'
+
+const deepClone = rfdc()
 
 let idCounter = 1
 
@@ -62,7 +65,7 @@ export function createEmptySave(overrides?: Partial<Save>): Save {
     lines: [],
     textTags: [],
     cvsSize: [1000, 1000],
-    config: configDefault,
+    config: deepClone(configDefault),
     meta: {},
     ...overrides
   }
