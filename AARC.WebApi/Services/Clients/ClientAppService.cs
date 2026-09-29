@@ -29,6 +29,7 @@ namespace AARC.WebApi.Services.Clients
             public string GitCommitId { get; set; } = "";
             public long SizeBytes { get; set; }
             public string Sha256 { get; set; } = "";
+            public string Version { get; set; } = "";
         }
 
         public List<ArtifactInfo> GetInfos()

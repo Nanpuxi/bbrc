@@ -25,7 +25,7 @@
     "android:init": "tauri android init",
     "android:dev": "node scripts/android-dev.mjs",
     "android:build": "tauri android build --apk --debug",
-    "android:build:release": "tauri android build --apk --split-per-abi"
+    "android:build:release": "tauri android build --apk --split-per-abi --target aarch64"
   },
   "dependencies": {
     "@aurouscia/au-color-picker": "^2.2.0",

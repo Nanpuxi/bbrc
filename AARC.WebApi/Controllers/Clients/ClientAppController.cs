@@ -7,7 +7,7 @@ using System.Net;
 namespace AARC.WebApi.Controllers.Clients
 {
     /// <summary>
-    /// 客户端产物（PC 绿色版 zip / 安卓 apk）下载与信息
+    /// 客户端产物（PC 绿色版 zip / PC 安装版 msi / 安卓 apk）下载与信息
     /// </summary>
     [ApiController]
     [Route(ApiConsts.routePattern)]
@@ -16,6 +16,13 @@ namespace AARC.WebApi.Controllers.Clients
         ClientAppService clientAppService
         ) : ControllerBase
     {
+        private static readonly Dictionary<string, string> contentTypesByExt = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [".apk"] = "application/vnd.android.package-archive",
+            [".msi"] = "application/x-msi",
+            [".zip"] = "application/zip",
+        };
+
         /// <summary>
         /// 下载指定类型的最新产物（返回物理文件，同时计一次下载量）
         /// </summary>
@@ -29,9 +36,9 @@ namespace AARC.WebApi.Controllers.Clients
             if (!global::System.IO.File.Exists(path))
                 throw new RqEx("客户端产物文件缺失", HttpStatusCode.NotFound);
             clientAppService.RecordDownload(type);
-            var contentType = info.FileName.EndsWith(".apk")
-                ? "application/vnd.android.package-archive"
-                : "application/zip";
+            var contentType = contentTypesByExt.GetValueOrDefault(
+                global::System.IO.Path.GetExtension(info.FileName),
+                "application/octet-stream");
             return PhysicalFile(path, contentType, info.FileName, enableRangeProcessing: true);
         }
 

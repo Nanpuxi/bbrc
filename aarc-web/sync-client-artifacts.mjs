@@ -1,13 +1,13 @@
 // 从 aarc-tauri 的构建产物目录复制产物到 AARC.WebApi/Data/ClientApp 供 WebApi 下发：
-// - exe 压缩为 zip（zipName 指定包内文件名），apk 原样复制
+// - exe/msi 压缩为 zip（zipName 指定包内文件名），apk 原样复制
 // - 并写出元数据 json clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，均为产物本体的值）
 // 文件名带 -YYYYMMDD-HHmm 时间戳（取产物文件创建时间），多版本可共存。
 // 幂等：产物未变化（sha256 已有记录）时不复制、不追加条目。
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import { ZipArchive } from 'archiver'
-import { dirname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const webDir = dirname(fileURLToPath(import.meta.url))
@@ -23,11 +23,35 @@ const artifacts = [
         zipName: 'aarc.exe',
     },
     {
+        type: 'msi',
+        // msi 文件名带版本号（aarc_0.1.0_x64_en-US.msi），版本升级后路径会变，取目录内最新的一个
+        srcDir: join(repoRoot, 'aarc-tauri', 'src-tauri', 'target', 'release', 'bundle', 'msi'),
+        match: /^aarc_(.+?)_x64_en-US\.msi$/,
+        baseName: 'aarc-setup',
+        zipName: 'aarc-setup.msi',
+    },
+    {
         type: 'apk',
         src: join(repoRoot, 'aarc-tauri', 'src-tauri', 'gen', 'android', 'app', 'build', 'outputs', 'apk', 'arm64', 'release', 'app-arm64-release.apk'),
         baseName: 'aarc-arm64',
     },
 ]
+
+// 目录内按文件名排序取最后一个作为产物源（msi 文件名含版本号，新构建的版本号更大）
+function newestFile(dir, match){
+    if (!existsSync(dir))
+        return null
+    const files = readdirSync(dir).filter((f)=>match.test(f)).sort()
+    return files.length ? join(dir, files[files.length - 1]) : null
+}
+
+// 从产物文件名提取版本号（当前仅 msi 文件名含版本，如 aarc_0.1.0_x64_en-US.msi），无则留空
+function versionOf(art, src){
+    if (!art.match)
+        return ''
+    const m = art.match.exec(basename(src))
+    return m ? m[1] : ''
+}
 
 function sha256Of(path){
     return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -52,7 +76,7 @@ function zipAsBuffer(name, srcPath){
 }
 
 async function buildDest(art, fileTime){
-    const ext = art.zipName ? '.zip' : (art.type === 'exe' ? '.exe' : '.apk')
+    const ext = art.zipName ? '.zip' : extname(art.src)
     const destName = `${art.baseName}-${fmtStamp(fileTime)}${ext}`
     const data = art.zipName ? await zipAsBuffer(art.zipName, art.src) : readFileSync(art.src)
     return { destName, data }
@@ -74,11 +98,13 @@ if (existsSync(jsonPath)) {
 mkdirSync(clientAppDir, { recursive: true })
 
 let changedAny = false
-for (const art of artifacts) {
-    if (!existsSync(art.src)) {
-        console.warn(`[syncClientArtifacts] 未找到产物，跳过：${art.src}`)
+for (let art of artifacts) {
+    const src = art.src ?? (art.srcDir ? newestFile(art.srcDir, art.match) : null)
+    if (!src || !existsSync(src)) {
+        console.warn(`[syncClientArtifacts] 未找到产物，跳过：${art.type}`)
         continue
     }
+    art = { ...art, src }
     const srcStat = statSync(art.src)
     const srcHash = sha256Of(art.src)
     const fileTime = srcStat.birthtime ?? srcStat.mtime
@@ -104,6 +130,7 @@ for (const art of artifacts) {
         gitCommitId,
         sizeBytes: data.length, // 展示的是实际下载文件的大小（exe 为 zip 的大小）
         sha256: srcHash, // 产物本体的 sha256（zip 为包内 exe 的）
+        version: versionOf(art, art.src),
     })
     changedAny = true
     console.log(`[syncClientArtifacts] ${art.type} 产物已更新：${destName}`)

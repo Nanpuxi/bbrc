@@ -5,7 +5,7 @@ import { faq } from "@/pages/homes/routes/routesNames";
 import { useCommonLocalConfigStore } from "@/app/localConfig/commonLocalConfig";
 import { userFileList, userFileMarket } from "@/pages/files/routes/routesNames";
 import { useUserListLocalConfigStore } from "../localConfig/userListLocalConfig";
-import { deriveMetroShuttleName, deriveRailchessName, deriveWikiName, donorsName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
+import { clientDownloadName, deriveMetroShuttleName, deriveRailchessName, deriveWikiName, donorsName, forkAarcName, sponsorWxName } from "@/pages/etc/routes/routesNames";
 
 const isFork = import.meta.env.VITE_IsFork == "true"
 
@@ -69,6 +69,10 @@ export async function getTopbarData(): Promise<TopbarModel> {
                 {
                     title: 'AARC 私服',
                     link: { name:forkAarcName }
+                },
+                {
+                    title: 'AARC 本地版',
+                    link: { name:clientDownloadName }
                 },
                 {
                     title: 'FCloud3 系统',
