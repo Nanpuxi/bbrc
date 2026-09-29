@@ -6,6 +6,7 @@ import Prompt from 'aarc-core/components/common/Prompt.vue'
 import { useSaveStore } from 'aarc-core/models/stores/saveStore'
 import { useCollabSessionStore } from 'aarc-core/models/collab/collabSessionStore'
 import { useCollabLogStore } from 'aarc-core/models/collab/collabLogStore'
+import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
 import collabIcon from '@/assets/ui/collab.svg'
 
 // 多人协作面板（参考 ChatRoom.vue）：展开按钮在聊天按钮左侧，
@@ -31,6 +32,7 @@ const router = useRouter()
 const saveStore = useSaveStore()
 const collabSession = useCollabSessionStore()
 const collabLog = useCollabLogStore()
+const { showPop } = useUniqueComponentsStore()
 const sidebar = useTemplateRef('sidebar')
 const logRef = useTemplateRef('log')
 const closedNoticeKind = ref<'collab' | 'room' | null>(null)
@@ -83,13 +85,27 @@ function formatTime(time: number): string {
 function open() {
     sidebar.value?.extend()
 }
+// 启用协作前的知情确认（仅房主在未启用时可见）：四项全部勾选后才允许开启
+const ackItems = [
+    '我明白：协作开启后他人的更改是无法追踪记录的，所以仅在完全信任“允许编辑的人”的情况下，才能开启本功能，绝对不应在允许陌生人编辑的存档中开启',
+    '我明白：房主必须时刻保持在线，不能断网或是离开浏览器，否则会打断他人编辑',
+    '我明白：保存由房主负责，完成后房主应点击左下角离开按钮而非直接关闭浏览器',
+    '我清楚如何反馈问题，我能清晰描述问题产生条件和时机。',
+]
+const ackChecks = ref<boolean[]>(ackItems.map(() => false))
+const allAcked = computed(() => ackChecks.value.every(c => c))
 function onToggle() {
     if (!canEdit.value)
         return
     if (enabled.value)
         emit('disable')
-    else
+    else {
+        if (!allAcked.value) {
+            showPop('请将项目全部勾选', 'failed')
+            return
+        }
         emit('enable')
+    }
 }
 /** 供外部（Editor.vue）在"所有者已关闭协作"时调用，弹出提示 */
 function notifyCollabClosed() {
@@ -141,6 +157,12 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
                     {{ enabled ? '已启用' : '未启用' }}
                 </span>
             </div>
+            <div v-if="!enabled && isOwner" class="ackList">
+                <label v-for="(item, i) in ackItems" :key="i" class="ackItem">
+                    <input type="checkbox" v-model="ackChecks[i]"/>
+                    <span>{{ item }}</span>
+                </label>
+            </div>
             <div v-if="sessionStatus" class="sessionStatus">{{ sessionStatus }}</div>
             <div v-if="collabSession.isInSession" class="members">
                 <div class="sectionTitle">在线成员</div>
@@ -161,7 +183,7 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
                     <div v-if="collabLog.entries.length === 0" class="emptyTip">暂无事件</div>
                 </div>
             </div>
-            <div class="tips">
+            <div v-else class="tips">
                 启用后，多名用户可同时编辑本存档并实时同步；仅存档所有者可修改此开关。
             </div>
         </div>
@@ -241,6 +263,25 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
             color: #999;
             &.on {
                 color: #4a90e2;
+            }
+        }
+    }
+    .ackList {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        .ackItem {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #666;
+            cursor: pointer;
+            input {
+                flex-shrink: 0;
+                margin-top: 3px;
+                cursor: pointer;
             }
         }
     }
