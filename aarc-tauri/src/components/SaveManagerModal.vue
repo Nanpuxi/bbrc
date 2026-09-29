@@ -14,6 +14,9 @@ import moveUpIcon from '../assets/ui/moveUp.svg';
 import moveDownIcon from '../assets/ui/moveDown.svg';
 import backupIcon from '../assets/ui/backup.svg';
 import importIcon from '../assets/ui/import.svg';
+import updateIcon from '../assets/ui/update.svg';
+import { checkForUpdate, clientDownloadPageUrl, UpdateCheckResult } from '../updateCheck';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 const props = defineProps<{
     currentSaveId: string
@@ -128,6 +131,57 @@ async function exportBackup() {
     }
 }
 
+// ---------- 检查更新（结果经上层 Modal 展示；比对依据见 updateCheck.ts） ----------
+
+const updateResult = ref<UpdateCheckResult>()
+const checkingUpdate = ref(false)
+
+async function checkUpdate() {
+    if (checkingUpdate.value) return
+    checkingUpdate.value = true
+    try {
+        updateResult.value = await checkForUpdate()
+    } finally {
+        checkingUpdate.value = false
+    }
+}
+
+const updateTitle = computed(() => {
+    switch (updateResult.value?.state) {
+        case 'latest': return '已是最新版本'
+        case 'update-available': return '有版本更新'
+        default: return '检查更新失败'
+    }
+})
+
+function fmtUpdateTime(iso: string) {
+    return new Date(iso).toLocaleString()
+}
+
+// 下载页地址常显在结果 Modal 中，浏览器调起失败时用户可手动前往
+const downloadPageUrl = clientDownloadPageUrl()
+
+async function goDownload() {
+    const url = clientDownloadPageUrl()
+    try {
+        // tauri 环境经 opener 插件调起系统默认浏览器
+        await openUrl(url)
+    } catch (e) {
+        console.warn('[检查更新] 打开浏览器失败', e)
+        // 浏览器 dev 环境无 opener 插件，退回新开标签页；webview 里 window.open 常被拦截（返回 null）
+        const w = window.open(url, '_blank')
+        if (!w)
+            showPop(`打开浏览器失败（${errMsgOf(e)}），请手动访问：${url}`, 'failed')
+    }
+}
+
+// 从异常中榨出可读的简短信息，用于无 devtools 的打包环境弹窗展示
+function errMsgOf(e: unknown) {
+    if (e instanceof Error)
+        return e.message
+    return String(e)
+}
+
 // 基础检查：按 core models/save.ts 的 Save 接口校验必填顶层字段的存在与类型。
 // 应用写盘的文件总是规范化后的完整 Save 对象，明显不是工程文件（任意 json）可据此拒绝
 function looksLikeSave(data: unknown): boolean {
@@ -188,6 +242,7 @@ async function open() {
     renamingGroupId.value = undefined
     groupModalFor.value = undefined
     confirmDelete.value = undefined
+    updateResult.value = undefined
     searchText.value = ''
     window.addEventListener('keydown', onKeydown)
     await refresh()
@@ -198,7 +253,9 @@ function close() {
 }
 function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-        if (confirmDelete.value)
+        if (updateResult.value)
+            updateResult.value = undefined
+        else if (confirmDelete.value)
             confirmDelete.value = undefined
         else if (groupModalFor.value)
             groupModalFor.value = undefined
@@ -385,6 +442,8 @@ defineExpose({ open })
             <div class="titleRow">
                 <div class="title">存档管理器</div>
                 <div class="titleBtns">
+                    <button class="lite" title="检查更新" :disabled="checkingUpdate"
+                        @click="checkUpdate"><img :src="updateIcon" /></button>
                     <button class="lite" title="导入 json 存档文件" :disabled="busy"
                         @click="fileInput?.click()"><img :src="importIcon" /></button>
                     <button class="lite" title="打包导出备份（zip）" :disabled="busy"
@@ -494,6 +553,31 @@ defineExpose({ open })
             <div class="footer">
                 <button class="cancel" :disabled="busy" @click="confirmDeleteYes">删除</button>
                 <button class="minor" @click="confirmDelete = undefined">取消</button>
+            </div>
+        </div>
+    </div>
+    <div v-if="updateResult" class="mask updateMask" @click.self="updateResult = undefined">
+        <div class="card updateCard">
+            <div class="title">{{ updateTitle }}</div>
+            <template v-if="updateResult.state === 'error'">
+                <div class="confirmDesc">{{ updateResult.message }}</div>
+            </template>
+            <template v-else>
+                <div class="confirmDesc">
+                    最新版本发布时间：<br/>{{ fmtUpdateTime(updateResult.artifact.updatedAt) }}
+                </div>
+                <div v-if="updateResult.artifact.version" class="confirmDesc">
+                    最新版本号：{{ updateResult.artifact.version }}
+                </div>
+                <div v-if="updateResult.state === 'update-available'" class="confirmDesc">
+                    请前往下载页获取新版本
+                </div>
+                <div class="confirmDesc urlHint">{{ downloadPageUrl }}</div>
+            </template>
+            <div class="footer">
+                <button v-if="updateResult.state === 'update-available'" class="confirm"
+                    @click="goDownload">前往下载</button>
+                <button class="minor" @click="updateResult = undefined">关闭</button>
             </div>
         </div>
     </div>
@@ -799,6 +883,21 @@ defineExpose({ open })
 }
 .confirmMask {
     z-index: 100002;
+}
+.updateMask {
+    z-index: 100003;
+}
+.updateCard {
+    width: 300px;
+    height: auto;
+    max-height: 80vh;
+    .title {
+        font-size: 16px;
+    }
+    .urlHint {
+        font-size: 12px;
+        word-break: break-all;
+    }
 }
 .confirmCard {
     width: 300px;

@@ -7,6 +7,7 @@
   ],
   "permissions": [
     "core:default",
+    "opener:default",
     "dialog:allow-save",
     "dialog:allow-open",
     "android-fs:allow-create-new-public-image-file",

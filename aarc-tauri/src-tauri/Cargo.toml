@@ -25,6 +25,7 @@ tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
 # 安卓公共目录（相册）写入；与前端 tauri-plugin-android-fs-api 版本必须严格一致
 tauri-plugin-android-fs = { version = "=29.0.0", features = ["legacy_storage_permission"] }
 

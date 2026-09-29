@@ -1,6 +1,7 @@
 using AARC.WebApi.Services.Clients;
 using AARC.WebApi.Utils;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -12,6 +13,7 @@ namespace AARC.WebApi.Controllers.Clients
     [ApiController]
     [Route(ApiConsts.routePattern)]
     [AllowAnonymous]
+    [EnableCors(CorsConfigure.clientAppCorsPolicyName)]
     public class ClientAppController(
         ClientAppService clientAppService
         ) : ControllerBase
@@ -55,5 +57,14 @@ namespace AARC.WebApi.Controllers.Clients
         [HttpGet]
         public Dictionary<string, int> Stats()
             => clientAppService.GetStats();
+
+        /// <summary>
+        /// 指定类型最新产物信息（客户端"检查更新"用）
+        /// </summary>
+        [HttpGet]
+        [RateLimit(60, 60)]
+        public ClientAppService.ArtifactInfo Latest(string type)
+            => clientAppService.GetLatest(type)
+                ?? throw new RqEx("未找到该类型的客户端产物", HttpStatusCode.NotFound);
     }
 }

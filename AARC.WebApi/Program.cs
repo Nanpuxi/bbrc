@@ -47,11 +47,13 @@ try
         app.UseOpenApi();
         app.UseSwaggerUi();
     }
-    app.UseConfiguredCors();
     app.UseHttpsRedirectionByConfig();
     app.UseFileServer();
     app.UseAppendedStaticFiles(e);
     app.UseRouting();
+    // CORS 需位于 UseRouting 之后：ClientAppController 的 [EnableCors] 端点元数据
+    // 依赖端点感知模式；放前面会因找不到 CORS 中间件直接 500
+    app.UseConfiguredCors();
     app.UseRequestCounter();
     app.UseIpRateLimit();
     app.UseAuthorization();
