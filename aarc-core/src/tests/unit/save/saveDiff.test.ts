@@ -247,3 +247,107 @@ describe('applySaveDiff 应用', () => {
         expect('name' in target.points[0]).toBe(false)
     })
 })
+
+describe('拼音转换预设字段的协作 diff', () => {
+    function ptWithPreset(id: number, presetRef?: string | null): ControlPoint {
+        const pt = makePt(id, id * 10, `站${id}`)
+        pt.pinyinConvertPreset = presetRef
+        return pt
+    }
+
+    it('站名/标签引用预设名变化进 keyed $upd，且仅含变化的属性', () => {
+        const a = createEmptySave({
+            points: [ptWithPreset(1)],
+            textTags: [{ id: 21, pos: [0, 0], text: '标签', pinyinConvertPreset: undefined }]
+        })
+        const b = clone(a)
+        b.points[0].pinyinConvertPreset = '粤语'
+        b.textTags[0].pinyinConvertPreset = '粤语'
+        const diff = diffSave(a, b)!
+        expect(diff.points).toEqual({ $upd: [{ id: 1, pinyinConvertPreset: '粤语' }] })
+        expect(diff.textTags).toEqual({ $upd: [{ id: 21, pinyinConvertPreset: '粤语' }] })
+    })
+
+    it('引用改为 null（不转换）作为普通值同步', () => {
+        const a = createEmptySave({ points: [ptWithPreset(1, '粤语')] })
+        const b = clone(a)
+        b.points[0].pinyinConvertPreset = null
+        const applied = clone(a)
+        roundTrip(applied, diffSave(a, b)!)
+        expect(applied.points[0].pinyinConvertPreset).toBeNull()
+    })
+
+    it('引用清除（回到跟随存档默认）以 $upd 带 $del 表达，JSON 往返后生效', () => {
+        const a = createEmptySave({ points: [ptWithPreset(1, '粤语')] })
+        const b = clone(a)
+        delete b.points[0].pinyinConvertPreset
+        const diff = diffSave(a, b)!
+        expect(diff.points).toEqual({ $upd: [{ id: 1, $del: ['pinyinConvertPreset'] }] })
+        const applied = clone(a)
+        roundTrip(applied, diff)
+        expect('pinyinConvertPreset' in applied.points[0]).toBe(false)
+    })
+
+    it('config.pinyinConvertPresets 以 name 为键：新增进 $add（与 C# SaveDiffService 的 name-keyed 一致）', () => {
+        const a = createEmptySave()
+        const b = clone(a)
+        b.config.pinyinConvertPresets = [{ name: '粤语', convert: { variantType: 1 } }]
+        const diff = diffSave(a, b)!
+        expect(diff.config).toEqual({
+            pinyinConvertPresets: { $add: [{ name: '粤语', convert: { variantType: 1 } }] }
+        })
+        const applied = clone(a)
+        roundTrip(applied, diff)
+        expect(applied.config.pinyinConvertPresets).toEqual(b.config.pinyinConvertPresets)
+    })
+
+    it('预设内容就地修改（改 convert 字段）按 name 走 $upd，删除走 $rm', () => {
+        const a = createEmptySave()
+        a.config.pinyinConvertPresets = [
+            { name: '粤语', convert: { variantType: 1 } },
+            { name: '小写', convert: { caseType: 2 } }
+        ]
+        const b = clone(a)
+        b.config.pinyinConvertPresets![0].convert.caseType = 2
+        b.config.pinyinConvertPresets!.splice(1, 1)
+        const diff = diffSave(a, b)!
+        expect(diff.config).toEqual({
+            pinyinConvertPresets: {
+                $upd: [{ id: '粤语', convert: { variantType: 1, caseType: 2 } }],
+                $rm: ['小写']
+            }
+        })
+        const applied = clone(a)
+        roundTrip(applied, diff)
+        expect(applied.config.pinyinConvertPresets).toEqual(b.config.pinyinConvertPresets)
+    })
+
+    it('并发新增不同预设：两个 op 先后应用后都保留（不做整组 $set 覆盖）', () => {
+        const base = createEmptySave()
+        // 甲、乙各自从同一底新增不同预设
+        const byA = clone(base)
+        byA.config.pinyinConvertPresets = [{ name: '粤语', convert: { variantType: 1 } }]
+        const byB = clone(base)
+        byB.config.pinyinConvertPresets = [{ name: '小写', convert: { caseType: 2 } }]
+        const diffA = diffSave(base, byA)!
+        const diffB = diffSave(base, byB)!
+        const applied = clone(base)
+        roundTrip(applied, diffA)
+        roundTrip(applied, diffB)
+        expect(applied.config.pinyinConvertPresets).toEqual([
+            { name: '粤语', convert: { variantType: 1 } },
+            { name: '小写', convert: { caseType: 2 } }
+        ])
+    })
+
+    it('name 重复的数组回退为原子 $set（防御非法数据）', () => {
+        const a = createEmptySave()
+        const b = clone(a)
+        b.config.pinyinConvertPresets = [
+            { name: '粤语', convert: {} },
+            { name: '粤语', convert: { caseType: 1 } }
+        ]
+        const diff = diffSave(a, b)!
+        expect((diff.config as Record<string, unknown>).pinyinConvertPresets).toHaveProperty('$set')
+    })
+})

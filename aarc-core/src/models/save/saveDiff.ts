@@ -10,15 +10,16 @@ import rfdc from "rfdc";
  * 格式（顶层与嵌套普通对象均为 { 属性名: PropDiff }）：
  * - { $set: value }   原子替换/新增属性（标量、非 keyed 数组、其它一切）
  * - { $del: true }    删除属性（值为 undefined 视为不存在；JSON 传输下 undefined 会丢失，必须显式表达删除）
- * - keyed 数组（全部元素为带唯一 id 的对象）：{ $add?: 完整元素[], $rm?: id[], $upd?: 按 id 更新[], $seq?: 新的完整 id 顺序 }
- *   - $upd 条目：{ id, ...变化属性的新值, $del?: 被删除的属性名[] }
+ * - keyed 数组（全部元素可提取出唯一键）：{ $add?: 完整元素[], $rm?: 键[], $upd?: 按键更新[], $seq?: 新的完整键顺序 }
+ *   - 键提取：优先元素 id（number/string），无 id 时回退 name（string，如 config.pinyinConvertPresets）
+ *   - $upd 条目：{ id: 键值, ...变化属性的新值, $del?: 被删除的属性名[] }
  *   - $seq 仅在“删除+追加后仍无法得到目标顺序”时输出（纯尾部追加不产生 $seq）
  * - 普通对象：递归的子 diff
  *
- * keyed 判定是自动的（无配置表）：数组元素均为含唯一 number/string id 的普通对象；
+ * keyed 判定是自动的（无配置表）；
  * **空数组视为天然 keyed**——空 ↔ 非空 keyed 数组之间也输出 $add/$rm 而非 $set 整组替换，
  * 这样本地未 ack op 重放到变化后的底上（快照重建）时幂等，不会整组覆盖他人并发新增。
- * 任一侧元素无 id / id 重复则回退为原子 $set 整体替换。
+ * 任一侧元素无法提取键 / 键重复则回退为原子 $set 整体替换。
  */
 
 const clone = rfdc()
@@ -201,14 +202,15 @@ function applyKeyedArr(target: Record<string, unknown>, key: string, node: Keyed
 
     if (node.$rm && node.$rm.length > 0) {
         const rm = new Set<Id>(node.$rm)
-        replaceArrContents(arr, arr.filter(el => !rm.has(el?.id as Id)))
+        replaceArrContents(arr, arr.filter(el => !rm.has(keyOfEl(el) as Id)))
     }
 
     if (node.$upd && node.$upd.length > 0) {
         const map = new Map<Id, Record<string, unknown>>()
         for (const el of arr) {
-            if (el && typeof el === 'object' && 'id' in el)
-                map.set(el.id as Id, el)
+            const key = keyOfEl(el)
+            if (key !== undefined)
+                map.set(key, el as Record<string, unknown>)
         }
         for (const upd of node.$upd) {
             const item = map.get(upd.id)
@@ -225,10 +227,10 @@ function applyKeyedArr(target: Record<string, unknown>, key: string, node: Keyed
     }
 
     if (node.$add && node.$add.length > 0) {
-        const existing = new Set<Id>(arr.map(el => el?.id as Id))
+        const existing = new Set<Id>(arr.map(el => keyOfEl(el)).filter(k => k !== undefined))
         for (const item of node.$add) {
-            const id = (item as Record<string, unknown>).id as Id
-            if (!existing.has(id)) {
+            const id = keyOfEl(item)
+            if (id !== undefined && !existing.has(id)) {
                 arr.push(clone(item) as Record<string, unknown>)
                 existing.add(id)
             }
@@ -240,30 +242,43 @@ function applyKeyedArr(target: Record<string, unknown>, key: string, node: Keyed
         node.$seq.forEach((id, i) => ord.set(id, i))
         // 不在序列中的元素保持相对顺序置于末尾（对乱序到达/基线不一致的防御）
         const sorted = arr
-            .map((el, idx) => ({ el, idx, ord: ord.get(el?.id as Id) ?? Infinity }))
+            .map((el, idx) => ({ el, idx, ord: ord.get(keyOfEl(el) as Id) ?? Infinity }))
             .sort((a, b) => a.ord - b.ord || a.idx - b.idx)
             .map(x => x.el)
         replaceArrContents(arr, sorted)
     }
 }
 
-/** 数组元素均为含唯一 number/string id 的普通对象时返回 id 序列，否则返回 null；
- *  空数组返回 []（天然 keyed：空 ↔ 非空 keyed 间走 $add/$rm，重放幂等） */
+/** 数组元素均可提取出唯一键时返回键序列，否则返回 null；
+ *  空数组返回 []（天然 keyed：空 ↔ 非空 keyed 间走 $add/$rm，重放幂等）。
+ *  键提取：优先 id（number/string），无合法 id 时回退 name（string）——
+ *  config.pinyinConvertPresets 等以 name 为键的数组因此走 keyed diff 而非整体 $set。 */
 function keyedIds(arr: unknown[]): Id[] | null {
     const ids: Id[] = []
     const seen = new Set<Id>()
     for (const el of arr) {
-        if (!el || typeof el !== 'object' || Array.isArray(el))
+        const key = keyOfEl(el)
+        if (key === undefined)
             return null
-        const id = (el as Record<string, unknown>).id
-        if (typeof id !== 'number' && typeof id !== 'string')
+        if (seen.has(key))
             return null
-        if (seen.has(id))
-            return null
-        seen.add(id)
-        ids.push(id)
+        seen.add(key)
+        ids.push(key)
     }
     return ids
+}
+
+/** 提取元素的 keyed 键：id 优先，其次 name；都不是合法键时返回 undefined */
+function keyOfEl(el: unknown): Id | undefined {
+    if (!el || typeof el !== 'object' || Array.isArray(el))
+        return undefined
+    const id = (el as Record<string, unknown>).id
+    if (typeof id === 'number' || typeof id === 'string')
+        return id
+    const name = (el as Record<string, unknown>).name
+    if (typeof name === 'string')
+        return name
+    return undefined
 }
 
 function idsEqual(a: Id[], b: Id[]): boolean {
