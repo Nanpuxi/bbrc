@@ -1,21 +1,7 @@
-import { PinyinConvertRequest } from "aarc-core/models/types/apiShapes";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { storeToRefs } from "pinia";
 import { computed, ref, Ref } from "vue";
-
-/** 拼音转换实现，由宿主注入（web 用后端 HTTP 接口） */
-export type PinyinConvertProvider = (req: PinyinConvertRequest) => Promise<string|null|undefined>
-
-let provider: PinyinConvertProvider | undefined
-
-export function initPinyinConvertProvider(p: PinyinConvertProvider) {
-    provider = p
-}
-
-/** 宿主是否已注入拼音转换实现；未注入时 core 隐藏相关入口 */
-export function hasPinyinConvertProvider(): boolean {
-    return !!provider
-}
+import { convertPinyinLocal } from "./pinyinConverter";
 
 type TargetRef = Ref<string|undefined|null>
 export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void)=>{
@@ -42,23 +28,16 @@ export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=
             return
         let res:string|undefined|null
         if(overridingReady.value && overridingToDest.value){
-            //若现在已经是二次点击，则无需重新用http获取
+            //若现在已经是二次点击，则无需重新转换
             res = overridingToDest.value
         }
         else{
-            if(!provider){
-                console.error('拼音转换实现未注入')
-                return
-            }
             const c = config.value.pinyinConvert
-            res = await provider({
-                text: source.value,
-                options:{
-                    rules: rules.value,
-                    spaceBetweenChars: c?.spaceBetweenChars,
-                    caseType: c?.caseType,
-                    variantType: c?.variantType
-                }
+            res = await convertPinyinLocal(source.value, {
+                rules: rules.value,
+                spaceBetweenChars: c?.spaceBetweenChars,
+                caseType: c?.caseType,
+                variantType: c?.variantType
             })
         }
         const apply = ()=>{

@@ -32,5 +32,18 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src')
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // 拼音词典经 core 动态 import 懒加载，独立命名 chunk
+        manualChunks: (id) => {
+          if (id.includes('pinyin-pro'))
+            return 'pinyin'
+          if (id.includes('to-jyutping') || id.includes('jyutping-data'))
+            return 'jyutping'
+        }
+      }
+    }
   }
 })

@@ -73,7 +73,7 @@ pnpm --filter aarc-tauri gen:icons
 
 - `siteLinks`：不注入则"关于页/私服案例"链接隐藏（tauri 本就不需要）。
 - `routeGuardRegistrar`：tauri 无前端路由，可不注入；`window.onbeforeunload` 部分 core 自理。
-- `pinyinConvert` / `saveInfo`：不注入则拼音转换按钮与"站名拼音转换"配置区隐藏；导出文件名退化为存档 id，不阻断导出。
+- `saveInfo`：不注入则导出文件名退化为存档 id，不阻断导出。（拼音转换已于 2026-09 改为 core 本地实现，无需注入、自动可用。）
 - `cloudSvgUploader`：不注入则"云端SVG"配置区整体隐藏；minimal 阶段也可注入 noop/本地保存占位，tauri 阶段换 fs 实现。
 - `initOpenFavoritesSidebar`：不注入则"添加资源"按钮隐藏（被调用时仅 `console.warn`）。
 - `fileSaver`：core 默认用浏览器 `<a download>` 下载兜底，tauri webview 下不可靠，**本包已注入原生实现**：`src/fileSaver.ts`（`main.ts` 经 `isTauri()` 判断仅在 tauri 环境注入，浏览器 dev 仍走默认下载）。实现按平台分流：

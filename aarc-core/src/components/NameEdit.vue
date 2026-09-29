@@ -8,7 +8,7 @@ import foldImg from 'aarc-core/assets/ui/fold.svg'
 import settingsImg from 'aarc-core/assets/ui/settings.svg'
 import pinyinConvertImg from 'aarc-core/assets/ui/pinyinConvert.svg'
 import ControlPointOptions from './sidebars/options/ControlPointOptions.vue';
-import { usePinyinConvert, hasPinyinConvertProvider } from './composables/usePinyinConvert';
+import { usePinyinConvert } from './composables/usePinyinConvert';
 import { computed, onMounted, onUnmounted, useTemplateRef } from 'vue';
 import { useNameSearchStore } from 'aarc-core/models/stores/nameSearchStore';
 
@@ -17,7 +17,6 @@ const nameEditStore = useNameEditStore()
 const nameSearchStore = useNameSearchStore()
 const { nameMain, nameSub, editing, edited, targetPtId } = storeToRefs(nameEditStore)
 const { convertPinyin, pinyinOverriding } = usePinyinConvert(nameMain, nameSub, ()=>nameEditStore.applyName())
-const pinyinConvertEnabled = hasPinyinConvertProvider()
 const mainInput = useTemplateRef('nameMainInput')
 const subInput = useTemplateRef('nameSubInput')
 const nameEditorDiv = useTemplateRef('nameEditorDiv')
@@ -105,7 +104,7 @@ const sameNameAndFarEnough = computed(()=>{
         v-if="sameNameAndFarEnough" title="这个站名已经在地图内出现过">
             ⚠️
         </div>
-        <div v-if="pinyinConvertEnabled" @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
+        <div @click="convertPinyinCall" class="pinyinConvertBtn sqrBtn withShadow" :class="{pinyinOverriding}">
             <img v-if="!pinyinOverriding" :src="pinyinConvertImg"/>
             <div v-else>再次<br/>点击</div>
         </div>

@@ -34,7 +34,6 @@ onMounted(()=>{
             const res = await api.saveSvg.upload(saveId, {data: svgBlob, fileName: 'latest.svg'})
             return res === true
         },
-        pinyinConvert: req => api.saveUtils.pinyinConvert(req),
         saveInfo: saveId => api.save.loadInfo(saveId),
         siteLinks: {
             about: router.resolve({ name: aboutName }).href,

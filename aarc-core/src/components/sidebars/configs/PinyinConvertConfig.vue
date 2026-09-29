@@ -3,20 +3,15 @@ import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { storeToRefs } from 'pinia';
 import ConfigSection from './shared/ConfigSection.vue';
 import { onMounted, watch } from 'vue';
-import { PinyinCaseType, PinyinVariantType } from 'aarc-core/models/types/apiShapes';
+import { PinyinCaseType, PinyinVariantType } from 'aarc-core/components/composables/pinyinConverter';
 import { useEditorLocalConfigStore } from 'aarc-core/app/localConfig/editorLocalConfig';
 import { usePreventLeavingUnsavedStore } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
-import { hasPinyinConvertProvider } from 'aarc-core/components/composables/usePinyinConvert';
-
-const pinyinConvertEnabled = hasPinyinConvertProvider()
 
 const { config } = storeToRefs(useConfigStore())
 const { tabForPinyinConvert } = storeToRefs(useEditorLocalConfigStore())
 const { preventLeaving } = usePreventLeavingUnsavedStore()
 
 onMounted(()=>{
-    if(!pinyinConvertEnabled)
-        return
     const ori = config.value.pinyinConvert
     if(!ori || !Object.keys(ori).length){
         config.value.pinyinConvert = {
@@ -33,7 +28,7 @@ watch(()=>config.value.pinyinConvert, ()=>{
 </script>
 
 <template>
-<ConfigSection :title="'站名拼音转换'" v-if="pinyinConvertEnabled">
+<ConfigSection :title="'站名拼音转换'">
 <table v-if="config.pinyinConvert">
     <tbody>
         <tr>
