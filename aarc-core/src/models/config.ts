@@ -129,6 +129,8 @@ export type PinyinConvertConfig = {
     caseType?:number,
     variantType?:number,
     spaceBetweenChars?:boolean,
+    /** 中文段与非中文段之间是否加空格；缺省 true */
+    spaceBetweenMixed?:boolean,
     /** 单字ü的写法（PinyinUStyle）；缺省 2（V，绿→lv） */
     uStyle?:number,
     /** 韵母üe的写法（PinyinUStyle）；缺省 0（U，略→lue） */

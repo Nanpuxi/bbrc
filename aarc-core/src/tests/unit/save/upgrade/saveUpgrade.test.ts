@@ -19,19 +19,37 @@ function makeMinimalSave(): Save {
 }
 
 describe('upgradeConfig', () => {
-  it('ver<1 时应升级到 v1', () => {
+  it('ver<1 时应逐级升级到最新版本', () => {
     const save = makeMinimalSave()
     save.config = {} as any
     upgradeConfig(save)
-    expect(save.config.configVersion).toBe(1)
+    expect(save.config.configVersion).toBe(freshNewConfigVersion)
     expect(save.config.textTagForLine).toBeDefined()
     expect(save.config.textTagForLine!.anchorX).toBe(1)
     expect(save.config.textTagForLine!.textAlign).toBe(0)
+    expect(save.config.pinyinConvert!.spaceBetweenMixed).toBe(true)
   })
 
-  it('ver>=1 时不应修改配置', () => {
+  it('ver<2 时应回填 spaceBetweenMixed（含预设，已有值不覆盖）', () => {
     const save = makeMinimalSave()
-    save.config = { configVersion: 1, textTagForLine: { anchorX: 0, textAlign: 1 } } as any
+    save.config = {
+      configVersion: 1,
+      pinyinConvert: {},
+      pinyinConvertPresets: [
+        { name: 'a', convert: {} },
+        { name: 'b', convert: { spaceBetweenMixed: false } }
+      ]
+    } as any
+    upgradeConfig(save)
+    expect(save.config.configVersion).toBe(freshNewConfigVersion)
+    expect(save.config.pinyinConvert!.spaceBetweenMixed).toBe(true)
+    expect(save.config.pinyinConvertPresets![0].convert.spaceBetweenMixed).toBe(true)
+    expect(save.config.pinyinConvertPresets![1].convert.spaceBetweenMixed).toBe(false)
+  })
+
+  it('ver>=最新版本时不应修改配置', () => {
+    const save = makeMinimalSave()
+    save.config = { configVersion: freshNewConfigVersion, textTagForLine: { anchorX: 0, textAlign: 1 } } as any
     upgradeConfig(save)
     expect(save.config.textTagForLine!.anchorX).toBe(0)
     expect(save.config.textTagForLine!.textAlign).toBe(1)
@@ -46,6 +64,7 @@ describe('initFreshNewConfig', () => {
     expect(save.config.configVersion).toBe(freshNewConfigVersion)
     expect(save.config.textTagForLine).toBeDefined()
     expect(save.config.textTagForLine!.edgeAnchorOutsidePadding).toBe(true)
+    expect(save.config.pinyinConvert!.spaceBetweenMixed).toBe(true)
   })
 })
 

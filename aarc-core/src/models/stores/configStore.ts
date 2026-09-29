@@ -94,7 +94,7 @@ export const configDefault:Config = {
     textTagForLineDropCapDetect:'classic',
     textTagForTerrain:{},
 
-    pinyinConvert:{},
+    pinyinConvert:{ spaceBetweenMixed: true },
     pinyinConvertPresets:[],
 
     configVersion:0
@@ -113,6 +113,7 @@ export const useConfigStore = defineStore('config', ()=>{
         normalizeSnapRayAngles()
         normalizeTextTagConfigs()
         normalizePinyinConvertPresets()
+        normalizePinyinConvertDefaults()
     }
     function writeConfigToSave(){
         const configNow = deepClone(config.value)
@@ -137,6 +138,7 @@ export const useConfigStore = defineStore('config', ()=>{
         normalizeSnapRayAngles()
         normalizeTextTagConfigs()
         normalizePinyinConvertPresets()
+        normalizePinyinConvertDefaults()
         console.log('写入后的配置：', deepClone(config.value))
     }
 
@@ -163,7 +165,17 @@ export const useConfigStore = defineStore('config', ()=>{
         }
         config.value.pinyinConvertPresets = raw
             .filter(p=>!!p && typeof p.name === 'string')
-            .map(p=>({ name: p.name, convert: p.convert && typeof p.convert === 'object' ? p.convert : {} }))
+            .map(p=>{
+                const convert = p.convert && typeof p.convert === 'object' ? p.convert : {}
+                convert.spaceBetweenMixed ??= true
+                return { name: p.name, convert }
+            })
+    }
+
+    /** 存档默认的“中英空格”缺省回填 true（旧存档升级已回填，这里兜导入/协作等旁路） */
+    function normalizePinyinConvertDefaults(){
+        config.value.pinyinConvert ??= {}
+        config.value.pinyinConvert.spaceBetweenMixed ??= true
     }
 
     /**

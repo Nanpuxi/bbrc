@@ -121,10 +121,10 @@ describe('协作：远端存档应用后的预设解析', () => {
       ['粤语', undefined, null], ['粤语']) as any
     cs.readConfigFromSave()
     const presets = cs.config.pinyinConvertPresets
-    expect(resolvePinyinConvert(saveStore.save!.points[0].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toEqual({ variantType: 1 })
+    expect(resolvePinyinConvert(saveStore.save!.points[0].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toEqual({ variantType: 1, spaceBetweenMixed: true })
     expect(resolvePinyinConvert(saveStore.save!.points[1].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toBe(cs.config.pinyinConvert)
     expect(resolvePinyinConvert(saveStore.save!.points[2].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toBeNull()
-    expect(resolvePinyinConvert(saveStore.save!.textTags[0].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toEqual({ variantType: 1 })
+    expect(resolvePinyinConvert(saveStore.save!.textTags[0].pinyinConvertPreset, presets, cs.config.pinyinConvert)).toEqual({ variantType: 1, spaceBetweenMixed: true })
   })
 
   it('对端引用在本地配置中不存在（悬空引用）时回退存档默认，不报错', () => {
@@ -161,7 +161,7 @@ describe('协作：远端存档应用后的预设解析', () => {
     // 对端拿到这份快照再应用一次
     cs.readConfigFromSave()
     expect(cs.config.pinyinConvertPresets.map(p => p.name)).toEqual(['粤语', '小写'])
-    expect(cs.config.pinyinConvertPresets[0].convert).toEqual({ variantType: 1 })
+    expect(cs.config.pinyinConvertPresets[0].convert).toEqual({ variantType: 1, spaceBetweenMixed: true })
     expect(saveStore.save!.points.map(p => p.pinyinConvertPreset)).toEqual(['粤语', '小写'])
     expect(saveStore.save!.textTags.map(t => t.pinyinConvertPreset)).toEqual([null])
   })

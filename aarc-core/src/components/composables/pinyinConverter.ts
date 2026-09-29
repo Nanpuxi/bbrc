@@ -6,6 +6,8 @@
  * 词典库（pinyin-pro / to-jyutping）经动态 import 懒加载，避免首屏体积膨胀。
  * 与 EzPinyin 语义对齐：普通话**逐字**取默认读音（非词组感知，"重庆"→zhong qing）；
  * 粤语取无调号 jyutping；ü 记法后处理为 EzPinyin 风格（女→nv、略→lue）。
+ * 本地扩展：规则值首尾 `_` 为强制空格标记，
+ * 在 spaceBetweenMixed 关闭时于该侧补一个空格（如 "公园:_Park"）。
  */
 
 import type { PinyinConvertConfig } from "aarc-core/models/config";
@@ -37,6 +39,8 @@ export interface PinyinConvertOptions {
     caseType?: PinyinCaseType;
     variantType?: PinyinVariantType;
     spaceBetweenChars?: boolean;
+    /** 中文段与非中文段之间是否加空格；缺省 true */
+    spaceBetweenMixed?: boolean;
     /** 单字ü的写法；缺省为 V（绿→lv），与旧版 EzPinyin 行为一致 */
     uStyle?: PinyinUStyle;
     /** 韵母üe的写法；缺省为 U（略→lue），与旧版 EzPinyin 行为一致 */
@@ -63,6 +67,7 @@ export function toPinyinOptions(c: PinyinConvertConfig): PinyinConvertOptions {
     return {
         rules: parsePinyinRules(c.rules),
         spaceBetweenChars: c.spaceBetweenChars,
+        spaceBetweenMixed: c.spaceBetweenMixed,
         caseType: c.caseType,
         variantType: c.variantType,
         uStyle: c.uStyle,
@@ -74,6 +79,9 @@ interface PinyinSegment {
     value: string;
     isFromRule: boolean;
     isChinese: boolean;
+    /** 规则值首/尾 `_` 标记：中英空格关闭时在该侧强制补一个空格 */
+    padLeft?: boolean;
+    padRight?: boolean;
 }
 
 interface PinyinConvertTarget {
@@ -149,12 +157,16 @@ function splitToSegments(text: string, rulesRaw: { [key: string]: string } | und
         if (matched) {
             if (tempRaw.length > 0) flushTempRaw();
             let value = rules[matched.targetRaw];
-            // 处理值中的 ^ $ 标记：把结果段搬到输出头部/尾部
-            const atHead = value.startsWith('^');
-            const atTail = value.endsWith('$');
-            if (atHead) value = value.slice(1);
-            if (atTail) value = value.slice(0, -1);
-            const segment: PinyinSegment = { value, isFromRule: true, isChinese: false };
+            // 解析值首尾标记：^ $ 把结果段搬到输出头部/尾部，_ 在中英空格关闭时在该侧强制补空格
+            let atHead = false, atTail = false, padLeft = false, padRight = false;
+            for (;;) {
+                if (value.startsWith('^')) { atHead = true; value = value.slice(1); }
+                else if (value.startsWith('_')) { padLeft = true; value = value.slice(1); }
+                else if (value.length > 0 && value.endsWith('$')) { atTail = true; value = value.slice(0, -1); }
+                else if (value.length > 0 && value.endsWith('_')) { padRight = true; value = value.slice(0, -1); }
+                else break;
+            }
+            const segment: PinyinSegment = { value, isFromRule: true, isChinese: false, padLeft, padRight };
             if (atHead)
                 headSegments.push(segment);
             else if (atTail)
@@ -208,12 +220,19 @@ export async function convertPinyinLocal(text: string, options: PinyinConvertOpt
     if (text.length > PINYIN_CONVERT_MAX_LENGTH) return null;
     const segs = splitToSegments(text, options.rules);
     const caseType = options.caseType ?? PinyinCaseType.Pascal;
+    const mixedSpace = options.spaceBetweenMixed ?? true;
     const segsConverted: string[] = [];
     for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
         const isFirstSeg = i === 0;
         if (seg.isFromRule || !seg.isChinese) {
-            segsConverted.push(seg.value); //规则段与非中文段 as-is
+            let v = seg.value; //规则段与非中文段 as-is
+            // 中英空格关闭时，按规则值首尾的下划线标记强制补空格（开启时标记已被消费，避免双空格）
+            if (seg.isFromRule && !mixedSpace) {
+                if (seg.padLeft) v = ' ' + v;
+                if (seg.padRight) v = v + ' ';
+            }
+            segsConverted.push(v);
             continue;
         }
         let arr = await convertSegmentToSyllables(seg.value, options);
@@ -236,5 +255,6 @@ export async function convertPinyinLocal(text: string, options: PinyinConvertOpt
         }
         segsConverted.push(segConverted);
     }
-    return segsConverted.join(' ');
+    const segJoiner = mixedSpace ? ' ' : '';
+    return segsConverted.join(segJoiner);
 }

@@ -43,6 +43,12 @@ const rulesNoteExpanded = ref(false)
         </td>
     </tr>
     <tr>
+        <td>中英<br/>空格</td>
+        <td>
+            <input v-model="settings.spaceBetweenMixed" type="checkbox">
+        </td>
+    </tr>
+    <tr>
         <td>绿</td>
         <td>
             <select v-model="settings.uStyle">
@@ -86,6 +92,8 @@ const rulesNoteExpanded = ref(false)
                 <p>^$在右侧同样可以使用，例如:</p>
                 <p class="example-p">北$:^North、东$:^East</p>
                 <p class="example-p">李家村东→East LiJiaCun</p>
+                <p>值首尾的下划线表示强制空格，“中英空格”关闭时仍生效:</p>
+                <p class="example-p">公园:_Park、北$:^North_</p>
             </div>
         </td>
     </tr>

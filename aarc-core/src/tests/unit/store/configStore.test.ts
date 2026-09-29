@@ -196,8 +196,8 @@ describe('configStore - 拼音转换预设', () => {
     }) as any
     cs.readConfigFromSave()
     expect(cs.config.pinyinConvertPresets).toEqual([
-      { name: '粤语', convert: { variantType: 1 } },
-      { name: '缺convert', convert: {} }
+      { name: '粤语', convert: { variantType: 1, spaceBetweenMixed: true } },
+      { name: '缺convert', convert: { spaceBetweenMixed: true } }
     ])
   })
 

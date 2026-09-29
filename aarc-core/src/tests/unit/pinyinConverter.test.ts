@@ -1,5 +1,5 @@
 /**
- * 移植自 AARC.Utils.Test/PinyinConverterTests.cs（后端实现保留作参照）。
+ * 移植自原后端 AARC.Utils.Test/PinyinConverterTests.cs（后端实现已下线，用例保留为规格）。
  * 预期值基于本地库实测：pinyin-pro 逐字读音、to-jyutping 去调号，
  * 与 EzPinyin/Jyutping 语义对齐（无声调、非词组感知、ü→v/üe→ue）。
  */
@@ -89,6 +89,14 @@ describe('中英文分段', () => {
     it('非中文段 as-is，段间空格连接', async () => {
         expect(await convertPinyinLocal('我love你', {})).toBe('Wo love Ni');
     });
+    it('spaceBetweenMixed 关闭时段间不加空格', async () => {
+        expect(await convertPinyinLocal('我love你', { spaceBetweenMixed: false })).toBe('WoloveNi');
+        expect(await convertPinyinLocal('abc中国', { caseType: PinyinCaseType.AllLower, spaceBetweenMixed: false })).toBe('abczhongguo');
+    });
+    it('spaceBetweenMixed 不影响字间空格', async () => {
+        expect(await convertPinyinLocal('我love你', { spaceBetweenChars: true, spaceBetweenMixed: false })).toBe('WoloveNi');
+        expect(await convertPinyinLocal('我爱你', { spaceBetweenChars: true, spaceBetweenMixed: false })).toBe('Wo Ai Ni');
+    });
     it('纯 ASCII as-is', async () => {
         expect(await convertPinyinLocal('hello123', {})).toBe('hello123');
     });
@@ -143,6 +151,28 @@ describe('规则 Value 的 ^ $ 定位', () => {
     });
     it('规则段与字间空格共存', async () => {
         expect(await convertPinyinLocal('你好', { rules: { '好': 'x' }, spaceBetweenChars: true })).toBe('Ni x');
+    });
+});
+
+describe('规则 Value 的 _ 强制空格标记', () => {
+    it('中英空格关闭时按标记补空格', async () => {
+        expect(await convertPinyinLocal('中山公园', { rules: { '公园': '_Park' }, spaceBetweenMixed: false })).toBe('ZhongShan Park');
+        expect(await convertPinyinLocal('公园东', { rules: { '公园': 'Park_' }, spaceBetweenMixed: false })).toBe('Park Dong');
+        expect(await convertPinyinLocal('去公园玩', { rules: { '公园': '_Park_' }, spaceBetweenMixed: false })).toBe('Qu Park Wan');
+    });
+    it('中英空格开启时标记被消费且不产生双空格', async () => {
+        expect(await convertPinyinLocal('中山公园', { rules: { '公园': '_Park_' } })).toBe('ZhongShan Park');
+    });
+    it('词中下滑线原样保留', async () => {
+        expect(await convertPinyinLocal('中山公园', { rules: { '公园': 'My_Park' }, spaceBetweenMixed: false })).toBe('ZhongShanMy_Park');
+    });
+    it('与 ^ $ 定位标记组合', async () => {
+        // 东$:^East_ → 尾部命中搬移到头部，右侧强制空格
+        expect(await convertPinyinLocal('李家村东', { rules: { '东$': '^East_' }, spaceBetweenMixed: false })).toBe('East LiJiaCun');
+    });
+    it('标记边界：首尾解析后无残留', async () => {
+        expect(await convertPinyinLocal('公园', { rules: { '公园': '_' }, spaceBetweenMixed: false })).toBe(' ');
+        expect(await convertPinyinLocal('公园', { rules: { '公园': '__A__' }, spaceBetweenMixed: false })).toBe(' A ');
     });
 });
 
