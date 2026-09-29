@@ -44,6 +44,18 @@ export interface PinyinConvertOptions {
 /** 与原 Controller 校验一致：超长返回错误标记文本 */
 export const PINYIN_CONVERT_MAX_LENGTH = 50
 
+/** 解析配置里的自定义规则文本（每行 "源:目标"） */
+export function parsePinyinRules(str?: string): { [key: string]: string } {
+    const res: { [key: string]: string } = {}
+    for(const line of str?.split('\n') ?? []){
+        const kv = line.split(/[:：]/, 2)
+        if(kv.length === 2){
+            res[kv[0]] = kv[1]
+        }
+    }
+    return res
+}
+
 interface PinyinSegment {
     value: string;
     isFromRule: boolean;

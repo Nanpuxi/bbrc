@@ -1,7 +1,7 @@
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { storeToRefs } from "pinia";
 import { computed, ref, Ref } from "vue";
-import { convertPinyinLocal } from "./pinyinConverter";
+import { convertPinyinLocal, parsePinyinRules } from "./pinyinConverter";
 
 type TargetRef = Ref<string|undefined|null>
 export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=>void)=>{
@@ -9,20 +9,7 @@ export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=
     const overridingForSource = ref<string>()
     const overridingToDest = ref<string>()
     const overridingReady = computed<boolean>(()=>!!source.value && overridingForSource.value === source.value)
-    const rules = computed<{[key:string]:string}>(()=>{
-        const res:{[key:string]:string} = {}
-        const str = config.value.pinyinConvert?.rules
-        if(str){
-            const lines = str.split('\n')
-            for(const line of lines){
-                const kv = line.split(/[:：]/, 2)
-                if(kv.length === 2){
-                    res[kv[0]] = kv[1]
-                }
-            }
-        }
-        return res
-    })
+    const rules = computed(() => parsePinyinRules(config.value.pinyinConvert?.rules))
     async function convertPinyin(){
         if(!source.value)
             return

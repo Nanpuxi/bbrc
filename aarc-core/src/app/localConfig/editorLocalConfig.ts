@@ -8,12 +8,16 @@ export const cvsRenderResolutionRatioLimits = { min: 0.5, max: 2 }
 export const selectionSizeLimits = { min: 0.3, max: 2 }
 export type BlankClickBehavior = 'none'|'exitAlways'|'exitWhenGrouped'
 export type TextTagClickMode = 'rect'|'anchor'|'rectAndAnchor'
+/** 一键拼音转换的处理方式 */
+export type PinyinBatchMode = 'none'|'skipExist'|'overwrite'
 
 export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const staNameFob = ref<number|string>()
     const lineFob = ref<number|string>()
     const staFob = ref<number|string>()
     const tabForPinyinConvert = ref<boolean>(false)
+    const pinyinBatchStaName = ref<PinyinBatchMode>('skipExist')
+    const pinyinBatchTextTag = ref<PinyinBatchMode>('none')
     const duplicateNameDistThrs = ref<number|string>(200)
     const allowMergePtAndTerrain = ref<boolean>(true)
     const ignoreStyleAndSpan = ref<boolean>(false)
@@ -59,6 +63,8 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         lineFob,
         staFob,
         tabForPinyinConvert,
+        pinyinBatchStaName,
+        pinyinBatchTextTag,
         duplicateNameDistThrs,
         allowMergePtAndTerrain,
         ignoreStyleAndSpan,
