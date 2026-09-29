@@ -513,8 +513,6 @@ async function enableCollab(){
 }
 
 async function disableCollab(){
-    if(!window.confirm('确认关闭多人协作？所有协作成员将被断开'))
-        return
     const save = saveStore.save
     if(!save || disablingCollabLocally)
         return

@@ -90,6 +90,7 @@ const ackItems = [
     '我明白：协作开启后他人的更改是无法追踪记录的，所以仅在完全信任“允许编辑的人”的情况下，才能开启本功能，绝对不应在允许陌生人编辑的存档中开启',
     '我明白：房主必须时刻保持在线，不能断网或是离开浏览器，否则会打断他人编辑',
     '我明白：保存由房主负责，完成后房主应点击左下角离开按钮而非直接关闭浏览器',
+    '我明白：凌晨1点后（或紧急情况）需要更新服务端时，可能造成协作房间短时间中断',
     '我清楚如何反馈问题，我能清晰描述问题产生条件和时机。',
 ]
 const ackChecks = ref<boolean[]>(ackItems.map(() => false))
@@ -97,13 +98,18 @@ const allAcked = computed(() => ackChecks.value.every(c => c))
 function onToggle() {
     if (!canEdit.value)
         return
-    if (enabled.value)
+    if (enabled.value) {
+        if (!window.confirm('关闭会立即触发一次保存，并将其他人踢出，确定关闭吗？'))
+            return
         emit('disable')
+    }
     else {
         if (!allAcked.value) {
             showPop('请将项目全部勾选', 'failed')
             return
         }
+        if (!window.confirm('启用会立即触发一次保存，并允许其他人进入，确定启用吗？'))
+            return
         emit('enable')
     }
 }
@@ -151,7 +157,7 @@ defineExpose({ notifyCollabClosed, notifyRoomClosed })
             <div class="row">
                 <span class="label">功能开关</span>
                 <button v-if="canEdit" class="toggleBtn" :class="{ on: enabled }" @click="onToggle">
-                    {{ enabled ? '已启用' : '已关闭' }}
+                    {{ enabled ? '已启用' : '点击启用' }}
                 </button>
                 <span v-else class="stateText" :class="{ on: enabled }">
                     {{ enabled ? '已启用' : '未启用' }}
