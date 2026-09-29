@@ -20,11 +20,25 @@ export enum PinyinVariantType {
     Cantonese = 1,
 }
 
+/** "ü"类韵母的写法（以代表性字命名选项：绿=单字ü，略=üe） */
+export enum PinyinUStyle {
+    /** 绿→lu、略→lue */
+    U = 0,
+    /** 绿→lü、略→lüe（保留原字母） */
+    Umlaut = 1,
+    /** 绿→lv、略→lve */
+    V = 2,
+}
+
 export interface PinyinConvertOptions {
     rules?: { [key: string]: string } | undefined;
     caseType?: PinyinCaseType;
     variantType?: PinyinVariantType;
     spaceBetweenChars?: boolean;
+    /** 单字ü的写法；缺省为 V（绿→lv），与旧版 EzPinyin 行为一致 */
+    uStyle?: PinyinUStyle;
+    /** 韵母üe的写法；缺省为 U（略→lue），与旧版 EzPinyin 行为一致 */
+    ueStyle?: PinyinUStyle;
 }
 
 /** 与原 Controller 校验一致：超长返回错误标记文本 */
@@ -137,13 +151,16 @@ function splitToSegments(text: string, rulesRaw: { [key: string]: string } | und
     return [...headSegments, ...res, ...tailSegments];
 }
 
-/** EzPinyin 记法对齐：üe→ue、ü→v */
-function normalizeMandarinU(s: string): string {
-    return s.replace(/ü(?=e)/g, 'u').replace(/ü/g, 'v');
+/** "ü"类韵母写法对齐：按 uStyle/ueStyle 设置映射（缺省组合即旧版 EzPinyin 行为：绿→lv、略→lue）。
+ *  单次替换同时匹配 üe 与 ü，避免两次 replace 互相污染（如 üe→üe 后又被 ü→v 命中） */
+function normalizeMandarinU(s: string, uStyle?: PinyinUStyle, ueStyle?: PinyinUStyle): string {
+    const ueMap = ['ue', 'üe', 've'][ueStyle ?? PinyinUStyle.U];
+    const uMap = ['u', 'ü', 'v'][uStyle ?? PinyinUStyle.V];
+    return s.replace(/üe|ü/g, m => m === 'üe' ? ueMap : uMap);
 }
 
-async function convertSegmentToSyllables(seg: string, variant: PinyinVariantType): Promise<string[]> {
-    if (variant === PinyinVariantType.Cantonese) {
+async function convertSegmentToSyllables(seg: string, options: PinyinConvertOptions): Promise<string[]> {
+    if (options.variantType === PinyinVariantType.Cantonese) {
         const { getJyutpingList } = await import('to-jyutping');
         return getJyutpingList(seg).map(([, jyut]) => (jyut ?? '').replace(/\d+$/, '')).filter(s => s.length > 0);
     }
@@ -153,7 +170,7 @@ async function convertSegmentToSyllables(seg: string, variant: PinyinVariantType
     for (const ch of seg) {
         const arr = pinyin(ch, { type: 'array', toneType: 'none' });
         for (const s of arr) {
-            if (s) out.push(normalizeMandarinU(s));
+            if (s) out.push(normalizeMandarinU(s, options.uStyle, options.ueStyle));
         }
     }
     return out;
@@ -165,7 +182,6 @@ export async function convertPinyinLocal(text: string, options: PinyinConvertOpt
     if (text.length > PINYIN_CONVERT_MAX_LENGTH) return null;
     const segs = splitToSegments(text, options.rules);
     const caseType = options.caseType ?? PinyinCaseType.Pascal;
-    const variantType = options.variantType ?? PinyinVariantType.Mandarin;
     const segsConverted: string[] = [];
     for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
@@ -174,7 +190,7 @@ export async function convertPinyinLocal(text: string, options: PinyinConvertOpt
             segsConverted.push(seg.value); //规则段与非中文段 as-is
             continue;
         }
-        let arr = await convertSegmentToSyllables(seg.value, variantType);
+        let arr = await convertSegmentToSyllables(seg.value, options);
         const pascal = caseType === PinyinCaseType.Pascal;
         if (pascal) arr = arr.map(toPascal);
         let segConverted = options.spaceBetweenChars ? arr.join(' ') : arr.join('');

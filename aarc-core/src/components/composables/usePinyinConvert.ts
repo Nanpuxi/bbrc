@@ -37,7 +37,9 @@ export const usePinyinConvert = (source:TargetRef, dest:TargetRef, afterDone:()=
                 rules: rules.value,
                 spaceBetweenChars: c?.spaceBetweenChars,
                 caseType: c?.caseType,
-                variantType: c?.variantType
+                variantType: c?.variantType,
+                uStyle: c?.uStyle,
+                ueStyle: c?.ueStyle
             })
         }
         const apply = ()=>{

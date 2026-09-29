@@ -8,6 +8,7 @@ import {
     convertPinyinLocal,
     PinyinCaseType,
     PinyinVariantType,
+    PinyinUStyle,
     PINYIN_CONVERT_MAX_LENGTH,
 } from 'aarc-core/components/composables/pinyinConverter';
 
@@ -32,6 +33,22 @@ describe('基础转换', () => {
     });
     it('ü 记法对齐 EzPinyin（女→nv、略→lue、虐→nue）', async () => {
         expect(await mandarinConvert('女略虐')).toEqual(['nv', 'lue', 'nue']);
+    });
+    it('ü 记法可配置：绿 lu/lü/lv', async () => {
+        expect(await mandarinConvert('绿')).toEqual(['lv']); // 缺省 = V
+        expect(await convertPinyinLocal('绿', { uStyle: PinyinUStyle.U })).toBe('Lu');
+        expect(await convertPinyinLocal('绿', { uStyle: PinyinUStyle.Umlaut })).toBe('Lü');
+        expect(await convertPinyinLocal('绿', { uStyle: PinyinUStyle.V })).toBe('Lv');
+    });
+    it('üe 记法可配置：略 lue/lüe/lve', async () => {
+        expect(await mandarinConvert('略')).toEqual(['lue']); // 缺省 = U
+        expect(await convertPinyinLocal('略', { ueStyle: PinyinUStyle.U })).toBe('Lue');
+        expect(await convertPinyinLocal('略', { ueStyle: PinyinUStyle.Umlaut })).toBe('Lüe');
+        expect(await convertPinyinLocal('略', { ueStyle: PinyinUStyle.V })).toBe('Lve');
+    });
+    it('uStyle 与 ueStyle 互不干扰', async () => {
+        expect(await convertPinyinLocal('绿略', { uStyle: PinyinUStyle.U, ueStyle: PinyinUStyle.V }))
+            .toBe('LuLve');
     });
 });
 

@@ -3,7 +3,7 @@ import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { storeToRefs } from 'pinia';
 import ConfigSection from './shared/ConfigSection.vue';
 import { onMounted, watch } from 'vue';
-import { PinyinCaseType, PinyinVariantType } from 'aarc-core/components/composables/pinyinConverter';
+import { PinyinCaseType, PinyinVariantType, PinyinUStyle } from 'aarc-core/components/composables/pinyinConverter';
 import { useEditorLocalConfigStore } from 'aarc-core/app/localConfig/editorLocalConfig';
 import { usePreventLeavingUnsavedStore } from 'aarc-core/utils/eventUtils/preventLeavingUnsaved';
 
@@ -17,6 +17,8 @@ onMounted(()=>{
         config.value.pinyinConvert = {
             caseType: 0,
             variantType: 0,
+            uStyle: PinyinUStyle.V,
+            ueStyle: PinyinUStyle.U,
             rules: "公园:Park\n广场:Square\n路$:Rd.\n街$:St."
         }
     }
@@ -55,6 +57,28 @@ watch(()=>config.value.pinyinConvert, ()=>{
             <td>字间<br/>空格</td>
             <td>
                 <input v-model="config.pinyinConvert.spaceBetweenChars" type="checkbox">
+            </td>
+        </tr>
+        <tr>
+            <td>绿</td>
+            <td>
+                <select v-model="config.pinyinConvert.uStyle">
+                    <option :value="undefined">默认 (lv)</option>
+                    <option :value="PinyinUStyle.U">lu</option>
+                    <option :value="PinyinUStyle.Umlaut">lü</option>
+                    <option :value="PinyinUStyle.V">lv</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td>略</td>
+            <td>
+                <select v-model="config.pinyinConvert.ueStyle">
+                    <option :value="undefined">默认 (lue)</option>
+                    <option :value="PinyinUStyle.U">lue</option>
+                    <option :value="PinyinUStyle.Umlaut">lüe</option>
+                    <option :value="PinyinUStyle.V">lve</option>
+                </select>
             </td>
         </tr>
         <tr>

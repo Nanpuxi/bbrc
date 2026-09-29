@@ -127,7 +127,11 @@ export type PinyinConvertConfig = {
     rules?:string,
     caseType?:number,
     variantType?:number,
-    spaceBetweenChars?:boolean
+    spaceBetweenChars?:boolean,
+    /** 单字ü的写法（PinyinUStyle）；缺省 2（V，绿→lv） */
+    uStyle?:number,
+    /** 韵母üe的写法（PinyinUStyle）；缺省 0（U，略→lue） */
+    ueStyle?:number
 }
 /**
  * 站名“地毯”（文字描边基底）配置，ControlPoint.nameCarpet 与全局 Config.staNameCarpet 共用。
