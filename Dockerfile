@@ -5,6 +5,7 @@ WORKDIR /src
 # 复制解决方案和项目文件
 COPY AARC.slnx .
 COPY AARC.Diff/AARC.Diff.csproj AARC.Diff/
+COPY AARC.Collab/AARC.Collab.csproj AARC.Collab/
 COPY AARC.WebApi/AARC.WebApi.csproj AARC.WebApi/
 
 # 还原依赖
@@ -12,6 +13,7 @@ RUN dotnet restore AARC.WebApi/AARC.WebApi.csproj
 
 # 复制源码并构建
 COPY AARC.Diff/ AARC.Diff/
+COPY AARC.Collab/ AARC.Collab/
 COPY AARC.WebApi/ AARC.WebApi/
 RUN dotnet build AARC.WebApi/AARC.WebApi.csproj -c Release -o /app/build
 RUN dotnet publish AARC.WebApi/AARC.WebApi.csproj -c Release -o /app/publish
@@ -44,6 +46,7 @@ WORKDIR /web
 COPY pnpm-workspace.yaml .npmrc package.json pnpm-lock.yaml* ./
 COPY aarc-web/package.json aarc-web/
 COPY aarc-core/package.json aarc-core/
+COPY aarc-tauri/package.json aarc-tauri/
 
 # 安装 pnpm 并安装依赖
 RUN npm install -g pnpm --registry=https://registry.npmmirror.com
