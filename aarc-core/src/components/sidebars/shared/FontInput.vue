@@ -29,7 +29,6 @@ const fontWeightOptions:Option[] = [
 ]
 
 const fontStyleOptions:Option[] = [
-    { value: undefined, label:'默认' },
     { value: '', label: '标准' },
     { value: 'italic', label: '斜体' },
 ]
