@@ -85,10 +85,10 @@ onMounted(()=>{
             :src="convertToProxyUrlIfNeeded(`http://ms.jowei19.com/card-images/static/shanghai-longterm/station-12.webp`, 'icon')"/>
     </a>
 </div>
-<p class="gotoDownload">
+<p v-if="!isFork" class="gotoDownload">
     <a href="/#/derive-metroshuttle">了解新游戏</a>
 </p>
-<div class="marginedSection">
+<div v-if="!isFork" class="marginedSection">
     <DonorList></DonorList>
 </div>
 <div v-if="!isFork" class="marginedSection">
