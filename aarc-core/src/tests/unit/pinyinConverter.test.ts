@@ -111,6 +111,18 @@ describe('中英文分段', () => {
         // "a中国" 首个中文段不再视为第一段，整体小写
         expect(await convertPinyinLocal('a中国', { caseType: PinyinCaseType.FirstUpper })).toBe('a zhongguo');
     });
+    it('WordsFirstUpper 每段各视作一个词', async () => {
+        // 与 FirstUpper 不同：每个中文段都首字母大写，不只看位置
+        expect(await convertPinyinLocal('中国a人', { caseType: PinyinCaseType.WordsFirstUpper })).toBe('Zhongguo a Ren');
+        expect(await convertPinyinLocal('李家村', { caseType: PinyinCaseType.WordsFirstUpper })).toBe('Lijiacun');
+    });
+    it('WordsFirstUpper 与规则段搬移组合（规则段不消耗首段资格）', async () => {
+        // 目标效果：东$:^East，李家村东 → East Lijiacun
+        expect(await convertPinyinLocal('李家村东', { rules: { '东$': '^East' }, caseType: PinyinCaseType.WordsFirstUpper })).toBe('East Lijiacun');
+    });
+    it('WordsFirstUpper 字间空格开启时逐词大写', async () => {
+        expect(await convertPinyinLocal('李家村', { caseType: PinyinCaseType.WordsFirstUpper, spaceBetweenChars: true })).toBe('Li Jia Cun');
+    });
 });
 
 describe('规则匹配', () => {

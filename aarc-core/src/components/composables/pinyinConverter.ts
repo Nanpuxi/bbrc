@@ -17,6 +17,8 @@ export enum PinyinCaseType {
     AllUpper = 1,
     AllLower = 2,
     FirstUpper = 3,
+    /** 每词首字母大写：每个中文段整体视为一个词（与位置无关），规则/非中文段 as-is */
+    WordsFirstUpper = 4,
 }
 
 export enum PinyinVariantType {
@@ -250,6 +252,11 @@ export async function convertPinyinLocal(text: string, options: PinyinConvertOpt
                 case PinyinCaseType.FirstUpper:
                     // isFirstSeg 被非中文首段消耗："a中国"→"a zhongguo"
                     segConverted = isFirstSeg ? toPascal(segConverted) : segConverted.toLowerCase();
+                    break;
+                case PinyinCaseType.WordsFirstUpper:
+                    // 每段各视作一个词：按空格分词逐词首字母大写，
+                    // 与段位置无关（规则段搬移到头部时不会消耗首段资格）
+                    segConverted = segConverted.split(' ').map(toPascal).join(' ');
                     break;
             }
         }

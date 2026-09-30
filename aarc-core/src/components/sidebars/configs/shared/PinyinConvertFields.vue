@@ -22,6 +22,7 @@ const rulesNoteExpanded = ref(false)
             <select v-model="settings.caseType">
                 <option :value="PinyinCaseType.Pascal">每字首字母大写</option>
                 <option :value="PinyinCaseType.FirstUpper">整体首字母大写</option>
+                <option :value="PinyinCaseType.WordsFirstUpper">每词首字母大写</option>
                 <option :value="PinyinCaseType.AllUpper">全大写</option>
                 <option :value="PinyinCaseType.AllLower">全小写</option>
             </select>
