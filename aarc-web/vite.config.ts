@@ -60,22 +60,21 @@ export default defineConfig(({ mode }) => {
       emptyOutDir:true,
       outDir:"../AARC.WebApi/wwwroot",
       chunkSizeWarningLimit: 600,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
-          manualChunks: (id) => {
-            if (id.includes('/aarc-core/'))
-              return 'core'
-            if (id.includes('@aurouscia'))
-              return 'au'
-            if (id.includes('svgo'))
-              return 'svgo'
-            // 拼音词典经动态 import 懒加载，独立命名 chunk，不并入初始 libs chunk
-            if (id.includes('pinyin-pro'))
-              return 'pinyin'
-            if (id.includes('to-jyutping') || id.includes('jyutping-data'))
-              return 'jyutping'
-            if (id.includes('node_modules'))
-              return 'libs'
+          // Vite 8 起 function 形式的 manualChunks 部分失效（vite#23153），改用 rolldown 原生 codeSplitting
+          codeSplitting: {
+            groups: [
+              { name: 'au', test: /node_modules[\\/]@aurouscia/, priority: 60 },
+              { name: 'svgo', test: /node_modules[\\/]svgo/, priority: 50 },
+              // 拼音词典经动态 import 懒加载，独立命名 chunk
+              { name: 'pinyin', test: /node_modules[\\/]pinyin-pro/, priority: 40 },
+              { name: 'jyutping', test: /node_modules[\\/](?:to-jyutping|jyutping-data)/, priority: 40 },
+              // node_modules 组优先级须高于 core：core 捕获模块时会递归带入其依赖，
+              // 优先占位可防止 aarc-core 的依赖（pako/pinia 等）被拖进 core chunk
+              { name: 'libs', test: /node_modules/, priority: 30 },
+              { name: 'core', test: /aarc-core[\\/]src[\\/]/, priority: 10 },
+            ]
           }
         }
       },
