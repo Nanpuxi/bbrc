@@ -471,7 +471,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         enforceLineWidth?:number, type?:LineRenderType, strokeTarget?:LineStrokeTarget,
         pathBuilder?:()=>void
     ){
-        const drawCarpet = (!type || type==='both' || type==='carpet') && (!lineInfo.removeCarpet)
+        const drawCarpet = (!type || type==='both' || type==='carpet') && (lineInfo.carpet ?? cs.config.lineCarpet)
         const drawBody = !type || type==='both' || type==='body'
         if(!lineInfo.isFilled || enforceNoFill || lineInfo.type!==LineType.terrain){
             const lineWidth = cs.config.lineWidth * (enforceLineWidth||lineInfo.width||1)

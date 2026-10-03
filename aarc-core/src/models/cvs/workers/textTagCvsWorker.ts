@@ -282,7 +282,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
             color: cs.config.bgColor,
             opacity: t.opacity || 1
         }
-        if (t.removeCarpet)
+        if (!(t.carpet ?? cs.config.textTagCarpet))
             textCarpetOpts=false
         const angle = t.angle ?? 0
         const noTextToDraw = iconValid && onlyIcon

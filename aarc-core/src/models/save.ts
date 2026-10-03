@@ -105,7 +105,8 @@ export interface Line{
     zIndex?:number
     parent?:number
     isFake?:boolean
-    removeCarpet?:boolean
+    /** 底层“白边”（carpet）开关；undefined=跟随全局配置 config.lineCarpet */
+    carpet?:boolean
     time?: LineTimeInfo
     cap?: CanvasLineCap
     /**
@@ -174,7 +175,7 @@ export interface TextTag{
     opacity?:number
     /** 旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
     angle?:number
-    removeCarpet?:boolean
+    carpet?:boolean
     sunken?:boolean
     /** 显示层级（同一“置底/非置底”分组内，高层级盖住低层级；undefined 按 0 处理） */
     zIndex?:number

@@ -214,10 +214,17 @@ defineExpose({
                     </td>
                 </tr>
                 <tr v-if="!editing.forId">
-                    <td>去除<br/>白边</td>
+                    <td>白边</td>
                     <td>
-                        <input type="checkbox" v-model="editing.removeCarpet"/>
-                        <div class="smallNote">标签将不会有底层的白边</div>
+                        <select v-model="editing.carpet">
+                            <option :value="true">开启</option>
+                            <option :value="false">关闭</option>
+                            <option :value="undefined">默认</option>
+                        </select>
+                        <div class="smallNote">
+                            标签底层的白边
+                            <br/>默认跟随全局设置
+                        </div>
                     </td>
                 </tr>
                 <tr v-if="!editing.forId">
@@ -226,7 +233,7 @@ defineExpose({
                         <div class="viewableRange">
                             <input type="range" v-model.number="editing.opacity" :min="0.05" :max="1" :step="0.05"/>
                             <input type="number" v-model.number="editing.opacity" :min="0.05" :max="1" :step="0.05"/>
-                            <div class="smallNote">配合“去除白边”使用</div>
+                            <div class="smallNote">配合“关闭白边”使用</div>
                         </div>
                     </td>
                 </tr>

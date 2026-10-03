@@ -54,6 +54,47 @@ describe('upgradeConfig', () => {
     expect(save.config.textTagForLine!.anchorX).toBe(0)
     expect(save.config.textTagForLine!.textAlign).toBe(1)
   })
+
+  it('ver<3 时应将 removeCarpet 迁移为 carpet 并回填全局配置默认值', () => {
+    const save = makeMinimalSave()
+    save.config = { configVersion: 2 } as any
+    save.lines = [
+      { id: 1, name: '', nameSub: '', color: '', type: 0, removeCarpet: true },
+      { id: 2, name: '', nameSub: '', color: '', type: 0 },
+      { id: 3, name: '', nameSub: '', color: '', type: 0, removeCarpet: false }
+    ] as any
+    save.textTags = [
+      { id: 1, pos: [0, 0], removeCarpet: true },
+      { id: 2, pos: [0, 0] }
+    ] as any
+    upgradeConfig(save)
+    expect(save.config.configVersion).toBe(freshNewConfigVersion)
+    expect(save.config.lineCarpet).toBe(true)
+    expect(save.config.textTagCarpet).toBe(true)
+    expect(save.lines[0].carpet).toBe(false)
+    expect('removeCarpet' in save.lines[0]).toBe(false)
+    expect(save.lines[1].carpet).toBeUndefined()
+    expect(save.lines[2].carpet).toBeUndefined()
+    expect(save.textTags[0].carpet).toBe(false)
+    expect(save.textTags[1].carpet).toBeUndefined()
+  })
+
+  it('ver<3 且全局配置已有值时不应覆盖', () => {
+    const save = makeMinimalSave()
+    save.config = { configVersion: 2, lineCarpet: false, textTagCarpet: false } as any
+    upgradeConfig(save)
+    expect(save.config.lineCarpet).toBe(false)
+    expect(save.config.textTagCarpet).toBe(false)
+  })
+
+  it('ver>=最新版本时不应迁移 removeCarpet', () => {
+    const save = makeMinimalSave()
+    save.config = { configVersion: freshNewConfigVersion } as any
+    save.lines = [{ id: 1, name: '', nameSub: '', color: '', type: 0, removeCarpet: true }] as any
+    upgradeConfig(save)
+    expect((save.lines[0] as any).carpet).toBeUndefined()
+    expect((save.lines[0] as any).removeCarpet).toBe(true)
+  })
 })
 
 describe('initFreshNewConfig', () => {

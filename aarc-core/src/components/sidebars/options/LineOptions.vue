@@ -116,7 +116,7 @@ watch(() => {
         ptSize: l.ptSize,
         ptSnapSize: l.ptSnapSize,
         isFilled: l.isFilled,
-        removeCarpet: l.removeCarpet,
+        carpet: l.carpet,
         zIndex: l.zIndex,
         tagTextColor: l.tagTextColor,
         cap: l.cap,
@@ -325,10 +325,17 @@ onMounted(()=>{
         </td>
     </tr>
     <tr v-if="line.type===LineType.common">
-        <td>去除<br/>白边</td>
+        <td>白边</td>
         <td>
-            <input type="checkbox" v-model="line.removeCarpet"/>
-            <div class="smallNote">线路将不会有底层的白边</div>
+            <select v-model="line.carpet">
+                <option :value="true">开启</option>
+                <option :value="false">关闭</option>
+                <option :value="undefined">默认</option>
+            </select>
+            <div class="smallNote">
+                线路底层的白边
+                <br/>默认跟随全局设置
+            </div>
         </td>
     </tr>
     <tr>

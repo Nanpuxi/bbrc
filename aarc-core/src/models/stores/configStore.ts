@@ -23,6 +23,7 @@ export const configDefault:Config = {
 
     lineWidth: 14,
     lineCarpetWiden: 7,
+    lineCarpet: true,
     lineTurnAreaRadius: 30,
     lineWidthMapped: {},
     lineExtensionHandleLengthVert: '',
@@ -90,6 +91,7 @@ export const configDefault:Config = {
     textTagSubFontColorHex: '#999999',
     textTagPlain:{},
     textTagForLine:{},
+    textTagCarpet:true,
     textTagForLineDropCap:true,
     textTagForLineDropCapDetect:'classic',
     textTagForTerrain:{},

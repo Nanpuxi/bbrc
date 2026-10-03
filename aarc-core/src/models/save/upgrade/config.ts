@@ -1,7 +1,7 @@
 import { ConfigInSave } from "aarc-core/models/config"
 import { Save } from "aarc-core/models/save"
 
-export const freshNewConfigVersion = 2
+export const freshNewConfigVersion = 3
 export function initFreshNewConfig(save:Save){
     save.config.configVersion = freshNewConfigVersion
     save.config.textTagForLine ??= {}
@@ -21,6 +21,11 @@ export function upgradeConfig(save:Save) {
         save.config.configVersion = 2
         upgradeTo2(save.config)
         console.log('[升级]配置:2')
+    }
+    if(ver < 3) {
+        save.config.configVersion = 3
+        upgradeTo3(save)
+        console.log('[升级]配置:3')
     }
 }
 
@@ -45,5 +50,28 @@ function upgradeTo2(sc: ConfigInSave){
                 p.convert.spaceBetweenMixed ??= true
             }
         }
+    }
+}
+
+function upgradeTo3(save: Save){
+    // removeCarpet 更名为 carpet，语义反转且支持跟随全局配置：
+    // 仅 removeCarpet=true 转为 carpet=false（旧行为即去除白边）；
+    // 缺失或为 false 的一律转为 undefined，跟随全局配置（此时全局默认已回填为 true，行为不变）
+    const rc = save.config
+    rc.lineCarpet ??= true
+    rc.textTagCarpet ??= true
+    for(const line of save.lines){
+        if(!line || typeof line !== 'object')
+            continue
+        const legacy = (line as { removeCarpet?: boolean }).removeCarpet
+        line.carpet = legacy ? false : undefined
+        delete (line as { removeCarpet?: boolean }).removeCarpet
+    }
+    for(const tag of save.textTags){
+        if(!tag || typeof tag !== 'object')
+            continue
+        const legacy = (tag as { removeCarpet?: boolean }).removeCarpet
+        tag.carpet = legacy ? false : undefined
+        delete (tag as { removeCarpet?: boolean }).removeCarpet
     }
 }

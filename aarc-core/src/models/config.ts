@@ -11,6 +11,7 @@ export interface Config{
 
     lineWidth: number,
     lineCarpetWiden: number,
+    lineCarpet: boolean,
     lineTurnAreaRadius: number,
     lineWidthMapped: LineWidthMappedConfig
     lineExtensionHandleLengthVert: string,
@@ -79,6 +80,7 @@ export interface Config{
     textTagSubRowHeightBase: number,
     textTagPlain:TextTagPerTypeGlobalConfig,
     textTagForLine:TextTagPerTypeGlobalConfig,
+    textTagCarpet:boolean
     textTagForLineDropCap:boolean
     textTagForLineDropCapDetect:'classic'|'loose'
     textTagForTerrain:TextTagPerTypeGlobalConfig

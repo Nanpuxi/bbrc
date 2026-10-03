@@ -15,6 +15,7 @@ import BgRefImageConfig from './configs/BgRefImageConfig.vue';
 import FontConfig from './configs/FontConfig.vue';
 import PatternsConfig from './configs/PatternsConfig.vue';
 import LineWidthMappedConfig from './configs/LineWidthMappedConfig.vue';
+import CarpetConfig from './configs/CarpetConfig.vue';
 import EtcConfig from './configs/EtcConfig.vue';
 import FreeSegmentConfig from './configs/FreeSegmentConfig.vue';
 import ColorsConfig from './configs/ColorsConfig.vue';
@@ -35,6 +36,8 @@ defineExpose({
 <LineGroupConfig></LineGroupConfig>
 
 <LineWidthMappedConfig></LineWidthMappedConfig>
+
+<CarpetConfig></CarpetConfig>
 
 <TextTagConfig></TextTagConfig>
 
