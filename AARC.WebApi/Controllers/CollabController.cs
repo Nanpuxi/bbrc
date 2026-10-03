@@ -30,22 +30,14 @@ namespace AARC.WebApi.Controllers
             return true;
         }
 
-        /// 房间成员下载存档快照（仅房间成员；未就绪时按 500ms/1s/2s/4s 退避重试四次，合计最多等 7.5s 后 404）
+        /// 房间成员下载存档快照（仅房间成员；未就绪时 404，调用方轮询）
         [HttpGet("/collab/snapshot")]
         [UserCheck]
-        public async Task<CollabSnapshotResult> DownloadSnapshot(int saveId)
+        public CollabSnapshotResult DownloadSnapshot(int saveId)
         {
             var uid = httpUserIdProvider.RequireUserId();
-            int[] delaysMs = [500, 1000, 2000, 4000];
-            for (var i = 0; ; i++)
-            {
-                var snap = collabRoomManager.GetSnapshot(saveId, uid);
-                if (snap is not null)
-                    return snap;
-                if (i >= delaysMs.Length)
-                    throw new RqEx("快照尚未就绪", HttpStatusCode.NotFound);
-                await Task.Delay(delaysMs[i]);
-            }
+            return collabRoomManager.GetSnapshot(saveId, uid)
+                ?? throw new RqEx("快照尚未就绪", HttpStatusCode.NotFound);
         }
     }
 }
