@@ -73,7 +73,10 @@ export const useTerrainSmoothCvsWorker = defineStore('terrainSmoothCvsWorker', (
             if(renderType=='carpet'){
                 ctx.strokeStyle = cs.config.bgColor
                 ctx.lineWidth = cs.config.lineCarpetWiden
+                const opacityOriginal = ctx.globalAlpha || 1
+                ctx.globalAlpha = opacityOriginal * (cs.config.lineCarpetOpacity ?? 1)
                 ctx.stroke()
+                ctx.globalAlpha = opacityOriginal
             }
             else if(renderType=='body'){
                 ctx.fillStyle = transGroup.color

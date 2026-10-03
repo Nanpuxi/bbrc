@@ -482,7 +482,10 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 const carpetWiden = cs.config.lineCarpetWiden
                 ctx.lineWidth = lineWidth+carpetWiden
                 ctx.strokeStyle = cs.config.bgColor
+                const opacityOriginal = ctx.globalAlpha || 1
+                ctx.globalAlpha = opacityOriginal * (cs.config.lineCarpetOpacity ?? 1)
                 ctx.stroke()
+                ctx.globalAlpha = opacityOriginal
             }
             if(drawBody){
                 const lineColor = lineStateStore.getLineActualColor(lineInfo)
@@ -527,7 +530,10 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 const carpetWiden = cs.config.lineWidth * 0.5
                 ctx.lineWidth = carpetWiden
                 ctx.strokeStyle = cs.config.bgColor
+                const opacityOriginal = ctx.globalAlpha || 1
+                ctx.globalAlpha = opacityOriginal * (cs.config.lineCarpetOpacity ?? 1)
                 ctx.stroke()
+                ctx.globalAlpha = opacityOriginal
             }
             if(drawBody){
                 ctx.fillStyle = lineStateStore.getLineActualColor(lineInfo)

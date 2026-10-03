@@ -233,7 +233,7 @@ defineExpose({
                         <div class="viewableRange">
                             <input type="range" v-model.number="editing.opacity" :min="0.05" :max="1" :step="0.05"/>
                             <input type="number" v-model.number="editing.opacity" :min="0.05" :max="1" :step="0.05"/>
-                            <div class="smallNote">配合“关闭白边”使用</div>
+                            <div class="smallNote">需要配合“关闭白边”使用</div>
                         </div>
                     </td>
                 </tr>

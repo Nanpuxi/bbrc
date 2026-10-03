@@ -280,7 +280,7 @@ export const useTextTagCvsWorker = defineStore('textTagCvsWorker', ()=>{
         let textCarpetOpts:false|DrawTextStrokeOption|undefined={
             width: cs.config.textTagFontSizeBase * mainRatio/4 * cs.config.textTagCarpetWidth,
             color: cs.config.bgColor,
-            opacity: t.opacity || 1
+            opacity: (t.opacity || 1) * (cs.config.textTagCarpetOpacity ?? 1)
         }
         if (!(t.carpet ?? cs.config.textTagCarpet))
             textCarpetOpts=false

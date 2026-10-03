@@ -12,6 +12,7 @@ export interface Config{
     lineWidth: number,
     lineCarpetWiden: number,
     lineCarpet: boolean,
+    lineCarpetOpacity: number,
     lineTurnAreaRadius: number,
     lineWidthMapped: LineWidthMappedConfig
     lineExtensionHandleLengthVert: string,
@@ -83,6 +84,8 @@ export interface Config{
     textTagCarpet:boolean
     /** 标签白边宽度倍率（实际宽度 = 字号基准×主文字倍率/4×本值） */
     textTagCarpetWidth:number
+    /** 标签白边不透明度倍率（叠乘在标签自身不透明度上） */
+    textTagCarpetOpacity:number
     textTagForLineDropCap:boolean
     textTagForLineDropCapDetect:'classic'|'loose'
     textTagForTerrain:TextTagPerTypeGlobalConfig

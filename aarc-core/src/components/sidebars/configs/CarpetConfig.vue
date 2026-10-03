@@ -20,8 +20,10 @@ function closeAllPickers(){
 watch(() => [
     config.value.lineCarpet,
     config.value.lineCarpetWiden,
+    config.value.lineCarpetOpacity,
     config.value.textTagCarpet,
     config.value.textTagCarpetWidth,
+    config.value.textTagCarpetOpacity,
 ], debounce(() => envStore.rerender([], []), 500))
 
 /**
@@ -96,6 +98,17 @@ const carpetOpacity = computed<number>({
             </td>
         </tr>
         <tr>
+            <td>不透<br/>明度</td>
+            <td>
+                <input type="range" v-model.number="config.lineCarpetOpacity" :min="0" :max="1" :step="0.1"/>
+                <div>
+                    <input type="number" v-model.number.lazy="config.lineCarpetOpacity"
+                        :min="0" :max="1" :step="0.05"
+                        @change="repairNum($event, v=>config.lineCarpetOpacity=v, 0, 1, 1)"/>
+                </div>
+            </td>
+        </tr>
+        <tr>
             <th colspan="2">
                 标签白边
             </th>
@@ -120,6 +133,18 @@ const carpetOpacity = computed<number>({
                         @change="repairNum($event, v=>config.textTagCarpetWidth=v, 0, 3, 1)"/>
                 </div>
                 <div class="explain">标签白边默认宽度<br/>的倍率</div>
+            </td>
+        </tr>
+        <tr>
+            <td>不透<br/>明度</td>
+            <td>
+                <input type="range" v-model.number="config.textTagCarpetOpacity" :min="0" :max="1" :step="0.1"/>
+                <div>
+                    <input type="number" v-model.number.lazy="config.textTagCarpetOpacity"
+                        :min="0" :max="1" :step="0.05"
+                        @change="repairNum($event, v=>config.textTagCarpetOpacity=v, 0, 1, 1)"/>
+                </div>
+                <div class="explain">叠乘在标签自身<br/>不透明度之上</div>
             </td>
         </tr>
         <tr>
