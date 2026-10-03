@@ -81,6 +81,8 @@ export interface Config{
     textTagPlain:TextTagPerTypeGlobalConfig,
     textTagForLine:TextTagPerTypeGlobalConfig,
     textTagCarpet:boolean
+    /** 标签白边宽度倍率（实际宽度 = 字号基准×主文字倍率/4×本值） */
+    textTagCarpetWidth:number
     textTagForLineDropCap:boolean
     textTagForLineDropCapDetect:'classic'|'loose'
     textTagForTerrain:TextTagPerTypeGlobalConfig

@@ -21,16 +21,17 @@ watch(() => [
     config.value.lineCarpet,
     config.value.lineCarpetWiden,
     config.value.textTagCarpet,
+    config.value.textTagCarpetWidth,
 ], debounce(() => envStore.rerender([], []), 500))
 
 /**
  * 数字输入框能被清空（此时 valueAsNumber 为 NaN），也能填出滑块表示不了的越界值。
  * 空值回落到生效默认值，其余夹到滑块区间。
  */
-function repairWiden(evt:Event){
+function repairNum(evt:Event, apply:(v:number)=>void, min:number, max:number, fallback:number){
     const el = evt.target as HTMLInputElement
     const val = el.valueAsNumber
-    config.value.lineCarpetWiden = Number.isFinite(val) ? clamp(val, 0, 30) : 7
+    apply(Number.isFinite(val) ? clamp(val, min, max) : fallback)
 }
 
 function customizeCarpetColor(){
@@ -89,7 +90,7 @@ const carpetOpacity = computed<number>({
                 <div>
                     <input type="number" v-model.number.lazy="config.lineCarpetWiden"
                         :min="0" :max="30" :step="1"
-                        @change="repairWiden"/>
+                        @change="repairNum($event, v=>config.lineCarpetWiden=v, 0, 30, 7)"/>
                 </div>
                 <div class="explain">线路白边在线宽基础上<br/>额外加宽的像素值</div>
             </td>
@@ -107,6 +108,18 @@ const carpetOpacity = computed<number>({
                     <option :value="false">关闭</option>
                 </select>
                 <div class="explain">标签底层白边的默认开关<br/>标签可另外单独设置</div>
+            </td>
+        </tr>
+        <tr>
+            <td>宽度<br/>倍率</td>
+            <td>
+                <input type="range" v-model.number="config.textTagCarpetWidth" :min="0" :max="3" :step="0.25"/>
+                <div>
+                    <input type="number" v-model.number.lazy="config.textTagCarpetWidth"
+                        :min="0" :max="3" :step="0.25"
+                        @change="repairNum($event, v=>config.textTagCarpetWidth=v, 0, 3, 1)"/>
+                </div>
+                <div class="explain">标签白边默认宽度<br/>的倍率</div>
             </td>
         </tr>
         <tr>
