@@ -10,6 +10,7 @@ using AARC.WebApi.Utils;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace AARC.WebApi.Repos.Identities
 {
@@ -112,9 +113,13 @@ namespace AARC.WebApi.Repos.Identities
         {
             int takeCount = 50;
             var myId = httpUserInfoService.UserInfo.Value.Id;
-            var userQ = exact && !string.IsNullOrWhiteSpace(search)
-                ? ExactMatchByName(Viewable, search)
-                : FilterByName(Viewable, search);
+            // id搜索：需 id: 前缀（冒号中英文皆可），后接数字id
+            var idMatch = UserRepoRegex.IdSearchRegex().Match(search ?? "");
+            var userQ = idMatch.Success
+                ? Viewable.Where(x => x.Id == int.Parse(idMatch.Groups[1].Value))
+                : exact && !string.IsNullOrWhiteSpace(search)
+                    ? ExactMatchByName(Viewable, search)
+                    : FilterByName(Viewable, search);
             var saveQ = base.Context.Saves.Existing().Where(x => x.StaCount > 0);
             var orderbySave = orderby == "save";
 
@@ -600,6 +605,12 @@ namespace AARC.WebApi.Repos.Identities
     {
         public int Id { get; set; }
         public string? Name { get; set; }
+    }
+
+    public static partial class UserRepoRegex
+    {
+        [GeneratedRegex(@"^id\s*[:：]\s*(\d+)$", RegexOptions.IgnoreCase)]
+        public static partial Regex IdSearchRegex();
     }
 
     public class UserDtoProfile : Profile

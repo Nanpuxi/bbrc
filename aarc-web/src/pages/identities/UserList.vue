@@ -14,6 +14,7 @@ import { useIdentitiesRoutesJump } from './routes/routesJump';
 import { useRouter } from 'vue-router';
 import AuthGrantEdit from '../components/AuthGrantEdit.vue';
 import SwitchingTabs from 'aarc-core/components/common/SwitchingTabs.vue';
+import { decodeSaveId } from '@/utils/dataUtils/saveIdCodec';
 import { userUpgradeToMemberName } from './routes/routesNames';
 
 const list = ref<WithIntroShow<UserDto>[]>()
@@ -35,7 +36,15 @@ watch(()=>exactActive.value, (val)=>{
 })
 
 async function loadList() {
-    list.value = await api.user.index(searchStr.value, orderby.value, exactActive.value || undefined)
+    // id搜索：需 id: 前缀（冒号中英文皆可），后接数字id
+    let query = searchStr.value
+    const idMatch = /^id[:：]\s*(.+)$/i.exec(searchStr.value?.trim() ?? '')
+    if (idMatch) {
+        const decodedId = decodeSaveId(idMatch[1].trim())
+        if (decodedId !== undefined)
+            query = `id:${decodedId}`
+    }
+    list.value = await api.user.index(query, orderby.value, exactActive.value || undefined)
     await router.replace(userListRoute(searchStr.value))
 }
 
@@ -147,7 +156,7 @@ onMounted(async()=>{
         <div>
             <button :class="exactActive ? 'lite confirm' : 'lite'" @click="exactActive = !exactActive; loadList()">精确</button>
             <button v-show="searchStr" class="lite" @click="searchStr=undefined;loadList()" style="margin-left: 6px;">清空</button>
-            <input v-model="searchStr" @blur="loadList" @keyup.enter="loadList" placeholder="搜索用户名称"/>
+            <input v-model="searchStr" @blur="loadList" @keyup.enter="loadList" placeholder="搜索用户名或id"/>
         </div>
         <select v-model="orderby" @change="loadList">
             <option :value="'active'">最新活跃</option>
@@ -170,8 +179,11 @@ onMounted(async()=>{
     <tr v-for="u in list" :key="u.id">
         <td>
             <div class="userName nowrapEllipsis">
-                <span v-if="u.id === userInfo.id" style="color: cornflowerblue">(我)</span>
-                {{ u.name }}
+                <span class="userNameText">
+                    <span v-if="u.id === userInfo.id" style="color: cornflowerblue">(我)</span>
+                    {{ u.name }}
+                </span>
+                <span class="userId">—{{ u.id }}—</span>
             </div>
         </td>
         <td>
@@ -197,6 +209,9 @@ onMounted(async()=>{
     </tr>
     <tr>
         <td :colspan="userInfo.isAdmin ? 5 : 4" style="color: #666; font-size: 14px;">仅显示当前排序前50的用户</td>
+    </tr>
+    <tr>
+        <td :colspan="userInfo.isAdmin ? 5 : 4" style="color: #666; font-size: 14px;">按id搜索请输入“id:”前缀，如 id:1</td>
     </tr>
 </tbody></table>
 </div>
@@ -309,6 +324,17 @@ onMounted(async()=>{
 .userName{
     margin: auto;
     max-width: 180px;
+    display: flex;
+    flex-direction: column;
+    .userNameText{
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .userId{
+        line-height: 1em;
+        font-size: 10px;
+        color: #aaa;
+    }
 }
 .smallNote{
     margin-top: 10px;
