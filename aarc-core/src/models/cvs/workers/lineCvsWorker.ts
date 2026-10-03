@@ -145,11 +145,14 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
      * 渲染某个线路（可选择“及其支线”）
      * @param ctx 
      * @param line 线路（单个或数组，如果是数组，应为x线路及其支线（x和parent设为x.id的线路））
-     * @param needReportFormalPts 需要更新formalPts
      * @param rtype 渲染类型（地毯/本体）
+     * @param writeCache 是否把 formalPts 写入/驱逐共享缓存（formalizedLineStore）。
+     * 共享缓存只应由主画布整帧渲染维护（点击检测以它为准，须与主画布像素一致）；
+     * active 画布的局部渲染传 false——只画不写，否则在主画布渲染被抑制（如协作远程调度）
+     * 期间会把新几何写进缓存，造成"看不见的位置能点中"
      * @returns 
      */
-    function renderLine(ctx:CvsContext, line:Line|Line[], rtype?:LineRenderType){
+    function renderLine(ctx:CvsContext, line:Line|Line[], rtype?:LineRenderType, writeCache:boolean = true){
         if(!(line instanceof Array)){
             line = [line]
         }
@@ -163,8 +166,15 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
         for(const l of line){
             const pts = saveStore.getPtsByIds(l.pts)
-            if(pts.length<=1)
+            if(pts.length<=1){
+                // 点数不足（含控制点id悬空）无法渲染：与下方省略路径对称，
+                // 驱逐整个family的formalPts缓存，避免残留旧缓存导致"未渲染但可点中"的幽灵线
+                if(writeCache){
+                    for(const l2 of line)
+                        formalizedLineStore.setLinesFormalPts(l2.id, undefined)
+                }
                 return;
+            }
             ptsOfLines.push(pts)
             for(const p of pts){
                 const [x, y] = p.pos
@@ -179,22 +189,29 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         const isFilledTerrain = line.some(l => l.isFilled && l.type === LineType.terrain)
         if(!isFilledTerrain && !renderOptionsStore.exporting && checkOmittableLine(minX, maxX, minY, maxY, line)){
             // 省略时清掉formalPts缓存：点击判定不会命中过期数据，缩略图渲染会按需重新formalize
-            for(const l of line)
-                formalizedLineStore.setLinesFormalPts(l.id, undefined)
+            if(writeCache){
+                for(const l of line)
+                    formalizedLineStore.setLinesFormalPts(l.id, undefined)
+            }
             return
         }
 
+        // formalize 结果先放本地供绘制使用；写缓存是独立动作（见 writeCache 说明）
+        const formalPtsOfLines:FormalPt[][] = []
         for(let i=0;i<line.length;i++){
             const formalPts = formalize(ptsOfLines[i])
-            formalizedLineStore.setLinesFormalPts(line[i].id, formalPts)
+            formalPtsOfLines.push(formalPts)
+            if(writeCache)
+                formalizedLineStore.setLinesFormalPts(line[i].id, formalPts)
         }
 
         const includeCarpet = !rtype || rtype == 'carpet' || rtype == 'both'
 
         // 简化模式：无视样式和分段，整线统一绘制
         if(editorLocalConfigStore.ignoreStyleAndSpan || lineShouldSimplify()){
-            for(const l of line){
-                const formalPts = formalizedLineStore.getLinesFormalPts(l.id) ?? []
+            for(let i=0;i<line.length;i++){
+                const l = line[i]
+                const formalPts = formalPtsOfLines[i]
                 const buildPath = () => {
                     ctx.beginPath()
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
@@ -207,8 +224,9 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
 
         // 1. Carpet 保持整线绘制
         if(includeCarpet){
-            for(const l of line){
-                const formalPts = formalizedLineStore.getLinesFormalPts(l.id) ?? []
+            for(let i=0;i<line.length;i++){
+                const l = line[i]
+                const formalPts = formalPtsOfLines[i]
                 const buildPath = () => {
                     ctx.beginPath()
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
@@ -224,8 +242,8 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         const includeBody = !rtype || rtype == 'body' || rtype == 'both'
         if(includeBody){
             const allSpanInfos: SpanRenderInfo[] = []
-            for(const l of line){
-                allSpanInfos.push(...formalizedLineStore.collectSpanRenderInfos(l))
+            for(let i=0;i<line.length;i++){
+                allSpanInfos.push(...formalizedLineStore.collectSpanRenderInfos(line[i], undefined, formalPtsOfLines[i]))
             }
             renderAllSpansBase(ctx, allSpanInfos)
             renderAllSpansStyle(ctx, allSpanInfos)

@@ -76,7 +76,10 @@ export const useActiveCvsDispatcher = defineStore('activeCvsDispatcher', ()=>{
                 line = saveStore.getLineById(envStore.activeTextTag?.forId ?? 0)
             }
             if(line){
-                renderLine(ctx, line)
+                // active 画布只画不写共享 formalPts 缓存（writeCache=false）：
+                // 缓存由主画布整帧渲染单一维护，避免主画布渲染被抑制（协作远程调度）
+                // 期间缓存与主画布像素脱节，出现"看不见的位置能点中"
+                renderLine(ctx, line, undefined, false)
                 renderLinePoints(ctx, line)
                 renderEmphasizesForRingLines(ctx, [line])
             }

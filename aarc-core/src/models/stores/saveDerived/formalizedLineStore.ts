@@ -100,15 +100,17 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
      * 
      * @param line 线路
      * @param filterNotOpened 是否过滤掉未开通的 span（用于导出时）
+     * @param formalPtsOverride 直接使用给定的 formal 点而非读缓存
+     * （active 画布等"只画不写缓存"的调用方使用，避免读到别处的旧缓存）
      */
-    function collectSpanRenderInfos(line: Line, filterNotOpened?: boolean): SpanRenderInfo[] {
+    function collectSpanRenderInfos(line: Line, filterNotOpened?: boolean, formalPtsOverride?: FormalPt[]): SpanRenderInfo[] {
         const lineSpanStore = useLineSpanStore()
         const lineStateStore = useLineStateStore()
         const { effectiveTimeMoment } = useRenderOptionsStore()
         const flattened = lineSpanStore.getFlattenedLine(line.id)
         if (!flattened || flattened.spans.length === 0) return []
 
-        const allFormalPts = getItem(line.id) ?? []
+        const allFormalPts = formalPtsOverride ?? getItem(line.id) ?? []
         const infos: SpanRenderInfo[] = []
         const timeMoment = typeof effectiveTimeMoment === 'number' ? effectiveTimeMoment : undefined
 
