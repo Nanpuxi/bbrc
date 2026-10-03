@@ -3,6 +3,7 @@ import { guideInfo } from 'aarc-core/app/guideInfo';
 import { convertToProxyUrlIfNeeded } from 'aarc-core/utils/urlUtils/proxyUrl';
 import { onMounted, ref } from 'vue';
 import Combinations from '../components/Combinations.vue';
+import SolutionsCompare from '../components/SolutionsCompare.vue';
 
 const gitUrl = 'https://gitee.com/au114514/aarc'
 const exampleUrl = 'http://aarc.maritel.jowei19.com'
@@ -68,6 +69,11 @@ onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
                     </div>
                 </a>
             </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">方案对比</h2>
+            <SolutionsCompare></SolutionsCompare>
         </section>
 
         <footer class="footer">

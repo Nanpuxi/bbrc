@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import copy from 'copy-to-clipboard'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
+import SolutionsCompare from '../components/SolutionsCompare.vue'
 
 interface ClientArtifact {
     type: string
@@ -177,6 +178,10 @@ async function copyShasum(item: ClientArtifact){
                     </li>
                 </ul>
             </details>
+        </section>
+        <section class="section">
+            <h2 class="section-title">方案对比</h2>
+            <SolutionsCompare></SolutionsCompare>
         </section>
     </div>
 </template>

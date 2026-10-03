@@ -2,7 +2,7 @@
 import { guideInfo } from 'aarc-core/app/guideInfo';
 import NewestSaves from '../components/NewestSaves.vue';
 import GiteeInfo from '@/components/common/GiteeGitInfo.vue';
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { appVersionCheck } from '@/app/appVersionCheck';
 import SearchSaveEntrance from '../components/SearchSaveEntrance.vue';
 import DonorList from '../components/DonorList.vue';
@@ -22,6 +22,7 @@ const userInfoStore = useUserInfoStore()
 const { simpleCoopRulesDisplay } = storeToRefs(useSaveListLocalConfigStore())
 const isFork = import.meta.env.VITE_IsFork == "true"
 const welcome = import.meta.env.VITE_Welcome
+const guideExtraExpanded = ref(false)
 
 onMounted(()=>{
     appVersionCheck()
@@ -40,8 +41,21 @@ onMounted(()=>{
             <a style="color:#cc88cc" href="/#/FAQ">常见问题</a>
         </b>
     </p>
-    <p v-if="guideInfo.findHelp">遇到问题：{{ guideInfo.findHelp }}</p>
-    <p v-if="guideInfo.extra" class="guideExtra" v-html="guideInfo.extra"></p>
+    <template v-if="isFork">
+        <p v-if="guideInfo.findHelp">遇到问题：{{ guideInfo.findHelp }}</p>
+        <p v-if="guideInfo.extra" class="guideExtra" v-html="guideInfo.extra"></p>
+    </template>
+    <template v-else>
+        <p v-if="guideInfo.findHelp">遇到问题：{{ guideInfo.findHelp }}
+            <button v-if="guideInfo.extra" class="lite" @click="guideExtraExpanded=!guideExtraExpanded">
+                {{ guideExtraExpanded ? '收起更多▲' : '更多社群▼' }}
+            </button>
+            <button class="lite" @click="simpleCoopRulesDisplay=!simpleCoopRulesDisplay">
+                {{ simpleCoopRulesDisplay ? '收起' : '展开'}}合作提示{{ simpleCoopRulesDisplay ? '▲':'▼' }}
+            </button>
+        </p>
+        <p v-if="guideInfo.extra && guideExtraExpanded" class="guideExtra" v-html="guideInfo.extra"></p>
+    </template>
 </div>
 <template v-if="!isFork">
 <Notice :type="'success'" :title="'🎉 好消息'" v-if="userInfoStore.userInfo.id && userInfoStore.userInfo.isTourist">
@@ -49,13 +63,10 @@ onMounted(()=>{
     <RouterLink :to="{name:userUpgradeToMemberName}" style="color: white;text-decoration: underline;">立即转正</RouterLink>
 </Notice>
 <div v-else class="simple-coop-rules">
-    <button class="lite" @click="simpleCoopRulesDisplay=!simpleCoopRulesDisplay">
-        {{ simpleCoopRulesDisplay ? '收起' : '展开'}}合作提示{{ simpleCoopRulesDisplay ? '▲':'▼' }}
-    </button>
     <div v-if="simpleCoopRulesDisplay">
         ✅ 推荐：存档明显位置展示你建的QQ群号，让协作者在QQ群讨论发展方向/团队规定<br/>
         ✅ 可以：在存档中添加与存档发展有关的留言<br/>
-        ❌ 请不要：把存档当聊天室/贴吧/伦坛使用<br/>
+        ❌ 请不要：把存档当聊天室/贴吧/伦坛使用（打错字是故意的）<br/>
         ❓如有疑问请咨询QQ交流群群主
     </div>
 </div>
@@ -76,7 +87,7 @@ onMounted(()=>{
     <p class="gotoDownload">
         <RouterLink :to="{name: clientDownloadName}">前往本地运行版下载页</RouterLink>
         或者
-        <RouterLink :to="{name: forkAarcName}">根据你的需求定制</RouterLink>
+        <RouterLink :to="{name: forkAarcName}">开私服</RouterLink>
     </p>
 </div>
 <div v-if="!isFork" class="poker-frame">
@@ -86,7 +97,7 @@ onMounted(()=>{
     </a>
 </div>
 <p v-if="!isFork" class="gotoDownload">
-    <a href="/#/derive-metroshuttle">了解新游戏</a>
+    <a href="/#/derive-metroshuttle">了解新游戏 MetroShuttle</a>
 </p>
 <div v-if="!isFork" class="marginedSection">
     <DonorList></DonorList>
@@ -137,6 +148,7 @@ onMounted(()=>{
         color: #999;
         margin-bottom: 0.5em;
         white-space: pre-wrap;
+        font-size: 14px;
         &.guideExtra {
             font-size: 14px;
         }
@@ -153,6 +165,11 @@ onMounted(()=>{
         &:hover{
             color: #333;
         }
+    }
+    button.lite{
+        vertical-align: text-bottom;
+        margin-left: 4px;
+        color: #aaa;
     }
 }
 .simple-coop-rules{
@@ -210,7 +227,7 @@ onMounted(()=>{
     }
 }
 .marginedSection{
-    margin: 20px 0px;
+    margin: 16px 0px;
     .userTypeNote{
         text-align: center;
         color: palevioletred;
