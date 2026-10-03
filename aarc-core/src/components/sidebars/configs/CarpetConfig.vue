@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import ConfigSection from './shared/ConfigSection.vue';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { useEnvStore } from 'aarc-core/models/stores/envStore';
+import { useSaveStore } from 'aarc-core/models/stores/saveStore';
 import { clamp } from 'aarc-core/utils/lang/clamp';
 import { debounce } from 'aarc-core/utils/lang/debounce';
 import { computed, useTemplateRef, watch } from 'vue';
@@ -11,10 +12,34 @@ import { AuColorPicker } from '@aurouscia/au-color-picker';
 const cs = useConfigStore()
 const { config } = storeToRefs(cs)
 const envStore = useEnvStore()
+const saveStore = useSaveStore()
 const pStaCarpet = useTemplateRef('pStaCarpet')
 
 function closeAllPickers(){
     pStaCarpet.value?.closePanel()
+}
+
+type CarpetField = 'carpet' | 'carpetWidth' | 'carpetOpacity'
+const carpetFieldNames: Record<CarpetField, string> = {
+    carpet: '开关',
+    carpetWidth: '宽度',
+    carpetOpacity: '不透明度',
+}
+function resetAllLinesCarpet(field: CarpetField){
+    if(!window.confirm(`确认将所有线路的白边${carpetFieldNames[field]}恢复为跟随全局？\n所有线路已单独设置的该项都将丢失。`))
+        return
+    saveStore.save?.lines.forEach(l=>{
+        l[field] = undefined
+    })
+    envStore.rerender([], [])
+}
+function resetAllTextTagsCarpet(field: CarpetField){
+    if(!window.confirm(`确认将所有标签的白边${carpetFieldNames[field]}恢复为跟随全局？\n所有标签已单独设置的该项都将丢失。`))
+        return
+    saveStore.save?.textTags.forEach(t=>{
+        t[field] = undefined
+    })
+    envStore.rerender([], [])
 }
 
 watch(() => [
@@ -83,6 +108,7 @@ const carpetOpacity = computed<number>({
                     <option :value="false">关闭</option>
                 </select>
                 <div class="explain">线路底层白边的默认开关<br/>线路可另外单独设置</div>
+                <button class="lite confirm" @click="resetAllLinesCarpet('carpet')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
@@ -95,6 +121,7 @@ const carpetOpacity = computed<number>({
                         @change="repairNum($event, v=>config.lineCarpetWiden=v, 0, 30, 7)"/>
                 </div>
                 <div class="explain">线路白边在线宽基础上<br/>额外加宽的像素值</div>
+                <button class="lite confirm" @click="resetAllLinesCarpet('carpetWidth')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
@@ -106,6 +133,7 @@ const carpetOpacity = computed<number>({
                         :min="0" :max="1" :step="0.05"
                         @change="repairNum($event, v=>config.lineCarpetOpacity=v, 0, 1, 1)"/>
                 </div>
+                <button class="lite confirm" @click="resetAllLinesCarpet('carpetOpacity')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
@@ -121,18 +149,20 @@ const carpetOpacity = computed<number>({
                     <option :value="false">关闭</option>
                 </select>
                 <div class="explain">标签底层白边的默认开关<br/>标签可另外单独设置</div>
+                <button class="lite confirm" @click="resetAllTextTagsCarpet('carpet')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
             <td>宽度<br/>倍率</td>
             <td>
-                <input type="range" v-model.number="config.textTagCarpetWidth" :min="0" :max="3" :step="0.25"/>
+                <input type="range" v-model.number="config.textTagCarpetWidth" :min="0" :max="2" :step="0.1"/>
                 <div>
                     <input type="number" v-model.number.lazy="config.textTagCarpetWidth"
-                        :min="0" :max="3" :step="0.25"
-                        @change="repairNum($event, v=>config.textTagCarpetWidth=v, 0, 3, 1)"/>
+                        :min="0" :max="2" :step="0.1"
+                        @change="repairNum($event, v=>config.textTagCarpetWidth=v, 0, 2, 1)"/>
                 </div>
                 <div class="explain">标签白边默认宽度<br/>的倍率</div>
+                <button class="lite confirm" @click="resetAllTextTagsCarpet('carpetWidth')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
@@ -145,11 +175,12 @@ const carpetOpacity = computed<number>({
                         @change="repairNum($event, v=>config.textTagCarpetOpacity=v, 0, 1, 1)"/>
                 </div>
                 <div class="explain">叠乘在标签自身<br/>不透明度之上</div>
+                <button class="lite confirm" @click="resetAllTextTagsCarpet('carpetOpacity')">全部恢复跟随全局</button>
             </td>
         </tr>
         <tr>
             <th colspan="2">
-                站名基底
+                站名白边
             </th>
         </tr>
         <tr>

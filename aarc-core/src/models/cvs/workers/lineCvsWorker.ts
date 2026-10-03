@@ -479,11 +479,11 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             ctx.lineCap = 'round'
             if(drawCarpet){
                 if(pathBuilder) pathBuilder()
-                const carpetWiden = cs.config.lineCarpetWiden
+                const carpetWiden = lineInfo.carpetWidth ?? cs.config.lineCarpetWiden
                 ctx.lineWidth = lineWidth+carpetWiden
                 ctx.strokeStyle = cs.config.bgColor
                 const opacityOriginal = ctx.globalAlpha || 1
-                ctx.globalAlpha = opacityOriginal * (cs.config.lineCarpetOpacity ?? 1)
+                ctx.globalAlpha = opacityOriginal * (lineInfo.carpetOpacity ?? cs.config.lineCarpetOpacity ?? 1)
                 ctx.stroke()
                 ctx.globalAlpha = opacityOriginal
             }
@@ -531,7 +531,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 ctx.lineWidth = carpetWiden
                 ctx.strokeStyle = cs.config.bgColor
                 const opacityOriginal = ctx.globalAlpha || 1
-                ctx.globalAlpha = opacityOriginal * (cs.config.lineCarpetOpacity ?? 1)
+                ctx.globalAlpha = opacityOriginal * (lineInfo.carpetOpacity ?? cs.config.lineCarpetOpacity ?? 1)
                 ctx.stroke()
                 ctx.globalAlpha = opacityOriginal
             }

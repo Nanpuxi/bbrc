@@ -312,7 +312,7 @@ defineExpose({
                     “记忆”用于临时记录上方表格中的设置，可用于创建统一的站点视觉效果，新命名的站将自动使用记忆值设置，修改时请<b>覆盖</b>，不再需要时请<b>清空</b>（退出编辑时自动清空）
                 </div>
             </div>
-            <h2>站名基底</h2>
+            <h2>站名白边</h2>
             <div class="optionSection pointCarpet">
                 <table class="fullWidth"><tbody>
                     <template v-if="editing.nameCarpet">

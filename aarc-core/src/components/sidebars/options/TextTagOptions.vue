@@ -228,6 +228,34 @@ defineExpose({
                     </td>
                 </tr>
                 <tr v-if="!editing.forId">
+                    <td>白边<br/>宽度</td>
+                    <td>
+                        <button v-if="editing.carpetWidth===undefined" class="lite"
+                            @click="editing.carpetWidth=cs.config.textTagCarpetWidth">此处单独设置</button>
+                        <template v-else>
+                            <div class="viewableRange">
+                                <input type="range" v-model.number="editing.carpetWidth" :min="0" :max="2" :step="0.1"/>
+                                <input type="number" v-model.number.lazy="editing.carpetWidth" :min="0" :max="2" :step="0.1"/>
+                            </div>
+                            <button class="lite" @click="editing.carpetWidth=undefined">恢复跟随全局</button>
+                        </template>
+                    </td>
+                </tr>
+                <tr v-if="!editing.forId">
+                    <td>白边<br/>不透<br/>明度</td>
+                    <td>
+                        <button v-if="editing.carpetOpacity===undefined" class="lite"
+                            @click="editing.carpetOpacity=cs.config.textTagCarpetOpacity">此处单独设置</button>
+                        <template v-else>
+                            <div class="viewableRange">
+                                <input type="range" v-model.number="editing.carpetOpacity" :min="0" :max="1" :step="0.1"/>
+                                <input type="number" v-model.number.lazy="editing.carpetOpacity" :min="0" :max="1" :step="0.05"/>
+                            </div>
+                            <button class="lite" @click="editing.carpetOpacity=undefined">恢复跟随全局</button>
+                        </template>
+                    </td>
+                </tr>
+                <tr v-if="!editing.forId">
                     <td>不透<br/>明度</td>
                     <td>
                         <div class="viewableRange">

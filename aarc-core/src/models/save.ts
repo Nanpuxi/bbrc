@@ -107,6 +107,10 @@ export interface Line{
     isFake?:boolean
     /** 底层“白边”（carpet）开关；undefined=跟随全局配置 config.lineCarpet */
     carpet?:boolean
+    /** 白边额外加宽像素；undefined=跟随全局配置 config.lineCarpetWiden */
+    carpetWidth?:number
+    /** 白边不透明度；undefined=跟随全局配置 config.lineCarpetOpacity */
+    carpetOpacity?:number
     time?: LineTimeInfo
     cap?: CanvasLineCap
     /**
@@ -176,6 +180,10 @@ export interface TextTag{
     /** 旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
     angle?:number
     carpet?:boolean
+    /** 白边宽度倍率；undefined=跟随全局配置 config.textTagCarpetWidth */
+    carpetWidth?:number
+    /** 白边不透明度倍率；undefined=跟随全局配置 config.textTagCarpetOpacity */
+    carpetOpacity?:number
     sunken?:boolean
     /** 显示层级（同一“置底/非置底”分组内，高层级盖住低层级；undefined 按 0 处理） */
     zIndex?:number

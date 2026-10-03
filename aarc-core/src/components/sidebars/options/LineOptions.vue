@@ -8,11 +8,13 @@ import { computed, CSSProperties, onMounted, ref, useTemplateRef, watch } from '
 import ColorPickerForLine from '../shared/ColorPickerForLine.vue';
 import ColorPickerForTerrain from '../shared/ColorPickerForTerrain.vue';
 import { useLineStateStore } from 'aarc-core/models/stores/saveDerived/state/lineStateStore';
+import { useConfigStore } from 'aarc-core/models/stores/configStore';
 
 
 const envStore = useEnvStore()
 const saveStore = useSaveStore()
 const lineStateStore = useLineStateStore()
+const cs = useConfigStore()
 const { save } = storeToRefs(saveStore)
 const props = defineProps<{
     line:Line,
@@ -117,6 +119,8 @@ watch(() => {
         ptSnapSize: l.ptSnapSize,
         isFilled: l.isFilled,
         carpet: l.carpet,
+        carpetWidth: l.carpetWidth,
+        carpetOpacity: l.carpetOpacity,
         zIndex: l.zIndex,
         tagTextColor: l.tagTextColor,
         cap: l.cap,
@@ -336,6 +340,34 @@ onMounted(()=>{
                 线路底层的白边
                 <br/>默认跟随全局设置
             </div>
+        </td>
+    </tr>
+    <tr v-if="line.type===LineType.common">
+        <td>白边<br/>宽度</td>
+        <td>
+            <button v-if="line.carpetWidth===undefined" class="lite"
+                @click="line.carpetWidth=cs.config.lineCarpetWiden">此处单独设置</button>
+            <template v-else>
+                <div class="viewableRange">
+                    <input type="range" v-model.number="line.carpetWidth" :min="0" :max="30" :step="1"/>
+                    <input type="number" v-model.number.lazy="line.carpetWidth" :min="0" :max="30" :step="1"/>
+                </div>
+                <button class="lite" @click="line.carpetWidth=undefined">恢复跟随全局</button>
+            </template>
+        </td>
+    </tr>
+    <tr v-if="line.type===LineType.common">
+        <td>白边<br/>不透<br/>明度</td>
+        <td>
+            <button v-if="line.carpetOpacity===undefined" class="lite"
+                @click="line.carpetOpacity=cs.config.lineCarpetOpacity">此处单独设置</button>
+            <template v-else>
+                <div class="viewableRange">
+                    <input type="range" v-model.number="line.carpetOpacity" :min="0" :max="1" :step="0.1"/>
+                    <input type="number" v-model.number.lazy="line.carpetOpacity" :min="0" :max="1" :step="0.05"/>
+                </div>
+                <button class="lite" @click="line.carpetOpacity=undefined">恢复跟随全局</button>
+            </template>
         </td>
     </tr>
     <tr>
