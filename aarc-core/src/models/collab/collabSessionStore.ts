@@ -66,6 +66,8 @@ export const collabSessionTiming = {
     snapshotPollIntervalMs: 1000,
     snapshotPollTimeoutMs: 15000,
     snapshotMaxAttempts: 4,
+    /** 轮询期间补发 RequestSnapshot 的间隔：首次转发可能撞上提供者未就绪（被静默丢弃），需定期重发 */
+    snapshotReRequestIntervalMs: 4000,
     bufferDrainMaxRounds: 10,
     /** 本地未 ack op 待发队列上限（防永久失败时内存无限增长；溢出即退会话） */
     maxPendingLocalOps: 1000,
@@ -260,15 +262,14 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
         await drainBuffer()
     }
 
-    /** 快照整档重建：请求房主 → 轮询 → 以快照为底 → SyncOps(水位) → 缓冲重放 */
+    /** 快照整档重建：请求房主 → 轮询（期间定期补发请求，覆盖首次转发时提供者未就绪被丢弃的情况）
+     *  → 以快照为底 → SyncOps(水位) → 缓冲重放 */
     async function snapshotFlow(): Promise<void> {
         const t = requireTransport()
         const sid = saveId.value!
         const epoch = sessionEpoch
         let lastError: unknown = Error('协作快照同步超时')
-        for (let attempt = 0; attempt < collabSessionTiming.snapshotMaxAttempts; attempt++) {
-            if (epoch !== sessionEpoch)
-                return  // 已离房/重进，放弃在途流程
+        const tryRequestSnapshot = async () => {
             try {
                 await t.requestSnapshot(sid)
             }
@@ -276,11 +277,23 @@ export const useCollabSessionStore = defineStore('collabSession', () => {
                 // 房主不在线等：快照缓存可能仍在 TTL 内，继续轮询；轮询不到则下轮重试
                 console.warn('[协作]转发快照请求失败，继续轮询缓存', e)
             }
+        }
+        for (let attempt = 0; attempt < collabSessionTiming.snapshotMaxAttempts; attempt++) {
+            if (epoch !== sessionEpoch)
+                return  // 已离房/重进，放弃在途流程
+            await tryRequestSnapshot()
+            let lastRequestAt = Date.now()
             const deadline = Date.now() + collabSessionTiming.snapshotPollTimeoutMs
             while (Date.now() < deadline) {
                 await sleep(collabSessionTiming.snapshotPollIntervalMs)
                 if (epoch !== sessionEpoch)
                     return
+                if (Date.now() - lastRequestAt >= collabSessionTiming.snapshotReRequestIntervalMs) {
+                    lastRequestAt = Date.now()
+                    await tryRequestSnapshot()
+                    if (epoch !== sessionEpoch)
+                        return
+                }
                 let snap: CollabSnapshotInfo | null = null
                 try {
                     snap = await t.getSnapshot(sid)
