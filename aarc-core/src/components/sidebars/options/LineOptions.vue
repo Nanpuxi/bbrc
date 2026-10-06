@@ -8,12 +8,14 @@ import { computed, CSSProperties, onMounted, ref, useTemplateRef, watch } from '
 import ColorPickerForLine from '../shared/ColorPickerForLine.vue';
 import ColorPickerForTerrain from '../shared/ColorPickerForTerrain.vue';
 import { useLineStateStore } from 'aarc-core/models/stores/saveDerived/state/lineStateStore';
+import { useLineSpanStore } from 'aarc-core/models/stores/saveDerived/slice/lineSpanStore';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 
 
 const envStore = useEnvStore()
 const saveStore = useSaveStore()
 const lineStateStore = useLineStateStore()
+const lineSpanStore = useLineSpanStore()
 const cs = useConfigStore()
 const { save } = storeToRefs(saveStore)
 const props = defineProps<{
@@ -34,6 +36,10 @@ const selectableLineStyles = computed<LineStyle[]>(()=>{
         return copy
     }) || []
 })
+
+const lineStyleShadowedBySlices = computed(()=>
+    lineSpanStore.isLineStyleFullyShadowedBySlices(props.line.id)
+)
 
 function isInSameFamily(line:Line){
     const p = props.line
@@ -238,7 +244,10 @@ onMounted(()=>{
                     {{ style.name }}
                 </option>
             </select>
-            <div class="smallNote">(可在设置-线路样式<br/>自定义更多选项)</div>
+            <div v-if="lineStyleShadowedBySlices" class="smallNoteVital">
+                当前线路的<b>所有区间</b>均被样式片段覆盖，本设置不会生效
+            </div>
+            <div v-else class="smallNote">(可在设置-线路样式<br/>自定义更多选项)</div>
         </td>
     </tr>
     <tr v-if="line.type===LineType.common">
@@ -467,8 +476,13 @@ onMounted(()=>{
                         {{ style.name }}
                     </option>
                 </select>
-                <div class="smallNote">(可在设置-线路样式<br/>自定义更多选项)</div>
-                <div class="smallNote">注意：支线与主线样式不同时，<br/>分叉处的半透明的样式颜色会重叠。<br/>如果要避免颜色重叠变深，<br/>请确保使用同一个样式，<br/>或设置样式透明度为1。</div>
+                <div v-if="lineStyleShadowedBySlices" class="smallNoteVital">
+                    当前线路的<b>所有区间</b>均被样式片段覆盖，此处设置不会生效
+                </div>
+                <template v-else>
+                    <div class="smallNote">(可在设置-线路样式<br/>自定义更多选项)</div>
+                    <div class="smallNote">注意：支线与主线样式不同时，<br/>分叉处的半透明的样式颜色会重叠。<br/>如果要避免颜色重叠变深，<br/>请确保使用同一个样式，<br/>或设置样式透明度为1。</div>
+                </template>
             </td>
         </tr>
         <tr>

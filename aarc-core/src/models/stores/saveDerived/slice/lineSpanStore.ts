@@ -203,6 +203,21 @@ export const useLineSpanStore = defineStore('lineSpan', () => {
     }
 
     /**
+     * 线路自身的 style 设置是否被样式片段完全遮蔽：
+     * 扁平化后的每个区间取到的样式都来自 StyleSlice 本身
+     * （片段样式为 -1"同线路样式"或解析回退到线路时不算遮蔽）
+     */
+    function isLineStyleFullyShadowedBySlices(lineId: number): boolean {
+        const flattened = getFlattenedLine(lineId)
+        if (!flattened || flattened.spans.length === 0)
+            return false
+        return flattened.spans.every((_, i) => {
+            const s = getSpanStyle(lineId, i)
+            return !!s?.styleSlice && !s.fromLine
+        })
+    }
+
+    /**
      * 获取指定线路指定区间的时间信息
      * 
      * 优先级：TimeSlice > Line.time（回退）
@@ -252,6 +267,7 @@ export const useLineSpanStore = defineStore('lineSpan', () => {
         allFlattened,
         getFlattenedLine,
         getSpanStyle,
+        isLineStyleFullyShadowedBySlices,
         getSpanTime,
         isSpanOpened,
         flattenLine

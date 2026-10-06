@@ -514,4 +514,154 @@ describe('lineSpanStore', () => {
       expect(result).toBeUndefined()
     })
   })
+
+  // ============ isLineStyleFullyShadowedBySlices ============
+  describe('isLineStyleFullyShadowedBySlices', () => {
+    it('无 slice 时应返回 false', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts, { style: 100 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        lineStyles: [createLineStyle(100, '线路样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(false)
+    })
+
+    it('StyleSlice 覆盖整条线路且片段样式有效时应返回 true', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 30, style: 200 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式'), createLineStyle(200, '片段样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(true)
+    })
+
+    it('片段样式为 0（无样式）时同样算遮蔽', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 30, style: 0 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(true)
+    })
+
+    it('片段样式为 -1（同线路样式）时不算遮蔽', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 30, style: -1 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(false)
+    })
+
+    it('片段引用的样式不存在、回退到线路样式时不算遮蔽', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 30, style: 999 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(false)
+    })
+
+    it('只有部分区间被 slice 覆盖时应返回 false', () => {
+      const pts = [10, 20, 30, 40]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 20, style: 200 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式'), createLineStyle(200, '片段样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(false)
+    })
+
+    it('所有区间都被不同 slice 覆盖时应返回 true', () => {
+      const pts = [10, 20, 30, 40]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice1 = createStyleSlice({ line: line.id, fromPt: 10, toPt: 20, style: 200 })
+      const styleSlice2 = createStyleSlice({ line: line.id, fromPt: 20, toPt: 40, style: 300 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice1, styleSlice2],
+        lineStyles: [
+          createLineStyle(100, '线路样式'),
+          createLineStyle(200, '片段样式1'),
+          createLineStyle(300, '片段样式2')
+        ]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(true)
+    })
+
+    it('线路只有1个点（无 span）时应返回 false', () => {
+      const pts = [10]
+      const line = createLine(pts, { style: 100 })
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 10, style: 200 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(100, '线路样式'), createLineStyle(200, '片段样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(false)
+    })
+
+    it('线路无 style 且所有区间被 slice 覆盖时仍返回 true', () => {
+      const pts = [10, 20, 30]
+      const line = createLine(pts)
+      const styleSlice = createStyleSlice({ line: line.id, fromPt: 10, toPt: 30, style: 200 })
+      const save = createEmptySave({
+        points: pts.map(id => createPoint(id)),
+        lines: [line],
+        styleSlices: [styleSlice],
+        lineStyles: [createLineStyle(200, '片段样式')]
+      })
+      setupSaveStore(save)
+      const store = useLineSpanStore()
+
+      expect(store.isLineStyleFullyShadowedBySlices(line.id)).toBe(true)
+    })
+  })
 })
