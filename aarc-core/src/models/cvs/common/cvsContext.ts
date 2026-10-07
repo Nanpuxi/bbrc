@@ -120,6 +120,11 @@ export class CvsContext{
         }
         return ctx2d.createPattern(image, repetition)
     }
+    /** 以逻辑坐标创建线性渐变（内部按 mapX/mapY 换算，SVG 导出同样适用） */
+    createLinearGradient(x1:number, y1:number, x2:number, y2:number): CanvasGradient{
+        const b = this.b
+        return b.ctx2d.createLinearGradient(b.mapX(x1), b.mapY(y1), b.mapX(x2), b.mapY(y2))
+    }
     translate(x:number, y:number){
         this.b.ctx2d.translate(x, y)
     }
@@ -162,9 +167,9 @@ export class CvsContext{
         this.b.ctx2d.lineCap = value}
     set lineWidth(value:number){
         this.b.ctx2d.lineWidth = value*this.b.scale}
-    set strokeStyle(value:string | CanvasPattern){
+    set strokeStyle(value:string | CanvasPattern | CanvasGradient){
         this.b.ctx2d.strokeStyle = value as any}
-    set fillStyle(value:string | CanvasPattern){
+    set fillStyle(value:string | CanvasPattern | CanvasGradient){
         this.b.ctx2d.fillStyle = value as any}
     set globalAlpha(value:number){
         this.b.ctx2d.globalAlpha = value}

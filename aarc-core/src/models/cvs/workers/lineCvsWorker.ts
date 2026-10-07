@@ -42,6 +42,7 @@ import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocal
 import { useCvsFrameStore } from "aarc-core/models/stores/cvsFrameStore";
 import { useRenderOptionsStore } from "aarc-core/models/stores/renderOptionsStore";
 import { formalize } from "aarc-core/utils/lineUtils/formalize";
+import { buildLineGradient, resolveLineGradient, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient";
 
 type LineRenderType = 'both'|'body'|'carpet'
 
@@ -212,12 +213,14 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             for(let i=0;i<line.length;i++){
                 const l = line[i]
                 const formalPts = formalPtsOfLines[i]
+                const gradient = resolveLineGradient(l, formalPts,
+                    saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
                 const buildPath = () => {
                     ctx.beginPath()
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
                 }
                 buildPath()
-                doRender(ctx, l, undefined, undefined, 'both', 'base', buildPath)
+                doRender(ctx, l, undefined, undefined, 'both', 'base', gradient, buildPath)
             }
             return
         }
@@ -232,7 +235,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
                 }
                 buildPath()
-                doRender(ctx, l, undefined, undefined, 'carpet', undefined, buildPath)
+                doRender(ctx, l, undefined, undefined, 'carpet', undefined, undefined, buildPath)
             }
         }
 
@@ -321,7 +324,11 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             }
             buildPath()
             const enforceLineWidth = line.isFilled ? 1 : undefined
-            doRender(ctx, line, true, enforceLineWidth, undefined, undefined, buildPath)
+            // 局部线段仍使用整线解析的渐变（CanvasGradient 为设备坐标系对象，对局部 path 同样适用）
+            const wholeFormalPts = formalizedLineStore.getLinesFormalPts(line.id)
+            const gradient = resolveLineGradient(line, wholeFormalPts,
+                saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
+            doRender(ctx, line, true, enforceLineWidth, undefined, undefined, gradient, buildPath)
         })
         formalizedLineStore.setLocalFormalSegs(formalizedSegs)
         return {
@@ -335,6 +342,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         style?: LineStyle
         styleId?: number
         strokeTarget?: LineStrokeTarget
+        gradient?: LineGradientResolution
     }
 
     /**
@@ -345,12 +353,13 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         lineInfo: Line,
         options: SpanRenderOptions & { pathBuilder?: () => void }
     ) {
-        const { color, downplayed, style, styleId, strokeTarget, pathBuilder } = options
-        const lineColor = color ?? lineStateStore.getLineActualColor(lineInfo)
+        const { color, downplayed, style, styleId, strokeTarget, gradient, pathBuilder } = options
+        // 支线渐变色按整线解析（各 span 共用），启用时优先于 span 级颜色覆盖
+        const lineColor = gradient ?? color ?? lineStateStore.getLineActualColor(lineInfo)
 
-        // 填充线路（如湖泊）
+        // 填充线路（如湖泊）；支线渐变不适用填充，回退主色
         if (lineInfo.isFilled && lineInfo.type === LineType.terrain) {
-            ctx.fillStyle = lineColor
+            ctx.fillStyle = typeof lineColor === 'string' ? lineColor : lineColor.fromColor
             ctx.fill()
             return
         }
@@ -402,6 +411,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 style: info.style,
                 styleId: info.styleId,
                 strokeTarget: 'base',
+                gradient: info.gradient,
                 pathBuilder: buildPath
             })
         }
@@ -412,12 +422,13 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
      * 
      * 将样式相同的 span 聚集后批量渲染，减少 canvas 状态切换次数。
      * 
-     * 分组依据：(styleId, line.width, color, downplayed)
-     * 这四个参数决定了 strokeStyledLine 在 target='style' 时的全部视觉表现：
+     * 分组依据：(styleId, line.width, color, downplayed, gradientKey)
+     * 这五个参数决定了 strokeStyledLine 在 target='style' 时的全部视觉表现：
      * - styleId/style → lineStyle.layers 决定每层 lineWidth 倍率、opacity、strokeStyle、lineCap、dash、pattern
      * - line.width    → lineWidthBase，所有样式层宽度的计算基准
      * - color         → dynaColor，当 layer.colorMode === 'line' 时的线条颜色
      * - downplayed    → fixedColorConverter，当 layer.colorMode !== 'line' 时对固定颜色的淡化处理
+     * - gradientKey   → 支线渐变色（colorMode === 'line' 层的 dynaColor），不同渐变的 span 不能合并
      * 
      * 同组的 span 具有完全相同的 canvas 渲染状态，因此可以把它们的路径累积到同一条
      * path 中（linkPts 内部使用 moveTo 开始每个 span，不会互相干扰），然后只需
@@ -434,7 +445,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             if (!itsStyle) continue
 
             const lineWidth = info.line.width || 1
-            const key = `${itsStyle.id}|${lineWidth}|${info.color ?? ''}|${info.downplayed}`
+            const key = `${itsStyle.id}|${lineWidth}|${info.color ?? ''}|${info.downplayed}|${info.gradientKey}`
             const existing = groups.get(key)
             if (existing) {
                 existing.push(info)
@@ -458,6 +469,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 style: representative.style,
                 styleId: representative.styleId,
                 strokeTarget: 'style',
+                gradient: representative.gradient,
                 pathBuilder: buildPath
             })
         }
@@ -469,7 +481,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
     function doRender(
         ctx:CvsContext, lineInfo:Line, enforceNoFill?:boolean,
         enforceLineWidth?:number, type?:LineRenderType, strokeTarget?:LineStrokeTarget,
-        pathBuilder?:()=>void
+        gradient?:LineGradientResolution, pathBuilder?:()=>void
     ){
         const drawCarpet = (!type || type==='both' || type==='carpet') && (lineInfo.carpet ?? cs.config.lineCarpet)
         const drawBody = !type || type==='both' || type==='body'
@@ -488,7 +500,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 ctx.globalAlpha = opacityOriginal
             }
             if(drawBody){
-                const lineColor = lineStateStore.getLineActualColor(lineInfo)
+                const lineColor = gradient ?? lineStateStore.getLineActualColor(lineInfo)
                 const lineDownplayed = lineStateStore.isLineDownplayed(lineInfo.id)
                 let styleId = lineInfo.style
                 if(styleId == -1 && lineInfo.parent){
@@ -518,7 +530,9 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 }else{
                     if(pathBuilder) pathBuilder()
                     ctx.lineWidth = lineWidth
-                    ctx.strokeStyle = lineColor
+                    ctx.strokeStyle = typeof lineColor === 'string'
+                        ? lineColor
+                        : buildLineGradient(ctx, lineColor, lineWidth)
                     ctx.stroke()
                 }
             }

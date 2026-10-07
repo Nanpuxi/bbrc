@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import SideBar from '../../common/SideBar.vue';
-import { nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, useTemplateRef, CSSProperties } from 'vue';
 import { useSideListShared } from './shared/useSideListShared';
 import { Line, LineType } from 'aarc-core/models/save';
 import LineOptions from '../options/LineOptions.vue';
@@ -14,6 +14,8 @@ import ColorPalette from '../ColorPalette.vue';
 import boxIcon from 'aarc-core/assets/ui/box.svg'
 import SliceEditorTable from '../options/slices/SliceEditorTable.vue';
 import { useLineFocusorStore } from 'aarc-core/models/stores/utils/lineFocusorStore';
+import { useLineStateStore } from 'aarc-core/models/stores/saveDerived/state/lineStateStore';
+import { detectLineAttachEnd } from 'aarc-core/utils/lineUtils/lineGradient';
 
 
 const props = defineProps<{isChildrenList?:boolean}>()
@@ -62,6 +64,26 @@ function clickContainer(){
 
 function showFakeLineInfo(){
     window.alert('该线路已被设为伪线，其不会计入线路数量，其站点不会被搜索到')
+}
+
+const lineStateStore = useLineStateStore()
+/** 子列表（支线）色块：启用渐变时为 CSS 渐变预览，否则为主线颜色色块 */
+function childLineColorStyle(l: Line): CSSProperties {
+    const g = l.gradient
+    if(!g)
+        return { backgroundColor: l.color, cursor: 'default' }
+    let to = g.targetColor ?? undefined
+    if(!to && g.targetLine != null){
+        const targetLine = saveStore.getLineById(g.targetLine)
+        to = targetLine ? lineStateStore.getLineActualColor(targetLine) : undefined
+    }
+    if(!to){
+        const attach = detectLineAttachEnd(l, saveStore.save?.lines)
+        to = attach ? lineStateStore.getLineActualColor(attach.targetLine) : undefined
+    }
+    to = to || l.color
+    const cssDeg = g.angle !== undefined ? 90 - g.angle * 180 / Math.PI : 90
+    return { background: `linear-gradient(${cssDeg}deg, ${l.color}, ${to})`, cursor: 'default' }
 }
 
 type FocusLineMode = {
@@ -185,8 +207,8 @@ onUnmounted(()=>{
                     </div>
                     <ColorPickerForLine v-else ref="pickers" :line="l" :z-index="idx"></ColorPickerForLine>
                 </div>
-                <div v-else class="sqrBtn" :style="{backgroundColor: l.color, cursor:'default'}"
-                    @click="showPop('支线颜色跟随主线，不可单独调整', 'info')">
+                <div v-else class="sqrBtn" :style="childLineColorStyle(l)"
+                    @click="showPop(l.gradient ? '支线渐变色设置请在线路选项中调整' : '支线颜色跟随主线，不可单独调整', 'info')">
                 </div>
                 <LineItemBtns
                     :mouse-down-line-arrange="mouseDownLineArrange"

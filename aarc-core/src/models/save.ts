@@ -104,6 +104,8 @@ export interface Line{
     tagTextColor?:string
     zIndex?:number
     parent?:number
+    /** 支线渐变色设置（仅对 parent 非空的普通线路有意义）；存在即启用 */
+    gradient?:LineGradient
     isFake?:boolean
     /** 底层“白边”（carpet）开关；undefined=跟随全局配置 config.lineCarpet */
     carpet?:boolean
@@ -125,6 +127,27 @@ export interface LineTimeInfo{
     open?: number
     suspend?: [number, number][]
     abandon?: number
+}
+/**
+ * 支线渐变色设置。
+ * 主颜色即支线自身 color（跟随主线同步），不另设字段；
+ * 渐变轴角度与范围不设置（undefined）时按自动语义解析（见 lineGradient.ts）。
+ */
+export interface LineGradient{
+    /** 目标颜色；undefined/null = 自动（从末端所接线路获取） */
+    targetColor?: string | null
+    /**
+     * 目标颜色来源线路 id（"指定线路"模式）；设置时优先于 targetColor。
+     * 指向的线路不存在时回退自动模式
+     */
+    targetLine?: number | null
+    /**
+     * 渐变轴角度（弧度，逆时针为正，与 canvas rotate 一致）；
+     * undefined = 自动（两端点连线方向，目标色位于连接端一侧）
+     */
+    angle?: number
+    /** 渐变作用范围：沿渐变轴的比例 [起, 止]，0..1；undefined = 自动 */
+    range?: [number, number]
 }
 export interface LineStyle{
     id:number
