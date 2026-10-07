@@ -9,6 +9,7 @@ import { useIconStore } from 'aarc-core/models/stores/iconStore';
 import { storeToRefs } from 'pinia';
 import FontInput from '../shared/FontInput.vue';
 import AngleInput from '../shared/AngleInput.vue';
+import { suspendSelectionPropSync } from 'aarc-core/models/stores/utils/selectionPropSync';
 
 const cs = useConfigStore()
 const saveStore = useSaveStore()
@@ -26,18 +27,25 @@ const pinyinPresetRefStale = computed(()=>{
 })
 function startEditing(tag: TextTag) {
     editing.value = tag
-    if(tag.forId && tag.padding === undefined)
-        tag.padding = 0
-    if(tag.forId && tag.width === undefined)
-        tag.width = 0
-    if(!tag.textOp) 
-        tag.textOp = { size:0, color: cs.config.textTagFontColorHex }
-    if(!tag.textSOp)
-        tag.textSOp = { size:0, color: cs.config.textTagSubFontColorHex }
-    if(!tag.opacity)
-        tag.opacity = 1
-    if(tag.zIndex === undefined)
-        tag.zIndex = 0
+    //补默认值不是用户编辑：挂起多选同步，避免初始化写入传播给选区
+    const resumeSync = suspendSelectionPropSync()
+    try{
+        if(tag.forId && tag.padding === undefined)
+            tag.padding = 0
+        if(tag.forId && tag.width === undefined)
+            tag.width = 0
+        if(!tag.textOp) 
+            tag.textOp = { size:0, color: cs.config.textTagFontColorHex }
+        if(!tag.textSOp)
+            tag.textSOp = { size:0, color: cs.config.textTagSubFontColorHex }
+        if(!tag.opacity)
+            tag.opacity = 1
+        if(tag.zIndex === undefined)
+            tag.zIndex = 0
+    }
+    finally{
+        resumeSync()
+    }
     picker1.value?.enforceTo(tag.textOp?.color || '#000000')
     picker2.value?.enforceTo(tag.textSOp?.color || '#000000')
     iconStore.enforcePrefixSelectedTo(tag.icon??0)

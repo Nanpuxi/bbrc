@@ -9,6 +9,38 @@ export const selectionSizeLimits = { min: 0.3, max: 2 }
 export type BlankClickBehavior = 'none'|'exitAlways'|'exitWhenGrouped'
 /** 批量选择时如何处理锁定线路上的点：exclude=不添加到选区 */
 export type SelectionLockedBehavior = 'exclude'|'include'
+/** 多选时编辑某元素，是否同步更改其他同类选中元素的同属性：undefined（默认）=尚未选择，作用与 never 一致，首次多选后由 Cvs.vue 弹窗引导设置 */
+export type MultiEditSyncScope = 'never'|'notGroupOnly'|'groupOnly'|'always'|undefined
+/** 同步时是否要求同伴该属性的当前值与编辑前旧值一致 */
+export type MultiEditSyncValue = 'sameValueOnly'|'always'
+/**
+ * 多选属性同步的逐键开关：键为 `pt:${属性名}` / `tag:${属性名}`。
+ * 不在表中的属性默认允许同步；表内列出的默认 false（面板外入口或覆盖类操作，显式 opt-in）。
+ */
+export const multiEditSyncKeyDefaults: Record<string, boolean> = {
+    'pt:dir': false,
+    'pt:sta': false,
+    'pt:free': false,
+    'pt:name': false,
+    'pt:nameS': false,
+    'tag:text': false,
+    'tag:textS': false,
+    'tag:icon': false,
+    //站名位置组（multiEditSyncGroupDefaults 的 pt:namePos）各成员，默认关闭、可单独开启
+    'pt:nameP': false,
+    'pt:anchorX': false,
+    'pt:anchorY': false,
+    'pt:noLeader': false,
+    'pt:nameAngle': false,
+}
+/**
+ * 多选属性同步的属性组：仅定义组成员与 UI 从属关系，同步判定落到各成员的逐键开关上
+ * （组 checkbox 为派生状态：全选=选中、部分选=indeterminate）。
+ * 与 namePosMemory 的"站名位置记忆"同一划分。
+ */
+export const multiEditSyncGroupDefaults: Record<string, string[]> = {
+    'pt:namePos': ['nameP', 'anchorX', 'anchorY', 'noLeader', 'nameAngle'],
+}
 export type TextTagClickMode = 'rect'|'anchor'|'rectAndAnchor'
 /** 一键拼音转换的处理方式 */
 export type PinyinBatchMode = 'none'|'skipExist'|'overwrite'
@@ -29,6 +61,10 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const selectionSize = ref<number>(useBrowserInfoStore().isMobile ? 1 : 0.8)
     const blankClickBehavior = ref<BlankClickBehavior>('exitWhenGrouped')
     const selectionLockedBehavior = ref<SelectionLockedBehavior>('exclude')
+    const multiEditSyncScope = ref<MultiEditSyncScope>(undefined)
+    const multiEditSyncValue = ref<MultiEditSyncValue>('sameValueOnly')
+    //用户对 multiEditSyncKeyDefaults 中各键的显式选择；未设置的键回退到默认值
+    const multiEditSyncKeys = ref<Record<string, boolean>>({})
     const cvsRenderResolutionRatio = ref<number>(2)
     const lineExtendSta = ref<ControlPointSta|undefined>(undefined)
     const textTagClickMode = ref<TextTagClickMode>('rect')
@@ -76,6 +112,9 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         selectionSize,
         blankClickBehavior,
         selectionLockedBehavior,
+        multiEditSyncScope,
+        multiEditSyncValue,
+        multiEditSyncKeys,
         cvsRenderResolutionRatio,
         lineExtendSta,
         textTagClickMode,

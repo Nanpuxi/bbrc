@@ -14,6 +14,7 @@ import { useEditorLocalConfigStore, selectionSizeLimits } from 'aarc-core/app/lo
 import { useMainCvsDispatcher } from 'aarc-core/models/cvs/dispatchers/mainCvsDispatcher';
 import StringReplace from './StringReplace.vue';
 import ConfigSection from './configs/shared/ConfigSection.vue';
+import MultiEditSyncConfig from './configs/MultiEditSyncConfig.vue';
 import ToolItem from './shared/ToolItem.vue';
 import textTagIcon from 'aarc-core/assets/ui/editor/textTag.svg';
 import ptLinkIcon from 'aarc-core/assets/ui/editor/ptLink.svg';
@@ -170,6 +171,12 @@ defineExpose({
                         <option value="exclude">不添加到选区</option>
                         <option value="include">可添加到选区</option>
                     </select>
+                </td>
+            </tr>
+            <tr>
+                <td>多选属性<br/>同步</td>
+                <td>
+                    <MultiEditSyncConfig/>
                 </td>
             </tr>
         </tbody></table>

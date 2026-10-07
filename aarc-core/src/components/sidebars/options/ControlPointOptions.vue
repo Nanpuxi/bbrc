@@ -15,6 +15,7 @@ import AngleInput from '../shared/AngleInput.vue';
 import { useNamePosMemoryStore } from 'aarc-core/models/stores/utils/namePosMemoryStore';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
+import { suspendSelectionPropSync } from 'aarc-core/models/stores/utils/selectionPropSync';
 
 const sidebar = useTemplateRef('sidebar')
 const pCarpet = useTemplateRef('pCarpet')
@@ -39,12 +40,19 @@ const mergingLine2Id = ref<number>(0)
 
 function startEditing(pt: ControlPoint) {
     editing.value = pt
-    if(editing.value.nameSize===undefined)
-        editing.value.nameSize = 0
-    if(editing.value.nameSSize===undefined)
-        editing.value.nameSSize = 0
-    if(editing.value.nameP===undefined)
-        editing.value.nameP = nameEditStore.optimizedNamePos(editing.value.id)
+    //补默认值不是用户编辑：挂起多选同步，避免初始化写入传播给选区
+    const resumeSync = suspendSelectionPropSync()
+    try{
+        if(editing.value.nameSize===undefined)
+            editing.value.nameSize = 0
+        if(editing.value.nameSSize===undefined)
+            editing.value.nameSSize = 0
+        if(editing.value.nameP===undefined)
+            editing.value.nameP = nameEditStore.optimizedNamePos(editing.value.id)
+    }
+    finally{
+        resumeSync()
+    }
     showLineSplitMenu.value = false
     showLineMergeMenu.value = false
     initSplittableLines()

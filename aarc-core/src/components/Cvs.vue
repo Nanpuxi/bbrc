@@ -19,6 +19,7 @@ import { usePointLinkStore } from 'aarc-core/models/stores/pointLinkStore';
 
 import { useSelectionStore } from 'aarc-core/models/stores/selectionStore';
 import { useSaveStore } from 'aarc-core/models/stores/saveStore';
+import MultiEditSyncPrompt from './MultiEditSyncPrompt.vue';
 
 const envStore = useEnvStore();
 const { somethingActive } = storeToRefs(envStore)
@@ -118,6 +119,7 @@ defineExpose({init})
     <Ops></Ops>
     <NameEdit></NameEdit>
     <TextTagEdit></TextTagEdit>
+    <MultiEditSyncPrompt></MultiEditSyncPrompt>
     <div v-if="pointLinkStore.isCreating" class="statusDisplay pointLinkCreatingStatus">
         正在创建连接，请点击第<b>{{ pointLinkStore.helpTextNumber }}</b>个点<br/>
         <button class="lite" @click="pointLinkStore.abortCreatingPtLink">取消创建</button>

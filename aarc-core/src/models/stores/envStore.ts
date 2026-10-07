@@ -33,6 +33,7 @@ import { useLineStateStore } from "./saveDerived/state/lineStateStore";
 import { useLineCreation } from "./composables/lineCreation";
 import { collabLockKey, collabLockKeyOf, useCollabLockStore } from "./collabLockStore";
 import { useRemoteRenderScheduler } from "aarc-core/models/collab/remoteRenderScheduler";
+import { useSelectionPropSync } from "./utils/selectionPropSync";
 
 export const useEnvStore = defineStore('env', ()=>{
     const saveStore = useSaveStore();
@@ -54,6 +55,8 @@ export const useEnvStore = defineStore('env', ()=>{
     const staClusterStore = useStaClusterStore()
     const activeLine = ref<Line>()
     const activeTextTag = ref<TextTag>()
+    //多选同属性同步的锚点：当前激活的点/文本标签（含右键切换 sta/dir 等面板外编辑）
+    useSelectionPropSync(computed(() => activePt.value ?? activeTextTag.value))
     const movingTextTag = ref<boolean>(false)
     const movedTextTag = ref<boolean>(false)
     const activeTextTagGrabbedAt = ref<Coord>([0,0])
@@ -532,7 +535,7 @@ export const useEnvStore = defineStore('env', ()=>{
                         const transferRes = staClusterStore.tryTransferStaNameWithinCluster(pt)
                         if(transferRes){
                             pt.name = undefined
-                            pt.nameS = undefined 
+                            pt.nameS = undefined
                             pt.nameP = undefined
                             setStaNameRect(pt.id, undefined)
                             nameEditStore.targetPtId = transferRes.id

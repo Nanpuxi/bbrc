@@ -203,6 +203,7 @@ export const useSelectionStore = defineStore('selection', ()=>{
         selCursor,
         getBrushRadius,
         brush,
+        brushStatus,
         setBrushStatus,
         applyGroups,
         selectedIdSets,

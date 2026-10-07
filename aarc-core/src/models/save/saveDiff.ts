@@ -291,7 +291,7 @@ function isPlainObj(x: unknown): x is Record<string, unknown> {
     return !!x && typeof x === 'object' && !Array.isArray(x)
 }
 
-function deepEqual(a: unknown, b: unknown): boolean {
+export function deepEqual(a: unknown, b: unknown): boolean {
     if (a === b)
         return true
     if (!a || !b || typeof a !== 'object' || typeof b !== 'object')
