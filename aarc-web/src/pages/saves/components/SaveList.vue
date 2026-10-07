@@ -2,6 +2,7 @@
 import { ref, nextTick, useTemplateRef, computed, watch } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
+import Prompt from 'aarc-core/components/common/Prompt.vue';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import fileDownload from 'js-file-download';
 import Loading from '@/components/common/Loading.vue';
@@ -257,6 +258,11 @@ async function addSaveToFolderInSidebar(folder: SaveFolderDto | undefined) {
     }
 }
 
+const howToMoveSaveShow = ref(false)
+function howToMoveSave(){
+    howToMoveSaveShow.value = true
+}
+
 defineExpose({ startCreating })
 </script>
 
@@ -389,7 +395,7 @@ defineExpose({ startCreating })
                 </tr>
                 <tr>
                     <td>
-                        <button class="downloadJsonBtn rcConvertBtn" @click="rcConvert?.extend()">转换为轨交棋棋盘</button>
+                        <button class="lite downloadJsonBtn" @click="rcConvert?.extend()">导出为轨交棋棋盘</button>
                     </td>
                 </tr>
             </tbody>
@@ -398,7 +404,7 @@ defineExpose({ startCreating })
             <tbody>
                 <tr>
                     <td>
-                        <button class="minor dangerZoneBtn" @click="dangerZone = !dangerZone">删除/导入</button>
+                        <button class="minor dangerZoneBtn" @click="dangerZone = !dangerZone">删除/导入工程文件</button>
                         <div v-show="dangerZone" class="dangerZone">
                             <div class="dangerOpName">
                                 替换存档数据
@@ -417,6 +423,11 @@ defineExpose({ startCreating })
                             <div class="deleteHint">删除后30天内可在回收站中恢复</div>
                             <button class="danger" @click="removeCurrentCvs">删除存档</button>
                         </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <button class="lite" @click="howToMoveSave">如何迁移存档？</button>
                     </td>
                 </tr>
             </tbody>
@@ -443,6 +454,23 @@ defineExpose({ startCreating })
         </template>
     </SideBar>
     <ConvertToRailChess ref="rcConvert" v-if="editingSave" :save="editingSave" />
+    <Prompt v-if="howToMoveSaveShow" bg-click-close @close="howToMoveSaveShow = false"
+        @click="howToMoveSaveShow = false">
+        <div class="howToMoveSave">
+            请点击“导出工程文件”，得到一个json文件。
+            <ul>
+                <li>
+                    对于本网站或衍生私服：创建一个新存档，打开新存档的“导入工程文件-替换存档数据”处，选择之前得到的json文件。
+                </li>
+                <li>
+                    对于本地版：点击存档管理器的导入按钮，选择json文件。
+                </li>
+                <li>
+                    对于其他可导入aarc存档的工具：请咨询其作者。
+                </li>
+            </ul>
+        </div>
+    </Prompt>
 </template>
 
 <style scoped lang="scss">
@@ -531,6 +559,15 @@ defineExpose({ startCreating })
     color: #999;
     font-size: 14px;
     margin-bottom: 8px;
+}
+
+.howToMoveSave {
+    max-width: 400px;
+    line-height: 1.6;
+    color: #333;
+    ul{
+        margin-left: 1em;
+    }
 }
 
 .save-order-btn {
