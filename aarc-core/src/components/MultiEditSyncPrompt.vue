@@ -11,7 +11,7 @@ const { multiEditSyncScope } = storeToRefs(editorLocalConfigStore)
 
 //多选同步策略未选择（undefined）时，首次多选手势结束后弹窗引导设置
 const promptShow = ref(false)
-const promptScope = ref<Exclude<MultiEditSyncScope, undefined>>('notGroupOnly')
+const promptScope = ref<Exclude<MultiEditSyncScope, undefined>>('always')
 const promptValue = ref<MultiEditSyncValue>('always')
 watch(() => selectionStore.brushStatus, (status, oldStatus)=>{
     if(status === 'up' && oldStatus === 'down'
