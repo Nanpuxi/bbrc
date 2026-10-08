@@ -394,7 +394,7 @@ var allEditGrants = context.AuthGrants.AsNoTracking().Existing()
 
 文件：`AARC.WebApi/Services/Saves/SaveDtoEnrichService.cs`
 
-为返回的 `SaveDto` 附加当前请求者对每个存档的 `View/Edit/Fork` 权限：
+为返回的 `SaveDto` 附加当前请求者对每个存档的 `View/Edit/Fork` 权限，以及该存档（或其所有者）是否设置了任何"允许编辑"授权条目（`AllowOthersEdit`，与请求者身份无关）：
 
 ```csharp
 public void EnrichPrivilege(List<SaveDto> saves, bool needFork = false)
@@ -403,11 +403,13 @@ public void EnrichPrivilege(List<SaveDto> saves, bool needFork = false)
     var allowEdit = authGrantCheckService.CalculateFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.Edit, false);
     var allowView = authGrantCheckService.CalculateFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.View, true);
     var allowFork = needFork ? authGrantCheckService.CalculateFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.Fork, false) : [];
+    var allowOthersEdit = authGrantCheckService.AnyAllowEntryFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.Edit);
     for (int i = 0; i < saves.Count; i++)
     {
         saves[i].AllowRequesterEdit = allowEdit.ElementAtOrDefault(i);
         saves[i].AllowRequesterView = allowView.ElementAtOrDefault(i);
         saves[i].AllowRequesterFork = allowFork.ElementAtOrDefault(i);
+        saves[i].AllowOthersEdit = allowOthersEdit.ElementAtOrDefault(i);
     }
 }
 ```

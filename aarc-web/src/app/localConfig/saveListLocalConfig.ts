@@ -20,6 +20,7 @@ export const useSaveListLocalConfigStore = defineStore('saveListLocalConfig', ()
     const folderOrderby = ref<FolderOrderBy>(defaultFolderOrderby)
     const simpleCoopRulesDisplay = ref<boolean>(true)
     const readRuleCommentIds = ref<Record<number, number>>({})
+    const readMultiUserEditRuleUpdated = ref<string>('')
     const favoriteGroup = ref<string>('')
     return {
         searchOrderby,
@@ -28,6 +29,7 @@ export const useSaveListLocalConfigStore = defineStore('saveListLocalConfig', ()
         folderOrderby,
         simpleCoopRulesDisplay,
         readRuleCommentIds,
+        readMultiUserEditRuleUpdated,
         favoriteGroup
     }
 },

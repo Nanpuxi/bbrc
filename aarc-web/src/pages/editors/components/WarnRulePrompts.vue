@@ -4,6 +4,7 @@ import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConf
 import iconWarn from '@/assets/ui/warn.svg';
 import Prompt from 'aarc-core/components/common/Prompt.vue'
 import { ref, watch } from 'vue';
+import { multiUserEditRule, multiUserEditRulePromptPending } from './multiUserEditRule';
 
 const props = defineProps<{
     saveStatus?: SaveDto
@@ -16,36 +17,75 @@ const emit = defineEmits<{
 }>()
 
 const saveListLocalConfig = useSaveListLocalConfigStore()
+const multiUserEditRulePromptShow = ref(false)
+const multiUserEditRuleDoNotShowAgain = ref(false)
 const rulePromptShow = ref(false)
 const ruleDoNotShowAgain = ref(false)
 const warnPromptShow = ref(false)
 
-watch(() => props.saveStatus, (s) => {
-    if (!s) return
-    // 检查是否有warn，优先展示warn
-    if (s.latestWarnContent) {
+function multiUserEditRulePending(s: SaveDto) {
+    return multiUserEditRulePromptPending(s, saveListLocalConfig.readMultiUserEditRuleUpdated)
+}
+
+function hasUnreadRule(s: SaveDto) {
+    return !!(s.latestRuleContent && s.id && s.latestRuleCommentId
+        && saveListLocalConfig.readRuleCommentIds[s.id] !== s.latestRuleCommentId)
+}
+
+/** 按 warn → rule 的顺序弹出下一个待显示的弹窗；返回是否确实弹出了。
+ * skipWarn 用于已关闭 warn 的场景，避免再次弹出 warn */
+function showNextPrompt(skipWarn = false): boolean {
+    const s = props.saveStatus
+    if (!s) return false
+    // 优先展示warn
+    if (!skipWarn && s.latestWarnContent) {
         warnPromptShow.value = true
-        return
+        return true
     }
     // 无warn，检查rule
-    if (s.latestRuleContent && s.id && s.latestRuleCommentId) {
-        const readRuleId = saveListLocalConfig.readRuleCommentIds[s.id]
-        if (!readRuleId || readRuleId !== s.latestRuleCommentId) {
-            rulePromptShow.value = true
-        }
+    if (hasUnreadRule(s)) {
+        rulePromptShow.value = true
+        return true
     }
+    return false
+}
+
+watch(() => props.saveStatus, (s) => {
+    if (!s) return
+    // 最优先展示多人存档管理规定
+    if (multiUserEditRulePending(s)) {
+        multiUserEditRulePromptShow.value = true
+        return
+    }
+    showNextPrompt()
 }, { immediate: true })
+
+function saveReadMultiUserEditRule() {
+    if (multiUserEditRuleDoNotShowAgain.value) {
+        saveListLocalConfig.readMultiUserEditRuleUpdated = multiUserEditRule.updated
+    }
+    multiUserEditRuleDoNotShowAgain.value = false
+}
+
+function handleMultiUserEditRulePromptClose() {
+    multiUserEditRulePromptShow.value = false
+    saveReadMultiUserEditRule()
+    showNextPrompt()
+}
+
+function handleMultiUserEditRulePrimaryAction() {
+    multiUserEditRulePromptShow.value = false
+    saveReadMultiUserEditRule()
+    if (showNextPrompt()) return
+    if (props.mode === 'navigate') {
+        emit('navigate')
+    }
+}
 
 function handleWarnPromptClose() {
     warnPromptShow.value = false
     // 关闭Warn后检查是否还有未读的Rule
-    const s = props.saveStatus
-    if (s?.latestRuleContent && s.id && s.latestRuleCommentId) {
-        const readRuleId = saveListLocalConfig.readRuleCommentIds[s.id]
-        if (!readRuleId || readRuleId !== s.latestRuleCommentId) {
-            rulePromptShow.value = true
-        }
-    }
+    showNextPrompt(true)
 }
 
 function handleRulePromptClose() {
@@ -72,14 +112,7 @@ function handleRulePrimaryAction() {
 function handleWarnPrimaryAction() {
     warnPromptShow.value = false
     // 关闭Warn后检查是否还有未读的Rule，有则显示Rule而不是进入编辑
-    const s = props.saveStatus
-    if (s?.latestRuleContent && s.id && s.latestRuleCommentId) {
-        const readRuleId = saveListLocalConfig.readRuleCommentIds[s.id]
-        if (!readRuleId || readRuleId !== s.latestRuleCommentId) {
-            rulePromptShow.value = true
-            return
-        }
-    }
+    if (showNextPrompt(true)) return
     // 无未读Rule，才进入编辑
     if (props.mode === 'navigate') {
         emit('navigate')
@@ -88,6 +121,20 @@ function handleWarnPrimaryAction() {
 </script>
 
 <template>
+    <Prompt v-if="multiUserEditRulePromptShow" bg-click-close @close="handleMultiUserEditRulePromptClose">
+        <div class="multi-user-edit-rule-prompt">
+            <div class="rule-label">多人存档管理规定</div>
+            <div v-for="(rule, idx) in multiUserEditRule.rules" :key="idx" class="rule-content">{{ rule }}</div>
+            <div class="rule-meta">{{ multiUserEditRule.updated }}</div>
+            <label class="do-not-show-again">
+                <input type="checkbox" v-model="multiUserEditRuleDoNotShowAgain" />
+                <span>不再显示本条</span>
+            </label>
+        </div>
+        <button class="major" @click="handleMultiUserEditRulePrimaryAction()">
+            {{ mode === 'navigate' ? '进入编辑' : '知道了' }}
+        </button>
+    </Prompt>
     <Prompt v-if="warnPromptShow" bg-click-close @close="handleWarnPromptClose">
         <div class="warn-prompt">
             <img :src="iconWarn" />
@@ -148,7 +195,8 @@ function handleWarnPrimaryAction() {
     }
 }
 
-.rule-prompt {
+.rule-prompt,
+.multi-user-edit-rule-prompt {
     display: flex;
     flex-direction: column;
     align-items: center;

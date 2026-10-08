@@ -537,6 +537,8 @@ namespace AARC.WebApi.Repos.Saves
         public bool AllowRequesterView { get; set; }
         public bool AllowRequesterEdit { get; set; }
         public bool AllowRequesterFork { get; set; }
+        /// 存档或其所有者是否设置了任何"允许编辑"的授权条目（即是否开放他人编辑）
+        public bool AllowOthersEdit { get; set; }
         public int EditingByUserId { get; set; }
         public string? EditingByUserName { get; set; }
         /// 当前是否存在活跃协作房间（至少一名成员在房；进入即加入协作）

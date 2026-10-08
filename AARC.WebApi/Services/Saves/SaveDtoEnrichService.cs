@@ -72,11 +72,14 @@ namespace AARC.WebApi.Services.Saves
                 .CalculateFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.View, true);
             var allowFork = needFork ? authGrantCheckService
                 .CalculateFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.Fork, false) : [];
+            var allowOthersEdit = authGrantCheckService
+                .AnyAllowEntryFor(AuthGrantOn.Save, ids, (byte)AuthGrantTypeOfSave.Edit);
             for (int i = 0; i < saves.Count; i++)
             {
                 saves[i].AllowRequesterEdit = allowEdit.ElementAtOrDefault(i);
                 saves[i].AllowRequesterView = allowView.ElementAtOrDefault(i);
                 saves[i].AllowRequesterFork = allowFork.ElementAtOrDefault(i);
+                saves[i].AllowOthersEdit = allowOthersEdit.ElementAtOrDefault(i);
             }
         }
 

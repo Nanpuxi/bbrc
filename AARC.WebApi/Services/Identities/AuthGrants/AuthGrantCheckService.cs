@@ -56,6 +56,23 @@ public class AuthGrantCheckService(
         }
         return CalculateFor(on, onIds, type, uid, isAdmin, isMember);
     }
+    /// 客体或其所有者身上是否存在任意一条对应类型的"允许"授权条目（与请求者身份无关）
+    public List<bool> AnyAllowEntryFor(AuthGrantOn on, List<int> onIds, byte type)
+    {
+        var owners = authGrantOwnerService.GetOwnerOf(on, onIds);
+        var allowGrants = Existing
+            .Where(x => x.On == on && x.Type == type && x.Flag)
+            .Where(x => owners.Contains(x.UserId) || onIds.Contains(x.OnId))
+            .ToList();
+        var res = new List<bool>(onIds.Count);
+        for (int i = 0; i < onIds.Count; i++)
+        {
+            var owner = owners[i];
+            var onId = onIds[i];
+            res.Add(allowGrants.Exists(x => x.UserId == owner || x.OnId == onId));
+        }
+        return res;
+    }
     /// 核心计算：身份信息显式传入（HTTP 场景由上方重载从 HttpContext 读取后委托到这里）
     public List<AuthGrantCheckResult> CalculateFor(AuthGrantOn on, List<int> onIds, byte type, int uid, bool isAdmin, bool isMember)
     {

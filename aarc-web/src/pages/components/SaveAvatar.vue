@@ -7,6 +7,7 @@ import iconPen from '@/assets/ui/pen.svg';
 import iconWarn from '@/assets/ui/warn.svg';
 import iconCollab from '@/assets/ui/collab.svg';
 import WarnRulePrompts from '@/pages/editors/components/WarnRulePrompts.vue';
+import { multiUserEditRulePromptPending } from '@/pages/editors/components/multiUserEditRule';
 import UserFavoriteStar from './UserFavoriteStar.vue';
 import { useEditorsRoutesJump } from '../editors/routes/routesJump';
 import { useRouter } from 'vue-router';
@@ -79,6 +80,11 @@ function openEditor(){
     // 强制重置promptSaveStatus以触发WarnRulePrompts的watch
     promptSaveStatus.value = undefined
     nextTick(()=>{
+        // 多人存档管理规定待展示时，先经弹窗再进入（WarnRulePrompts会自行接力warn/rule）
+        if(multiUserEditRulePromptPending(s, saveListLocalConfig.readMultiUserEditRuleUpdated)){
+            promptSaveStatus.value = s
+            return
+        }
         if(hasWarn.value){
             promptSaveStatus.value = s
             return
