@@ -263,7 +263,10 @@ export const devSave:Save = {
             color: "#ff8800",
             type: LineType.common,
             style: 100002,
-            parent: 103
+            parent: 103,
+            gradient: {
+                targetColor: "#0088ff"
+            }
         }
     ],
     textTags:[

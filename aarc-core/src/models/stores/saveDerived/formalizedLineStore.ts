@@ -14,6 +14,7 @@ import { sampleLinePath } from "aarc-core/utils/lineUtils/sampleLinePath";
 import { PathPrimitive } from "aarc-core/utils/lineUtils/linePathPrimitives";
 import { intervalMidpoints } from "aarc-core/utils/lineUtils/intervalMidpoints";
 import { turn45Ratio } from "../configStore";
+import { resolveLineGradient, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient";
 
 export interface FormalizedLine{
     lineId:number,
@@ -27,6 +28,10 @@ export interface SpanRenderInfo {
     downplayed: boolean
     style: LineStyle | undefined
     styleId: number | undefined
+    /** 支线渐变色解析结果（整线共享，各 span 视觉连续）；未启用或未解析出为 undefined */
+    gradient: LineGradientResolution | undefined
+    /** gradient 的内容键（分组渲染时区分不同渐变） */
+    gradientKey: string
 }
 
 export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
@@ -114,6 +119,13 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
         const infos: SpanRenderInfo[] = []
         const timeMoment = typeof effectiveTimeMoment === 'number' ? effectiveTimeMoment : undefined
 
+        // 支线渐变色按整线解析一次，所有 span 共用（StyleSlice 截段时视觉连续，见决策 F）
+        const gradient = resolveLineGradient(line, allFormalPts,
+            useSaveStore().save?.lines, l => lineStateStore.getLineActualColor(l))
+        const gradientKey = gradient
+            ? JSON.stringify([gradient.from, gradient.to, gradient.range, gradient.fromColor, gradient.toColor])
+            : ''
+
         for (let spanIdx = 0; spanIdx < flattened.spans.length; spanIdx++) {
             const span = flattened.spans[spanIdx]
             const spanFormalPts = extractSpanFormalPts(allFormalPts, span)
@@ -138,7 +150,9 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
                 color: spanColor,
                 downplayed: spanDownplayed,
                 style: spanStyle,
-                styleId: spanStyleId
+                styleId: spanStyleId,
+                gradient,
+                gradientKey
             })
         }
         return infos

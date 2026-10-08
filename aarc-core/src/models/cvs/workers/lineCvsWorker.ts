@@ -23,7 +23,7 @@
 
 import { useSaveStore } from "../../stores/saveStore";
 import { ControlPoint, Line, LineType } from "../../save";
-import { FormalPt } from "../../coord";
+import { Coord, FormalPt } from "../../coord";
 import { useEnvStore } from "aarc-core/models/stores/envStore";
 import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { FormalizedLine, SpanRenderInfo, useFormalizedLineStore } from "aarc-core/models/stores/saveDerived/formalizedLineStore";
@@ -42,6 +42,7 @@ import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocal
 import { useCvsFrameStore } from "aarc-core/models/stores/cvsFrameStore";
 import { useRenderOptionsStore } from "aarc-core/models/stores/renderOptionsStore";
 import { formalize } from "aarc-core/utils/lineUtils/formalize";
+import { buildLineGradient, resolveLineGradient, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient";
 
 type LineRenderType = 'both'|'body'|'carpet'
 
@@ -206,45 +207,58 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         }
 
         const includeCarpet = !rtype || rtype == 'carpet' || rtype == 'both'
+        const includeBody = !rtype || rtype == 'body' || rtype == 'both'
 
         // 简化模式：无视样式和分段，整线统一绘制
         if(editorLocalConfigStore.ignoreStyleAndSpan || lineShouldSimplify()){
             for(let i=0;i<line.length;i++){
                 const l = line[i]
                 const formalPts = formalPtsOfLines[i]
+                const gradient = resolveLineGradient(l, formalPts,
+                    saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
                 const buildPath = () => {
                     ctx.beginPath()
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
                 }
                 buildPath()
-                doRender(ctx, l, undefined, undefined, 'both', 'base', buildPath)
+                doRender(ctx, l, undefined, undefined, 'both', 'base', gradient, buildPath)
             }
             return
         }
 
-        // 1. Carpet 保持整线绘制
-        if(includeCarpet){
-            for(let i=0;i<line.length;i++){
-                const l = line[i]
-                const formalPts = formalPtsOfLines[i]
-                const buildPath = () => {
-                    ctx.beginPath()
-                    linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
-                }
-                buildPath()
-                doRender(ctx, l, undefined, undefined, 'carpet', undefined, buildPath)
-            }
-        }
-
-        // 2. Body 按 span 拆分渲染
-        // 收集所有 line（含 children）的所有 spans，然后统一先画 base 再画 style
-        // 这样可以避免不同 line 之间的 base/style 覆盖问题（如支线分叉处）
-        const includeBody = !rtype || rtype == 'body' || rtype == 'both'
-        if(includeBody){
-            const allSpanInfos: SpanRenderInfo[] = []
+        // 收集所有 line（含 children）的所有 spans，carpet 与 body 共用同一份
+        // （carpet 也按 span 拆分绘制，保证切片接缝处与本体几何一致）
+        const allSpanInfos: SpanRenderInfo[] = []
+        if(includeCarpet || includeBody){
             for(let i=0;i<line.length;i++){
                 allSpanInfos.push(...formalizedLineStore.collectSpanRenderInfos(line[i], undefined, formalPtsOfLines[i]))
             }
+        }
+
+        // 1. Carpet 按 span 拆分绘制（span 几何与本体一致，cap 也取本体 base 层的
+        //    lineCapWithDefault），使切片接缝落在拐角处时 carpet 与本体形成相同折角，
+        //    而不是整线绘制时的圆角
+        if(includeCarpet){
+            for(let i=0;i<line.length;i++){
+                const l = line[i]
+                if(l.isFilled && l.type===LineType.terrain){
+                    // 填充地形本体是 fill，无 span 接缝问题：carpet 维持整线描边
+                    const formalPts = formalPtsOfLines[i]
+                    const buildPath = () => {
+                        ctx.beginPath()
+                        linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
+                    }
+                    buildPath()
+                    doRender(ctx, l, undefined, undefined, 'carpet', undefined, undefined, buildPath)
+                }
+            }
+            renderCarpetSpans(ctx, allSpanInfos.filter(info =>
+                !(info.line.isFilled && info.line.type===LineType.terrain)))
+        }
+
+        // 2. Body 按 span 拆分渲染
+        // 统一先画 base 再画 style，避免不同 line 之间的 base/style 覆盖问题（如支线分叉处）
+        if(includeBody){
             renderAllSpansBase(ctx, allSpanInfos)
             renderAllSpansStyle(ctx, allSpanInfos)
         }
@@ -321,7 +335,11 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             }
             buildPath()
             const enforceLineWidth = line.isFilled ? 1 : undefined
-            doRender(ctx, line, true, enforceLineWidth, undefined, undefined, buildPath)
+            // 局部线段仍使用整线解析的渐变（CanvasGradient 为设备坐标系对象，对局部 path 同样适用）
+            const wholeFormalPts = formalizedLineStore.getLinesFormalPts(line.id)
+            const gradient = resolveLineGradient(line, wholeFormalPts,
+                saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
+            doRender(ctx, line, true, enforceLineWidth, undefined, undefined, gradient, buildPath)
         })
         formalizedLineStore.setLocalFormalSegs(formalizedSegs)
         return {
@@ -335,6 +353,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         style?: LineStyle
         styleId?: number
         strokeTarget?: LineStrokeTarget
+        gradient?: LineGradientResolution
     }
 
     /**
@@ -345,12 +364,13 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         lineInfo: Line,
         options: SpanRenderOptions & { pathBuilder?: () => void }
     ) {
-        const { color, downplayed, style, styleId, strokeTarget, pathBuilder } = options
-        const lineColor = color ?? lineStateStore.getLineActualColor(lineInfo)
+        const { color, downplayed, style, styleId, strokeTarget, gradient, pathBuilder } = options
+        // 支线渐变色按整线解析（各 span 共用），启用时优先于 span 级颜色覆盖
+        const lineColor = gradient ?? color ?? lineStateStore.getLineActualColor(lineInfo)
 
-        // 填充线路（如湖泊）
+        // 填充线路（如湖泊）；支线渐变不适用填充，回退主色
         if (lineInfo.isFilled && lineInfo.type === LineType.terrain) {
-            ctx.fillStyle = lineColor
+            ctx.fillStyle = typeof lineColor === 'string' ? lineColor : lineColor.fromColor
             ctx.fill()
             return
         }
@@ -387,23 +407,124 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
 
 
     /**
+     * 把连续的同线 span 分组。allSpanInfos 按 family 内 line 顺序收集，
+     * 同一条线的 span 必然相邻；分组用于求折角接缝点（相邻 span 的共享端点）
+     */
+    function groupSpansByLine(infos: SpanRenderInfo[]): SpanRenderInfo[][] {
+        const groups: SpanRenderInfo[][] = []
+        for (const info of infos) {
+            const last = groups.at(-1)
+            if (last && last[0].line === info.line)
+                last.push(info)
+            else
+                groups.push([info])
+        }
+        return groups
+    }
+
+    /**
+     * 折角接缝点：同线相邻 span 的共享端点（含环线首尾的闭合接缝）。
+     * span 之间是断笔（各自带 cap），折角外侧会露出楔形缺口，
+     * 需要在这些点补圆盘（见 renderCarpetSpans / renderAllSpansBase）
+     */
+    function seamPoints(group: SpanRenderInfo[], ring: boolean): Coord[] {
+        const res: Coord[] = []
+        for (let i = 1; i < group.length; i++) {
+            const pt = group[i].formalPts[0]?.pos
+            if (pt)
+                res.push(pt)
+        }
+        if (ring && group.length > 1) {
+            const pt = group[0].formalPts[0]?.pos
+            if (pt)
+                res.push(pt)
+        }
+        return res
+    }
+
+    /**
+     * 按 span 拆分绘制 carpet（与本体共用同一份 span 切分）：
+     * span 内部拐角照旧为圆弧；span 两端 cap 取与本体 base 层相同的 lineCapWithDefault，
+     * 使切片接缝落在拐角处时 carpet 与本体形成相同的折角，而不是整线绘制时的圆角。
+     * 断笔折角外侧仍有楔形缺口，在每个接缝点补一个直径=carpet 宽度的圆盘填平
+     */
+    function renderCarpetSpans(ctx: CvsContext, infos: SpanRenderInfo[]) {
+        for (const group of groupSpansByLine(infos)) {
+            const l = group[0].line
+            if (!(l.carpet ?? cs.config.lineCarpet))
+                continue
+            const carpetWiden = l.carpetWidth ?? cs.config.lineCarpetWiden
+            const lineWidth = cs.config.lineWidth * (l.width || 1)
+            const fullWidth = lineWidth + carpetWiden
+            const opacity = l.carpetOpacity ?? cs.config.lineCarpetOpacity ?? 1
+            ctx.lineJoin = 'round'
+            ctx.lineCap = lineCapWithDefault(l)
+            ctx.lineWidth = fullWidth
+            ctx.strokeStyle = cs.config.bgColor
+            ctx.fillStyle = cs.config.bgColor
+            for (const info of group) {
+                const buildPath = () => {
+                    ctx.beginPath()
+                    linkPts(ctx, info.formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
+                }
+                buildPath()
+                const opacityOriginal = ctx.globalAlpha || 1
+                ctx.globalAlpha = opacityOriginal * opacity
+                ctx.stroke()
+                ctx.globalAlpha = opacityOriginal
+            }
+            const opacityOriginal = ctx.globalAlpha || 1
+            ctx.globalAlpha = opacityOriginal * opacity
+            for (const pt of seamPoints(group, !!isRing(l))) {
+                ctx.beginPath()
+                ctx.arc(pt[0], pt[1], fullWidth / 2, 0, 2 * Math.PI)
+                ctx.fill()
+            }
+            ctx.globalAlpha = opacityOriginal
+        }
+    }
+
+    /**
      * 统一绘制所有 span 的 base（新版渲染函数的包装器）
      */
     function renderAllSpansBase(ctx: CvsContext, infos: SpanRenderInfo[]) {
-        for (const info of infos) {
-            const buildPath = () => {
+        for (const group of groupSpansByLine(infos)) {
+            for (let i = 0; i < group.length; i++) {
+                const info = group[i]
+                const buildPath = () => {
+                    ctx.beginPath()
+                    linkPts(ctx, info.formalPts, info.line, cs.getTurnRadiusOf, lineShouldSimplify())
+                }
+                buildPath()
+                doRenderSpan(ctx, info.line, {
+                    color: info.color,
+                    downplayed: info.downplayed,
+                    style: info.style,
+                    styleId: info.styleId,
+                    strokeTarget: 'base',
+                    gradient: info.gradient,
+                    pathBuilder: buildPath
+                })
+                // 断笔折角补圆：与 carpet 同款。接缝圆颜色取 span 起点侧（本 span）的颜色；
+                // base 被样式配置关闭（noBase）或填充地形时无断笔缺口，不补
+                const effectiveStyleId = info.styleId ?? info.line.style
+                const itsStyle = info.style || saveStore.save?.lineStyles?.find(x => x.id === effectiveStyleId)
+                const filled = info.line.isFilled && info.line.type === LineType.terrain
+                const seamStart = i > 0 || (i === 0 && group.length > 1 && !!isRing(info.line))
+                if (filled || itsStyle?.noBase || !seamStart)
+                    continue
+                const pt = info.formalPts[0]?.pos
+                if (!pt)
+                    continue
+                const lineWidth = cs.config.lineWidth * (info.line.width || 1)
+                const lineColor = info.gradient ?? info.color ?? lineStateStore.getLineActualColor(info.line)
                 ctx.beginPath()
-                linkPts(ctx, info.formalPts, info.line, cs.getTurnRadiusOf, lineShouldSimplify())
+                ctx.arc(pt[0], pt[1], lineWidth / 2, 0, 2 * Math.PI)
+                ctx.fillStyle = typeof lineColor === 'string'
+                    ? lineColor
+                    : buildLineGradient(ctx, lineColor, lineWidth)
+                ctx.fill()
             }
-            buildPath()
-            doRenderSpan(ctx, info.line, {
-                color: info.color,
-                downplayed: info.downplayed,
-                style: info.style,
-                styleId: info.styleId,
-                strokeTarget: 'base',
-                pathBuilder: buildPath
-            })
         }
     }
 
@@ -412,12 +533,13 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
      * 
      * 将样式相同的 span 聚集后批量渲染，减少 canvas 状态切换次数。
      * 
-     * 分组依据：(styleId, line.width, color, downplayed)
-     * 这四个参数决定了 strokeStyledLine 在 target='style' 时的全部视觉表现：
+     * 分组依据：(styleId, line.width, color, downplayed, gradientKey)
+     * 这五个参数决定了 strokeStyledLine 在 target='style' 时的全部视觉表现：
      * - styleId/style → lineStyle.layers 决定每层 lineWidth 倍率、opacity、strokeStyle、lineCap、dash、pattern
      * - line.width    → lineWidthBase，所有样式层宽度的计算基准
      * - color         → dynaColor，当 layer.colorMode === 'line' 时的线条颜色
      * - downplayed    → fixedColorConverter，当 layer.colorMode !== 'line' 时对固定颜色的淡化处理
+     * - gradientKey   → 支线渐变色（colorMode === 'line' 层的 dynaColor），不同渐变的 span 不能合并
      * 
      * 同组的 span 具有完全相同的 canvas 渲染状态，因此可以把它们的路径累积到同一条
      * path 中（linkPts 内部使用 moveTo 开始每个 span，不会互相干扰），然后只需
@@ -434,7 +556,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             if (!itsStyle) continue
 
             const lineWidth = info.line.width || 1
-            const key = `${itsStyle.id}|${lineWidth}|${info.color ?? ''}|${info.downplayed}`
+            const key = `${itsStyle.id}|${lineWidth}|${info.color ?? ''}|${info.downplayed}|${info.gradientKey}`
             const existing = groups.get(key)
             if (existing) {
                 existing.push(info)
@@ -458,18 +580,19 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 style: representative.style,
                 styleId: representative.styleId,
                 strokeTarget: 'style',
+                gradient: representative.gradient,
                 pathBuilder: buildPath
             })
         }
     }
 
     /** 
-     * 旧版渲染函数（整条线，目前仅用于 carpet 和选中点局部）
+     * 旧版渲染函数（整条线，目前仅用于简化模式、填充地形 carpet 和选中点局部）
      */
     function doRender(
         ctx:CvsContext, lineInfo:Line, enforceNoFill?:boolean,
         enforceLineWidth?:number, type?:LineRenderType, strokeTarget?:LineStrokeTarget,
-        pathBuilder?:()=>void
+        gradient?:LineGradientResolution, pathBuilder?:()=>void
     ){
         const drawCarpet = (!type || type==='both' || type==='carpet') && (lineInfo.carpet ?? cs.config.lineCarpet)
         const drawBody = !type || type==='both' || type==='body'
@@ -488,7 +611,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 ctx.globalAlpha = opacityOriginal
             }
             if(drawBody){
-                const lineColor = lineStateStore.getLineActualColor(lineInfo)
+                const lineColor = gradient ?? lineStateStore.getLineActualColor(lineInfo)
                 const lineDownplayed = lineStateStore.isLineDownplayed(lineInfo.id)
                 let styleId = lineInfo.style
                 if(styleId == -1 && lineInfo.parent){
@@ -518,7 +641,9 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 }else{
                     if(pathBuilder) pathBuilder()
                     ctx.lineWidth = lineWidth
-                    ctx.strokeStyle = lineColor
+                    ctx.strokeStyle = typeof lineColor === 'string'
+                        ? lineColor
+                        : buildLineGradient(ctx, lineColor, lineWidth)
                     ctx.stroke()
                 }
             }

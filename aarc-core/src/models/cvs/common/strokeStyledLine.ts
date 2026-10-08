@@ -2,6 +2,7 @@ import { LineStyle } from "aarc-core/models/save"
 import { CvsContext, isSvgCanvasContext } from "./cvsContext"
 import { usePatternStore } from "aarc-core/models/stores/patternStore"
 import { Coord } from "aarc-core/models/coord"
+import { buildLineGradient, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient"
 
 function isCvsContext(ctx: CanvasRenderingContext2D | CvsContext): ctx is CvsContext {
     return 'getUnderlyingCanvas' in ctx
@@ -18,7 +19,8 @@ export function strokeStyledLine(
         lineStyle?:LineStyle,
         lineWidthBase:number,
         baseCap:CanvasLineCap
-        dynaColor:string,
+        /** 线路本体色；支线渐变色时传入解析结果（pattern 层仍优先覆盖） */
+        dynaColor:string | LineGradientResolution,
         /** colorMode==='bg' 时的颜色来源，缺省按白色处理 */
         bgColor?:string,
         fixedColorConverter:(c:string)=>string,
@@ -26,12 +28,13 @@ export function strokeStyledLine(
     }){
     const { target, scale, offset, lineWidthBase, lineStyle, baseCap, dynaColor, bgColor, fixedColorConverter, pathBuilder } = options
     const needRebuildPath = pathBuilder && isCvsContext(ctx) && isSvgCanvasContext(ctx.getUnderlyingCanvas() as any)
+    const dynaStroke = typeof dynaColor === 'string' ? dynaColor : buildLineGradient(ctx, dynaColor, lineWidthBase)
     if(target != 'style' && !lineStyle?.noBase){
         // target 为 base 或 both 时，渲染线路本体
         if(needRebuildPath) pathBuilder()
         ctx.lineWidth = lineWidthBase
         ctx.globalAlpha = 1
-        ctx.strokeStyle = dynaColor
+        ctx.strokeStyle = dynaStroke
         ctx.setLineDash([])
         ctx.lineCap = baseCap
         ctx.stroke()
@@ -52,7 +55,7 @@ export function strokeStyledLine(
         ctx.globalAlpha = layer.opacity
         let color
         if(layer.colorMode === 'line')
-            color = dynaColor
+            color = dynaStroke
         else if(layer.colorMode === 'bg')
             // bgColor 未经上游淡化处理，须走 converter 使淡化对背景色层生效
             color = fixedColorConverter(bgColor ?? 'white')
@@ -79,9 +82,12 @@ export function strokeStyledLine(
             if(layer.pattern || layer.patternEmbedded){
                 let offsetForPattern = offset ?? [0, 0]
                 const patternStore = usePatternStore()
+                // pattern 优先于渐变色（见决策）；渐变作为 tint 时回退其主色
+                const tintColor = typeof color === 'string' ? color
+                    : (typeof dynaColor === 'string' ? 'white' : dynaColor.fromColor)
                 const patternBase = layer.patternEmbedded
-                    ? patternStore.getRenderedOf(layer.patternEmbedded, scale ?? 1, offsetForPattern, color, 1)
-                    : patternStore.getRendered(layer.pattern!, scale ?? 1, offsetForPattern, color, 1)
+                    ? patternStore.getRenderedOf(layer.patternEmbedded, scale ?? 1, offsetForPattern, tintColor, 1)
+                    : patternStore.getRendered(layer.pattern!, scale ?? 1, offsetForPattern, tintColor, 1)
                 if(patternBase){
                     const pattern = ctx.createPattern(patternBase, null)
                     if(pattern){

@@ -7,9 +7,11 @@ import { storeToRefs } from 'pinia';
 import { computed, CSSProperties, onMounted, ref, useTemplateRef, watch } from 'vue';
 import ColorPickerForLine from '../shared/ColorPickerForLine.vue';
 import ColorPickerForTerrain from '../shared/ColorPickerForTerrain.vue';
+import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { useLineStateStore } from 'aarc-core/models/stores/saveDerived/state/lineStateStore';
 import { useLineSpanStore } from 'aarc-core/models/stores/saveDerived/slice/lineSpanStore';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
+import { detectLineAttachEnd, attachesOfEnd, LINE_GRADIENT_AUTO_RANGE } from 'aarc-core/utils/lineUtils/lineGradient';
 
 
 const envStore = useEnvStore()
@@ -94,11 +96,141 @@ const haveChildren = computed(()=>{
 })
 const haveParent = computed(()=>!!props.line.parent)
 
+// 支线渐变色（gradient 存在即启用）
+const gradient = computed(()=>props.line.gradient)
+const gradientAttach = computed(()=>{
+    if(!props.line.gradient)
+        return undefined
+    return detectLineAttachEnd(props.line, save.value?.lines)
+})
+// 目标颜色三种模式：自动（null/null）/ 手动指定（targetColor）/ 指定线路（targetLine）
+const gradientTargetMode = computed(()=>{
+    const g = props.line.gradient
+    if(!g)
+        return 'auto'
+    if(g.targetLine != null)
+        return 'line'
+    if(g.targetColor != null)
+        return 'manual'
+    return 'auto'
+})
+/** 本线路两端"接着"的所有其他线路（指定线路模式的候选；同一端有多条时全部列出；排除 parent） */
+const gradientConnectedLines = computed(()=>{
+    const lines = save.value?.lines
+    if(!lines)
+        return []
+    const res: Line[] = []
+    for(const end of [0, 1] as const){
+        for(const l of attachesOfEnd(props.line, lines, end)){
+            if(l.id === props.line.parent || res.some(x => x.id === l.id))
+                continue
+            res.push(l)
+        }
+    }
+    return res
+})
+const gradientTargetLineId = computed<number|undefined>({
+    get: () => props.line.gradient?.targetLine ?? undefined,
+    set: (v) => {
+        const g = props.line.gradient
+        if(g)
+            g.targetLine = v ?? null
+    }
+})
+function setGradientTargetMode(mode: string){
+    const g = props.line.gradient
+    if(!g)
+        return
+    if(mode === 'manual'){
+        g.targetLine = null
+        g.targetColor = lineStateStore.getLineActualColor(props.line)
+    }
+    else if(mode === 'line'){
+        g.targetColor = null
+        const connected = gradientConnectedLines.value
+        if(g.targetLine == null || g.targetLine === props.line.parent
+            || !connected.some(x => x.id === g.targetLine))
+            g.targetLine = connected[0]?.id ?? null
+    }
+    else{
+        g.targetLine = null
+        g.targetColor = null
+    }
+}
+const gradientTargetColor = computed<string|undefined>({
+    get: () => props.line.gradient?.targetColor ?? undefined,
+    set: (v) => {
+        const g = props.line.gradient
+        if(g)
+            g.targetColor = v
+    }
+})
+function enableGradient(){
+    props.line.gradient = { range: [...LINE_GRADIENT_AUTO_RANGE] }
+}
+function disableGradient(){
+    if(window.confirm('确定要关闭本线路的渐变色吗？这会使设置丢失')){
+        props.line.gradient = undefined
+    }
+}
+function setGradientAngleMode(manual: boolean){
+    const g = props.line.gradient
+    if(!g)
+        return
+    g.angle = manual ? (g.angle ?? 0) : undefined
+}
+const gradientAngleDeg = computed({
+    get: () => {
+        const a = props.line.gradient?.angle
+        return a === undefined ? 0 : Math.round(a * 180 / Math.PI * 10) / 10
+    },
+    set: (v: number) => {
+        const g = props.line.gradient
+        if(g)
+            g.angle = v * Math.PI / 180
+    }
+})
+const gradientRangeFromPct = computed({
+    get: () => props.line.gradient?.range ? Math.round(props.line.gradient.range[0] * 100) : 25,
+    set: (v: number) => {
+        const g = props.line.gradient
+        if(!g)
+            return
+        const range = g.range ?? [...LINE_GRADIENT_AUTO_RANGE]
+        const pct = Math.min(100, Math.max(0, v))
+        const other = Math.round(range[1] * 100)
+        // 第一个必须 <= 第二个；不合法时交换两值
+        g.range = pct > other ? [other / 100, pct / 100] : [pct / 100, other / 100]
+    }
+})
+const gradientRangeToPct = computed({
+    get: () => props.line.gradient?.range ? Math.round(props.line.gradient.range[1] * 100) : 75,
+    set: (v: number) => {
+        const g = props.line.gradient
+        if(!g)
+            return
+        const range = g.range ?? [...LINE_GRADIENT_AUTO_RANGE]
+        const pct = Math.min(100, Math.max(0, v))
+        const other = Math.round(range[0] * 100)
+        // 第一个必须 <= 第二个；不合法时交换两值
+        g.range = pct < other ? [pct / 100, other / 100] : [other / 100, pct / 100]
+    }
+})
+let gradientReportTimer = 0
+watch(() => props.line.gradient, () => {
+    window.clearTimeout(gradientReportTimer)
+    gradientReportTimer = window.setTimeout(() => {
+        envStore.lineInfoChanged(props.line)
+    }, 500)
+}, { deep: true })
+
 const picker0 = useTemplateRef('picker0')
 const picker1 = useTemplateRef('picker1')
+const gradientPicker = useTemplateRef('gradientPicker')
 function closePickers(){
     picker0.value?.close()
     picker1.value?.close()
+    gradientPicker.value?.closePanel()
 }
 const pickerEntryStyles:CSSProperties = {
     width: '240px', height: '26px'
@@ -493,6 +625,78 @@ onMounted(()=>{
                 </button>
             </td>
         </tr>
+        <tr v-if="line.type===LineType.common">
+            <td>渐变</td>
+            <td>
+                <button v-if="!gradient" class="minor" @click="enableGradient">启用渐变色</button>
+                <button v-else class="minor" @click="disableGradient">关闭渐变色</button>
+            </td>
+        </tr>
+        <template v-if="gradient && line.type===LineType.common">
+        <tr>
+            <td>目标<br/>颜色</td>
+            <td>
+                <select :value="gradientTargetMode"
+                    @change="setGradientTargetMode(($event.target as HTMLSelectElement).value)">
+                    <option value="auto">自动</option>
+                    <option value="manual">手动指定</option>
+                    <option value="line">指定线路</option>
+                </select>
+                <div v-if="gradientTargetMode==='auto'">
+                    <div v-if="gradientAttach" class="smallNote">
+                        从末端所接线路获取：{{ gradientAttach.targetLine.name || '未命名线路' }}
+                    </div>
+                    <div v-if="gradientConnectedLines.length>1" class="smallNote">
+                        如效果不理想，请改用“指定线路”模式
+                    </div>
+                    <div v-if="gradientConnectedLines.length===0" class="smallNoteVital">
+                        请将本线路接到其他线路上<br>确保两者共享节点
+                    </div>
+                </div>
+                <div v-else-if="gradientTargetMode==='line'">
+                    <select v-if="gradientConnectedLines.length>0" v-model.number="gradientTargetLineId">
+                        <option v-for="x in gradientConnectedLines" :value="x.id">
+                            {{ x.name || '未命名线路' }}
+                        </option>
+                    </select>
+                    <div v-else class="smallNoteVital">
+                        请将本线路末端连接其他线路<br>确保两者共享节点
+                    </div>
+                </div>
+                <div v-else class="gradientPickerEntry">
+                    <AuColorPicker ref="gradientPicker" v-model="gradientTargetColor"
+                        :pos="-120" :entry-respond-delay="1" :panel-click-stop-propagation="true">
+                    </AuColorPicker>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td>渐变<br/>角度</td>
+            <td>
+                <select :value="gradient.angle===undefined ? 'auto' : 'manual'"
+                    @change="setGradientAngleMode(($event.target as HTMLSelectElement).value === 'manual')">
+                    <option value="auto">自动</option>
+                    <option value="manual">手动指定</option>
+                </select>
+                <div v-if="gradient.angle!==undefined" class="viewableRange">
+                    <input type="range" v-model.number="gradientAngleDeg" :min="-180" :max="180" :step="10"/>
+                    <div>{{ gradientAngleDeg }}°</div>
+                    <div class="smallNote">0=向右，逆时针为正</div>
+                </div>
+                <div v-else class="smallNote">沿两端点连线方向</div>
+            </td>
+        </tr>
+        <tr>
+            <td>渐变<br/>范围</td>
+            <td>
+                <div class="viewableRange">
+                    <input type="range" v-model.number="gradientRangeFromPct" :min="0" :max="100" :step="1"/>
+                    <input type="range" v-model.number="gradientRangeToPct" :min="0" :max="100" :step="1"/>
+                </div>
+                <div class="smallNote">{{ gradientRangeFromPct }}% → {{ gradientRangeToPct }}%（沿线百分比）</div>
+            </td>
+        </tr>
+        </template>
         <tr>
             <td>片段</td>
             <td>
@@ -531,6 +735,11 @@ onMounted(()=>{
         input:first-child{
             font-size: 18px;
         }
+    }
+}
+.gradientPickerEntry{
+    &:deep(.acp){
+        margin: auto;
     }
 }
 .sameZIndexLines{
