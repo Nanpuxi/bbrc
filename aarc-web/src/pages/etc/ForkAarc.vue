@@ -5,7 +5,8 @@ import { onMounted, ref } from 'vue';
 import Combinations from '../components/Combinations.vue';
 import SolutionsCompare from '../components/SolutionsCompare.vue';
 
-const gitUrl = 'https://gitee.com/au114514/aarc'
+const giteeUrl = 'https://gitee.com/au114514/aarc'
+const githubUrl = 'https://github.com/Aurouscia/aarc'
 const exampleUrl = 'http://aarc.maritel.jowei19.com'
 const exampleLogo = convertToProxyUrlIfNeeded('http://maritel.jowei19.com/maritelLogo.png', 'icon')
 
@@ -24,7 +25,8 @@ onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
                 如果你和你的创作团队需要一个自主可控且不被打扰的环境，可以 Fork 一份本项目代码，根据自己的需求和喜好随意修改它，并把它运行在自己的服务器上。
             </p>
             <div class="hero-actions">
-                <a class="btn primary" :href="gitUrl" target="_blank" rel="noopener">获取代码 / 部署指南</a>
+                <a class="btn primary" :href="giteeUrl" target="_blank" rel="noopener">Gitee 获取代码</a>
+                <a class="btn" :href="githubUrl" target="_blank" rel="noopener">Github 获取代码</a>
                 <a class="btn" :href="exampleUrl" target="_blank" rel="noopener">私服示范站点</a>
             </div>
         </header>
@@ -68,6 +70,13 @@ onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
                         <p class="card-sub">基于 AARC Fork 的私服实例</p>
                     </div>
                 </a>
+                <div class="card fork-card fork-placeholder">
+                    <span class="fork-placeholder-plus">+</span>
+                    <div class="fork-info">
+                        <h3 class="card-title">你的网站</h3>
+                        <p class="card-sub">要在此宣传你的网站，可联系本站管理员</p>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -88,5 +97,29 @@ onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
 a {
     color: cornflowerblue;
     text-decoration: underline;
+}
+
+.fork-placeholder {
+    border: 2px dashed #9ca3af;
+    color: #6b7280;
+    cursor: default;
+
+    &:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    .fork-placeholder-plus {
+        width: 56px;
+        height: 56px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: #9ca3af;
+        border: 2px dashed #d1d5db;
+        border-radius: 12px;
+    }
 }
 </style>

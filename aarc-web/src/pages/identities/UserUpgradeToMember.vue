@@ -5,7 +5,7 @@ import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { guideInfo } from 'aarc-core/app/guideInfo';
 import { useRouter, useRoute, RouterLink } from 'vue-router';
 import { computed } from 'vue';
-import { forkAarcName } from '@/pages/etc/routes/routesNames';
+import { clientDownloadName, forkAarcName } from '@/pages/etc/routes/routesNames';
 import { userUpgradeToMemberName } from './routes/routesNames';
 
 const api = useApiStore()
@@ -80,6 +80,9 @@ async function upgradeToMember() {
             <div class="rules">
                 <div class="rule">
                     ✅ 直接继续使用本站即可，无需任何转正操作
+                </div>
+                <div class="rule">
+                    或者：<RouterLink :to="{name:clientDownloadName}">前往下载本地运行版本</RouterLink>（Windows/安卓）
                 </div>
             </div>
         </template>
