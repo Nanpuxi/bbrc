@@ -14,6 +14,13 @@ export type MultiEditSyncScope = 'never'|'notGroupOnly'|'groupOnly'|'always'|und
 /** 同步时是否要求同伴该属性的当前值与编辑前旧值一致 */
 export type MultiEditSyncValue = 'sameValueOnly'|'always'
 /**
+ * 文本标签字体（textOp/textSOp）的同步范围：
+ * all=全部同步（不管 forId）；sameLine=仅同线路（forId 相等）；
+ * sameKind=仅同类（按 forId 是否存在分两类：线路标签与独立标签各自内部同步）；
+ * never=全部不同步
+ */
+export type MultiEditSyncFontScope = 'all'|'sameLine'|'sameKind'|'never'
+/**
  * 多选属性同步的逐键开关：键为 `pt:${属性名}` / `tag:${属性名}`。
  * 不在表中的属性默认允许同步；表内列出的默认 false（面板外入口或覆盖类操作，显式 opt-in）。
  */
@@ -65,6 +72,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const multiEditSyncValue = ref<MultiEditSyncValue>('sameValueOnly')
     //用户对 multiEditSyncKeyDefaults 中各键的显式选择；未设置的键回退到默认值
     const multiEditSyncKeys = ref<Record<string, boolean>>({})
+    const multiEditSyncFontScope = ref<MultiEditSyncFontScope>('sameKind')
     const cvsRenderResolutionRatio = ref<number>(2)
     const lineExtendSta = ref<ControlPointSta|undefined>(undefined)
     const textTagClickMode = ref<TextTagClickMode>('rect')
@@ -115,6 +123,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         multiEditSyncScope,
         multiEditSyncValue,
         multiEditSyncKeys,
+        multiEditSyncFontScope,
         cvsRenderResolutionRatio,
         lineExtendSta,
         textTagClickMode,

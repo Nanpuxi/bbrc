@@ -315,7 +315,7 @@ describe('useSelectionPropSync', () => {
         expect(saveStore.getPtById(2)!.sta).toBe(ControlPointSta.plain)
     })
 
-    it('TextTag 字体仅同步给 forId 一致的同伴，且写入为深拷贝', async () => {
+    it('字体同步范围=sameLine：仅同步给 forId 一致的同伴，且写入为深拷贝', async () => {
         const saveStore = setup(
             [],
             [
@@ -330,6 +330,7 @@ describe('useSelectionPropSync', () => {
         const lc = useEditorLocalConfigStore()
         lc.multiEditSyncScope = 'always'
         lc.multiEditSyncValue = 'always'
+        lc.multiEditSyncFontScope = 'sameLine'
 
         const editing = beginEditing<TextTag>(saveStore, 1)
         await flush()
@@ -347,6 +348,92 @@ describe('useSelectionPropSync', () => {
         expect(saveStore.getTextTagById(2)!.textOp!.color).toBe('#999999') // 联动但非共享引用
         saveStore.getTextTagById(2)!.textOp!.color = '#000000'
         expect(saveStore.getTextTagById(1)!.textOp!.color).toBe('#999999')
+    })
+
+    it('字体同步范围=sameKind（默认）：按 forId 是否存在分两类各自同步，跨类不同步', async () => {
+        const saveStore = setup(
+            [],
+            [
+                tag(1, { forId: 7, textOp: { size: 1, color: '#111111' } }),
+                tag(2, { forId: 8, textOp: { size: 1, color: '#111111' } }),
+                tag(3, { textOp: { size: 1, color: '#111111' } }),
+                tag(4, { textOp: { size: 1, color: '#111111' } }),
+            ])
+        const selectionStore = useSelectionStore()
+        for (const id of [1, 2, 3, 4])
+            selectionStore.selected.add(saveStore.getTextTagById(id)!)
+        const lc = useEditorLocalConfigStore()
+        lc.multiEditSyncScope = 'always'
+        lc.multiEditSyncValue = 'always'
+        expect(lc.multiEditSyncFontScope).toBe('sameKind') // 默认值
+
+        const editing = beginEditing<TextTag>(saveStore, 1)
+        await flush()
+        editing.value!.textOp!.size = 3
+        await flush()
+
+        expect(saveStore.getTextTagById(2)!.textOp!.size).toBe(3)   // 不同线路但同为线路标签
+        expect(saveStore.getTextTagById(3)!.textOp!.size).toBe(1)   // 独立标签：另一类
+        expect(saveStore.getTextTagById(4)!.textOp!.size).toBe(1)
+
+        // 反向：编辑独立标签，仅独立标签间同步
+        const editing2 = beginEditing<TextTag>(saveStore, 3)
+        await flush()
+        editing2.value!.textOp!.size = 5
+        await flush()
+        expect(saveStore.getTextTagById(4)!.textOp!.size).toBe(5)   // 同为独立标签
+        expect(saveStore.getTextTagById(1)!.textOp!.size).toBe(3)   // 线路标签：不受影响
+        expect(saveStore.getTextTagById(2)!.textOp!.size).toBe(3)
+    })
+
+    it('字体同步范围=all：不管 forId 全部同步', async () => {
+        const saveStore = setup(
+            [],
+            [
+                tag(1, { forId: 7, textOp: { size: 1, color: '#111111' } }),
+                tag(2, { forId: 8, textOp: { size: 1, color: '#111111' } }),
+                tag(3, { textOp: { size: 1, color: '#111111' } }),
+            ])
+        const selectionStore = useSelectionStore()
+        for (const id of [1, 2, 3])
+            selectionStore.selected.add(saveStore.getTextTagById(id)!)
+        const lc = useEditorLocalConfigStore()
+        lc.multiEditSyncScope = 'always'
+        lc.multiEditSyncValue = 'always'
+        lc.multiEditSyncFontScope = 'all'
+
+        const editing = beginEditing<TextTag>(saveStore, 1)
+        await flush()
+        editing.value!.textOp!.size = 3
+        await flush()
+
+        expect(saveStore.getTextTagById(2)!.textOp!.size).toBe(3)   // 不同线路也同步
+        expect(saveStore.getTextTagById(3)!.textOp!.size).toBe(3)   // 独立标签也同步
+    })
+
+    it('字体同步范围=never：字体键全部不同步，其余属性不受影响', async () => {
+        const saveStore = setup(
+            [],
+            [
+                tag(1, { forId: 7, textOp: { size: 1, color: '#111111' } }),
+                tag(2, { forId: 7, textOp: { size: 1, color: '#111111' }, width: 100 }),
+            ])
+        const selectionStore = useSelectionStore()
+        selectionStore.selected.add(saveStore.getTextTagById(1)!)
+        selectionStore.selected.add(saveStore.getTextTagById(2)!)
+        const lc = useEditorLocalConfigStore()
+        lc.multiEditSyncScope = 'always'
+        lc.multiEditSyncValue = 'always'
+        lc.multiEditSyncFontScope = 'never'
+
+        const editing = beginEditing<TextTag>(saveStore, 1)
+        await flush()
+        editing.value!.textOp!.size = 3
+        editing.value!.width = 200
+        await flush()
+
+        expect(saveStore.getTextTagById(2)!.textOp!.size).toBe(1)   // 同线路也不同步
+        expect(saveStore.getTextTagById(2)!.width).toBe(200)        // 非字体键仍正常同步
     })
 
     it('独立标签（forId 均为 undefined）之间字体可互相同步', async () => {

@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { useEditorLocalConfigStore, multiEditSyncKeyDefaults, multiEditSyncGroupDefaults } from 'aarc-core/app/localConfig/editorLocalConfig';
 
-const { multiEditSyncScope, multiEditSyncValue, multiEditSyncKeys } = storeToRefs(useEditorLocalConfigStore())
+const { multiEditSyncScope, multiEditSyncValue, multiEditSyncKeys, multiEditSyncFontScope } = storeToRefs(useEditorLocalConfigStore())
 //默认不同步的键（平铺项）
 const multiEditSyncKeyLabels: [string, string][] = [
     ['pt:dir', '点方向'],
@@ -88,6 +88,13 @@ function setSyncGroup(group: string, e: Event) {
             </label>
         </div>
     </template>
+    <div class="smallNote">文本标签字体同步范围</div>
+    <select v-model="multiEditSyncFontScope" :disabled="!multiEditSyncScope || multiEditSyncScope==='never'">
+        <option value="all">全部同步</option>
+        <option value="never">全部不同步</option>
+        <option value="sameLine">仅同线路同步</option>
+        <option value="sameKind">仅同类同步</option>
+    </select>
 </div>
 </template>
 

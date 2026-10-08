@@ -12,8 +12,9 @@ const clone = rfdc()
 //不做属性级同步的键：pos 的选区级同步由 draggingCommit 统一处理；
 //nameP 不在此列——它由属性组 pt:namePos 控制（组关闭即不同步），且拖动期间由 envStore 挂起同步
 const excludedKeys = ['pos']
-//仅允许 forId 一致的同伴间同步的键（字体体系随标签归属不同）
-const forIdScopedKeys = ['textOp', 'textSOp']
+//文本标签字体键：同步范围受 editorLocalConfig.multiEditSyncFontScope 约束
+//（all=不管 forId / sameLine=forId 相等 / sameKind=按 forId 是否存在分两类 / never=全部不同步）
+const fontScopedKeys = ['textOp', 'textSOp']
 /**
  * 嵌套对象逐字段同步注册表：值为扁平纯对象的顶层键。
  * 这些键仍作为整体受逐键开关（pt:nameCarpet 等）与 forId 限制约束，
@@ -154,16 +155,24 @@ export function useSelectionPropSync(anchor: Ref<SyncableTarget | undefined>) {
         }
     }
 
-    //遍历可同步的同伴（同类、非自身；forId 受限键还要求 forId 一致）
+    //遍历可同步的同伴（同类、非自身；字体键再按 multiEditSyncFontScope 过滤）
     function eachPeer(cur: SyncableTarget, key: string, fn: (peer: SyncableTarget, peerRec: Record<string, unknown>) => void) {
         for (const peer of selectionStore.selected) {
             if (peer === cur)
                 continue
             if (('dir' in peer) !== ('dir' in cur))
                 continue
-            if (forIdScopedKeys.includes(key)
-                && (('dir' in peer) || ('dir' in cur) || peer.forId !== cur.forId))
-                continue
+            if (fontScopedKeys.includes(key)) {
+                if (('dir' in peer) || ('dir' in cur))
+                    continue
+                const fontScope = editorLocalConfig.multiEditSyncFontScope
+                if (fontScope === 'never')
+                    continue
+                if (fontScope === 'sameLine' && peer.forId !== cur.forId)
+                    continue
+                if (fontScope === 'sameKind' && (peer.forId === undefined) !== (cur.forId === undefined))
+                    continue
+            }
             fn(peer, peer as unknown as Record<string, unknown>)
         }
     }

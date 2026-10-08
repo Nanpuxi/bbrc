@@ -19,6 +19,8 @@
 export type MultiEditSyncScope = 'never' | 'notGroupOnly' | 'groupOnly' | 'always' | undefined
 /** 同步时是否要求同伴该属性的当前值与编辑前旧值一致 */
 export type MultiEditSyncValue = 'sameValueOnly' | 'always'
+/** 文本标签字体（textOp/textSOp）的同步范围：all=全部同步；never=全部不同步；sameLine=仅同线路（forId 相等）；sameKind=仅同类（按 forId 是否存在分两类） */
+export type MultiEditSyncFontScope = 'all' | 'never' | 'sameLine' | 'sameKind'
 ```
 
 - `multiEditSyncScope`（默认 `undefined`，视同 `never`）：
@@ -30,6 +32,11 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
 - `multiEditSyncValue`（默认 `'sameValueOnly'`）：
   - `sameValueOnly`：仅当同伴该属性与编辑前旧值**深相等**时写入（保持"值相同的一批"联动、不打扰值不同的）。
   - `always`：无条件写入。
+- `multiEditSyncFontScope`（默认 `'sameKind'`）：仅作用于 TextTag 的字体键（`textOp`/`textSOp`）：
+  - `all`：全部同步，不管 `forId`。
+  - `never`：全部不同步——字体键完全不参与传播（其余属性不受影响）。
+  - `sameLine`：仅同线路——`forId` 相等的同伴间同步（独立标签之间可互相同步）。
+  - `sameKind`：仅同类——按 `forId` 是否存在分两类，线路标签（forId 存在，跨线路也算同类）与独立标签（forId 为 undefined）各自内部同步，跨类不同步。
 - **逐键开关** `multiEditSyncKeys: Record<string, boolean>`（键格式 `pt:${属性名}` / `tag:${属性名}`，带类型前缀避免点/标签同名属性冲突）：用户对 `multiEditSyncKeyDefaults` 表中属性的显式选择；未设置的键回退到默认值表，表外属性一律默认允许同步。默认关闭、需用户勾选开启的键：
   - `pt:dir` / `pt:sta` / `pt:free`——右键/Ctrl 点击切换，面板外入口，极易误触发广播
   - `pt:name` / `pt:nameS`、`tag:text` / `tag:textS`——文字内容同步=批量覆盖，危险操作 opt-in
@@ -39,7 +46,7 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
   - `pt:namePos`：`nameP`/`anchorX`/`anchorY`/`noLeader`/`nameAngle`——站名位置五元组，一同决定站名视觉效果
   - `nameP` 走**绝对值同步**（与组内其他键一致）：拖动站名时每帧的 nameP 直接广播给选区同伴（含原本无 nameP 的点，最终全部一致）；`pos` 仍为硬排除。历史上曾实现 delta 语义（`syncNamePDragDelta`），按用户要求改为绝对收敛后已移除
 
-设置 UI 挂在 `ToolBox.vue` 的"批量选择功能设置" `ConfigSection`（`MultiEditSyncConfig.vue`）：两个 `<select>` + scope 非 `never`/`undefined` 时显示默认关闭键的 checkbox 列表。scope 下拉底部有"未选择"选项（`:value="undefined"`，仅当当前值为 undefined 时渲染），选中即回到未选择态。
+设置 UI 挂在 `ToolBox.vue` 的"批量选择功能设置" `ConfigSection`（`MultiEditSyncConfig.vue`）：scope/value 两个 `<select>` + scope 非 `never`/`undefined` 时显示默认关闭键的 checkbox 列表，底部为文本标签字体同步范围 select（scope 为 `never`/未选择时禁用）。scope 下拉底部有"未选择"选项（`:value="undefined"`，仅当当前值为 undefined 时渲染），选中即回到未选择态。
 
 **首次引导弹窗**（`MultiEditSyncPrompt.vue`，由 `Cvs.vue` 引用）：`multiEditSyncScope === undefined` 时，监听 `selectionStore.brushStatus` 由 `down` 转 `up`（鼠标/手指松开、多选涂抹手势结束）且 `selected.size >= 2`，弹出 `Prompt`（无 bg-click-close、无 close-btn，只能点确认关闭）。弹窗内两个下拉框不含 undefined 选项，默认 `notGroupOnly` + `always`；确认后写入两项配置。
 
@@ -62,7 +69,7 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
 
 - **`pos` 一律不做属性级同步**（已决策 4）——拖动位移已由 `draggingCommit` 对全选区统一施加，再同步会双重叠加；`nameP` 不在此列，它由属性组 `pt:namePos` 的逐键开关控制（默认关闭），且拖动期间由 envStore 挂起同步。
 - **嵌套对象逐字段同步**（已决策 7）：`textOp`/`textSOp`（TextOptions）、`nameCarpet`（StaNameCarpetConfig）等值为扁平纯对象的键登记在 `nestedObjectSyncKeys`，逐字段 diff/比较/合并写入；新增嵌套对象属性时在注册表加一行即可纳入。整体移除（新值为 undefined）时回退整键写入。
-- **TextTag 的 `textOp` / `textSOp` 仅同步给 `forId` 一致的同伴**（已决策 1）：同线路（`forId` 相等）或同为独立标签（均 undefined）；字体体系不同不互相污染。
+- **TextTag 的 `textOp` / `textSOp` 同步范围可配置**（已决策 1，原为"仅 forId 一致的同伴"硬编码）：由 `multiEditSyncFontScope` 控制，默认 `sameKind`（按 forId 是否存在分两类各自同步，避免字体体系互相污染）；`sameLine` 退化为原硬编码行为；`all` 不做 forId 过滤；`never` 字体键全部不同步。
 - 线路名标签的文字颜色实际存于 line 上（`TextTagOptions.vue:179` 改的是 `editingForLine.tagTextColor`），不在 tag 自身，同步逻辑不涉及（已决策 2：跳过）。
 
 - `ControlPointOptions` 中 `anchorX/anchorY/noLeader`（undefined 参与的三态值）按顶层 key 处理；`pinyinConvertPreset` 纳入同步（已决策）。
@@ -90,9 +97,9 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
 
 | 文件 | 改动 |
 |---|---|
-| `src/app/localConfig/editorLocalConfig.ts` | 新增 `MultiEditSyncScope`/`MultiEditSyncValue` 类型与两个 ref、`multiEditSyncKeys` 逐键开关 ref 与 `multiEditSyncKeyDefaults` 默认值表，导出 |
+| `src/app/localConfig/editorLocalConfig.ts` | 新增 `MultiEditSyncScope`/`MultiEditSyncValue`/`MultiEditSyncFontScope` 类型与对应 ref、`multiEditSyncKeys` 逐键开关 ref 与 `multiEditSyncKeyDefaults` 默认值表，导出 |
 | `src/components/sidebars/ToolBox.vue` | "批量选择功能设置"里挂 `MultiEditSyncConfig` 组件 |
-| `src/components/sidebars/configs/MultiEditSyncConfig.vue` | 多选属性同步设置（scope/value 两个 select + 逐键 checkbox + 派生状态的属性组树），自 ToolBox 拆出 |
+| `src/components/sidebars/configs/MultiEditSyncConfig.vue` | 多选属性同步设置（scope/value 两个 select + 逐键 checkbox + 派生状态的属性组树 + 底部字体同步范围 select），自 ToolBox 拆出 |
 | `src/components/MultiEditSyncPrompt.vue` | 首次多选后的同步策略引导弹窗（watch brushStatus 触发，自 Cvs 拆出） |
 | `src/models/stores/utils/selectionPropSync.ts` | 组合式函数：快照 + deep watch diff + 按配置/逐键开关传播；锚点由调用方指定，flush=sync；含 `suspendSelectionPropSync`（供 startEditing 补默认值挂起） |
 | `src/models/stores/envStore.ts` | setup 期接入一次：`useSelectionPropSync(computed(() => activePt ?? activeTextTag))` |
@@ -111,7 +118,7 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
 - `groupOnly`：与 `notGroupOnly` 相反，仅选区恰为选区组时同步。
 - `sameValueOnly`：同伴值相同被写、不同不被写；嵌套对象键（textOp/nameCarpet）逐字段比较、合并写入不共享引用，只调字号不改同伴颜色。
 - `pos` 变更不传播；`nameP` 由属性组 `pt:namePos` 控制（组默认关闭，且拖动期间挂起）。
-- TextTag：`forId` 不同的同伴不被写入 textOp/textSOp。
+- TextTag：字体同步范围四档均生效——`never` 全部不同步；`sameLine` 仅 forId 一致；`sameKind`（默认）按 forId 是否存在分两类各自同步、跨类不同步；`all` 全部同步。
 - 属性组 `pt:namePos`：默认关闭不同步，开启后整组联动；拖动挂起期的 nameP 不同步、手输同步。
 - `startEditing` 初始化（补默认值）不触发传播。
 - 协作相关：传播产生的同伴变更与编辑者变更在同一个 capture 边界内（mock 渲染钩子断言一次 op）。
@@ -119,7 +126,7 @@ export type MultiEditSyncValue = 'sameValueOnly' | 'always'
 
 ## 7. 已决策记录
 
-1. TextTag 字体类属性（textOp/textSOp）仅 `forId` 一致的同伴间同步。
+1. TextTag 字体类属性（textOp/textSOp）同步范围可配置（`multiEditSyncFontScope`，2026-12 由"仅 forId 一致的同伴间同步"的硬编码改为配置项）：`all`=全部同步、`never`=全部不同步、`sameLine`=仅同线路（forId 相等，原硬编码行为）、`sameKind`=仅同类（按 forId 是否存在分两类），默认 `sameKind`。
 2. 线路级 `tagTextColor`（存在 line 上）不涉及本次同步。
 3. 配置一最初中间档为 `notGroupOnly`（非选区组时同步），判据为 `matchedSelectionGroup === undefined`；后追加其反向档 `groupOnly`（仅选区组时同步），四档并存。
 4. `pos` 作为特例排除，不做属性级同步（拖动已有选区级位移）。
