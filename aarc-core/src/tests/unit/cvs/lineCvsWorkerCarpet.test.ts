@@ -13,19 +13,22 @@ import { Save } from 'aarc-core/models/save'
 ensureDomStub()
 
 interface StrokeRec { strokeStyle: string, lineCap: string, lineWidth: number, hadArc: boolean }
+interface FillRec { fillStyle: string, x: number, y: number, radius: number }
 
-/** 记录每次 stroke 时的样式与"自 beginPath 以来是否走过圆弧"的 ctx2d 桩 */
+/** 记录每次 stroke 时的样式与"自 beginPath 以来是否走过圆弧"、每次 fill 的样式与圆几何的 ctx2d 桩 */
 function createRecordingCtx() {
     const strokes: StrokeRec[] = []
+    const fills: FillRec[] = []
     let hadArc = false
+    let lastArc: number[] = []
     const ctx2d = {
         canvas: { width: 1000, height: 1000 },
         beginPath: () => { hadArc = false },
         closePath: () => {},
         moveTo: () => {}, lineTo: () => {},
-        arc: () => { hadArc = true },
+        arc: (...args: number[]) => { hadArc = true; lastArc = args },
         stroke: () => { strokes.push({ strokeStyle: ctx2d.strokeStyle, lineCap: ctx2d.lineCap, lineWidth: ctx2d.lineWidth, hadArc }) },
-        fill: () => {},
+        fill: () => { fills.push({ fillStyle: ctx2d.fillStyle, x: lastArc[0], y: lastArc[1], radius: lastArc[2] }) },
         strokeRect: () => {}, fillRect: () => {},
         strokeText: () => {}, fillText: () => {},
         measureText: () => ({ width: 0, actualBoundingBoxAscent: 0, actualBoundingBoxDescent: 0 }),
@@ -37,7 +40,7 @@ function createRecordingCtx() {
         textBaseline: '', textAlign: '', font: ''
     }
     const ctx = new CvsContext(new CvsBlock(1, 0, 0, ctx2d as unknown as Cvs2dContext))
-    return { ctx, strokes }
+    return { ctx, strokes, fills }
 }
 
 /** 使 blockTotalBoundary 覆盖整个画布，线路不会被 omit 判定驱逐 */
@@ -74,23 +77,24 @@ describe('carpet 按 span 拆分渲染（与本体接缝对齐）', () => {
         setupFullViewBlocks()
     })
 
-    it('无 slice：carpet 仍为一笔整线，拐角处含圆弧', () => {
+    it('无 slice：carpet 仍为一笔整线，拐角处含圆弧，无缝补圆', () => {
         useSaveStore().save = makeLShapedSave(false)
         const bg = useConfigStore().config.bgColor
-        const { ctx, strokes } = createRecordingCtx()
+        const { ctx, strokes, fills } = createRecordingCtx()
 
         useLineCvsWorker().renderAllLines(ctx)
 
         const carpets = strokes.filter(s => s.strokeStyle === bg)
         expect(carpets).toHaveLength(1)
         expect(carpets[0].hadArc).toBe(true)
+        expect(fills).toHaveLength(0)
     })
 
-    it('slice 接缝在拐角处：carpet 按 span 拆分、无圆弧、cap 与本体 base 一致', () => {
+    it('slice 接缝在拐角处：carpet 按 span 拆分、无圆弧、cap 与本体 base 一致，接缝补圆', () => {
         useSaveStore().save = makeLShapedSave(true)
         const cs = useConfigStore()
         const bg = cs.config.bgColor
-        const { ctx, strokes } = createRecordingCtx()
+        const { ctx, strokes, fills } = createRecordingCtx()
 
         useLineCvsWorker().renderAllLines(ctx)
 
@@ -111,5 +115,18 @@ describe('carpet 按 span 拆分渲染（与本体接缝对齐）', () => {
         expect(bodies).toHaveLength(2)
         for (const b of bodies)
             expect(b.lineCap).toBe('butt')
+
+        // 断笔折角外侧有楔形缺口：carpet 与本体都在接缝点 B(100,0) 补圆盘
+        const carpetFills = fills.filter(f => f.fillStyle === bg)
+        expect(carpetFills).toHaveLength(1)
+        expect(carpetFills[0].x).toBeCloseTo(100)
+        expect(carpetFills[0].y).toBeCloseTo(0)
+        expect(carpetFills[0].radius).toBeCloseTo(carpetWidth / 2)
+
+        const bodyFills = fills.filter(f => f.fillStyle !== bg)
+        expect(bodyFills).toHaveLength(1)
+        expect(bodyFills[0].x).toBeCloseTo(100)
+        expect(bodyFills[0].y).toBeCloseTo(0)
+        expect(bodyFills[0].radius).toBeCloseTo(cs.config.lineWidth / 2)
     })
 })
