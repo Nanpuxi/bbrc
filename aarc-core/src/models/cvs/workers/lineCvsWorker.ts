@@ -207,6 +207,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         }
 
         const includeCarpet = !rtype || rtype == 'carpet' || rtype == 'both'
+        const includeBody = !rtype || rtype == 'body' || rtype == 'both'
 
         // 简化模式：无视样式和分段，整线统一绘制
         if(editorLocalConfigStore.ignoreStyleAndSpan || lineShouldSimplify()){
@@ -225,29 +226,39 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             return
         }
 
-        // 1. Carpet 保持整线绘制
-        if(includeCarpet){
-            for(let i=0;i<line.length;i++){
-                const l = line[i]
-                const formalPts = formalPtsOfLines[i]
-                const buildPath = () => {
-                    ctx.beginPath()
-                    linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
-                }
-                buildPath()
-                doRender(ctx, l, undefined, undefined, 'carpet', undefined, undefined, buildPath)
-            }
-        }
-
-        // 2. Body 按 span 拆分渲染
-        // 收集所有 line（含 children）的所有 spans，然后统一先画 base 再画 style
-        // 这样可以避免不同 line 之间的 base/style 覆盖问题（如支线分叉处）
-        const includeBody = !rtype || rtype == 'body' || rtype == 'both'
-        if(includeBody){
-            const allSpanInfos: SpanRenderInfo[] = []
+        // 收集所有 line（含 children）的所有 spans，carpet 与 body 共用同一份
+        // （carpet 也按 span 拆分绘制，保证切片接缝处与本体几何一致）
+        const allSpanInfos: SpanRenderInfo[] = []
+        if(includeCarpet || includeBody){
             for(let i=0;i<line.length;i++){
                 allSpanInfos.push(...formalizedLineStore.collectSpanRenderInfos(line[i], undefined, formalPtsOfLines[i]))
             }
+        }
+
+        // 1. Carpet 按 span 拆分绘制（span 几何与本体一致，cap 也取本体 base 层的
+        //    lineCapWithDefault），使切片接缝落在拐角处时 carpet 与本体形成相同折角，
+        //    而不是整线绘制时的圆角
+        if(includeCarpet){
+            for(let i=0;i<line.length;i++){
+                const l = line[i]
+                if(l.isFilled && l.type===LineType.terrain){
+                    // 填充地形本体是 fill，无 span 接缝问题：carpet 维持整线描边
+                    const formalPts = formalPtsOfLines[i]
+                    const buildPath = () => {
+                        ctx.beginPath()
+                        linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
+                    }
+                    buildPath()
+                    doRender(ctx, l, undefined, undefined, 'carpet', undefined, undefined, buildPath)
+                }
+            }
+            renderCarpetSpans(ctx, allSpanInfos.filter(info =>
+                !(info.line.isFilled && info.line.type===LineType.terrain)))
+        }
+
+        // 2. Body 按 span 拆分渲染
+        // 统一先画 base 再画 style，避免不同 line 之间的 base/style 覆盖问题（如支线分叉处）
+        if(includeBody){
             renderAllSpansBase(ctx, allSpanInfos)
             renderAllSpansStyle(ctx, allSpanInfos)
         }
@@ -396,6 +407,34 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
 
 
     /**
+     * 按 span 拆分绘制 carpet（与本体共用同一份 span 切分）：
+     * span 内部拐角照旧为圆弧；span 两端 cap 取与本体 base 层相同的 lineCapWithDefault，
+     * 使切片接缝落在拐角处时 carpet 与本体形成相同的折角，而不是整线绘制时的圆角
+     */
+    function renderCarpetSpans(ctx: CvsContext, infos: SpanRenderInfo[]) {
+        for (const info of infos) {
+            const l = info.line
+            if (!(l.carpet ?? cs.config.lineCarpet))
+                continue
+            const buildPath = () => {
+                ctx.beginPath()
+                linkPts(ctx, info.formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
+            }
+            buildPath()
+            const carpetWiden = l.carpetWidth ?? cs.config.lineCarpetWiden
+            const lineWidth = cs.config.lineWidth * (l.width || 1)
+            ctx.lineJoin = 'round'
+            ctx.lineCap = lineCapWithDefault(l)
+            ctx.lineWidth = lineWidth + carpetWiden
+            ctx.strokeStyle = cs.config.bgColor
+            const opacityOriginal = ctx.globalAlpha || 1
+            ctx.globalAlpha = opacityOriginal * (l.carpetOpacity ?? cs.config.lineCarpetOpacity ?? 1)
+            ctx.stroke()
+            ctx.globalAlpha = opacityOriginal
+        }
+    }
+
+    /**
      * 统一绘制所有 span 的 base（新版渲染函数的包装器）
      */
     function renderAllSpansBase(ctx: CvsContext, infos: SpanRenderInfo[]) {
@@ -476,7 +515,7 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
     }
 
     /** 
-     * 旧版渲染函数（整条线，目前仅用于 carpet 和选中点局部）
+     * 旧版渲染函数（整条线，目前仅用于简化模式、填充地形 carpet 和选中点局部）
      */
     function doRender(
         ctx:CvsContext, lineInfo:Line, enforceNoFill?:boolean,
