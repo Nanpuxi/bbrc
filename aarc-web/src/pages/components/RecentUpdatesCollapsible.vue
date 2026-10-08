@@ -50,6 +50,8 @@ onBeforeUnmount(() => {
     flex-direction: column;
     align-items: center;
     gap: 4px;
+    max-width: 700px;
+    margin: auto;
 }
 .clamp{
     position: relative;
@@ -69,13 +71,7 @@ onBeforeUnmount(() => {
     pointer-events: none;
 }
 .expandBtn{
-    margin: 8px auto 0;
-    padding: 6px 20px;
     border: none;
-    border-radius: 999px;
-    color: #fff;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
     cursor: pointer;
 }
 </style>

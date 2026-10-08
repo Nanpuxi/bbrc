@@ -136,7 +136,7 @@ export const devSave:Save = {
             id: 34,
             pos: [1050, 900],
             dir: ControlPointDir.vertical,
-            sta: ControlPointSta.sta,
+            sta: ControlPointSta.plain,
             name: '东南新城',
             nameS: 'S.E. New Town',
             nameP: [0, 20],

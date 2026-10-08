@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useApiStore } from '@/app/com/apiStore';
-import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
 import type { CSSProperties } from 'vue';
 import { useSavesRoutesJump } from '../saves/routes/routesJump';
 import { SaveDto, UserFavoriteType } from '@/app/com/apiGenerated';
@@ -23,12 +23,32 @@ const FAVORITE_TAKE = 30
 
 const isFavoriteMode = computed(() => !props.forAuditor && saveListLocalConfig.newestSavesSource === 'favorite')
 const needLogin = ref(false)
+/** 状态指示器与下拉框默认收起，点击“设置此处显示”后展开 */
+const configRowVisible = ref(false)
 
 const list = ref<SaveDto[]>([])
 const firstItemMargin = ref(0)
 const firstItemTransition = ref('none')
 const newestSavesRef = useTemplateRef('newestSavesRef')
 const isAutoRefreshingNow = ref(true)
+
+/** 滚动位置：不在最左/最右端时，对应侧显示阴影提示可继续滚动 */
+const scrolledFromLeft = ref(false)
+const scrolledFromRight = ref(false)
+function updateScrollEdges(){
+    const el = newestSavesRef.value
+    if(!el){
+        scrolledFromLeft.value = false
+        scrolledFromRight.value = false
+        return
+    }
+    scrolledFromLeft.value = el.scrollLeft > 1
+    scrolledFromRight.value = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+}
+function onListScroll(){
+    updateAutoRefreshStatus()
+    updateScrollEdges()
+}
 
 function updateAutoRefreshStatus(){
     const mode = saveListLocalConfig.autoRefreshNewest
@@ -133,6 +153,7 @@ const loaded = ref(false)
 
 onMounted(async()=>{
     await load()
+    window.addEventListener('resize', updateScrollEdges)
     timer = setInterval(() => {
         now.value = Date.now()
     }, 1000)
@@ -160,7 +181,13 @@ watch(isFavoriteMode, () => {
     load()
 })
 
+watch(list, async () => {
+    await nextTick()
+    updateScrollEdges()
+})
+
 onUnmounted(()=>{
+    window.removeEventListener('resize', updateScrollEdges)
     if(timer){
         clearInterval(timer)
         timer = null
@@ -176,6 +203,8 @@ onUnmounted(()=>{
 <template>
 <div v-if="loaded">
     <div class="autoRefreshRow">
+        <button v-if="!configRowVisible" class="lite configToggle" @click="configRowVisible = true">设置此处显示</button>
+        <template v-else>
         <template v-if="allowAutoRefresh">
             <div class="statusDot" :class="{ active: isAutoRefreshingNow }"></div>
             <label>
@@ -192,21 +221,28 @@ onUnmounted(()=>{
                 <option value="favorite">我的收藏</option>
             </select>
         </label>
+        </template>
     </div>
     <div v-if="needLogin" class="favoriteTip">
         登录后可查看收藏的存档，<RouterLink :to="{ name: loginName }">去登录</RouterLink>
     </div>
     <div v-else-if="isFavoriteMode && list.length === 0" class="favoriteTip">还没有收藏的存档</div>
-    <div v-else ref="newestSavesRef" class="newestSaves" :style="{ gap: ITEM_GAP + 'px' }" @scroll="updateAutoRefreshStatus">
+    <div
+        v-else
+        class="scrollShadowWrap"
+        :class="{ fromLeft: scrolledFromLeft, fromRight: scrolledFromRight }"
+    >
+    <div ref="newestSavesRef" class="newestSaves" :style="{ gap: ITEM_GAP + 'px' }" @scroll="onListScroll">
     <div v-for="item in listWithStyle" :key="item.s.id"
         :style="item.style">
         <SaveAvatar :s="item.s" :size="120"></SaveAvatar>
         <div class="cvsName">{{ item.s.name }}</div>
         <div class="cvsData">{{ item.s.lineCount }}线 {{ item.s.staCount }}站</div>
         <RouterLink :to="someonesSavesRoute(item.s.ownerUserId||0)" class="cvsOwner">
-            {{ item.s.ownerName }}
+            —{{ item.s.ownerName }}—
         </RouterLink>
         <div class="cvsData">{{ lastActiveFromNow(item.s.lastActiveUnix) }}</div>
+    </div>
     </div>
     </div>
 </div>
@@ -229,6 +265,10 @@ onUnmounted(()=>{
     align-items: center;
     align-items: center;
     gap: 6px;
+    min-height: 24px;
+    .configToggle{
+        font-size: 12px;
+    }
     .statusDot{
         width: 10px;
         height: 10px;
@@ -243,6 +283,34 @@ onUnmounted(()=>{
         font-size: 14px;
         padding: 2px 4px;
         margin: 0px;
+    }
+}
+.scrollShadowWrap{
+    position: relative;
+    &::before, &::after{
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 14px;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+    &::before{
+        left: 0;
+        background: linear-gradient(to right, rgba(0, 0, 0, 0.18), transparent);
+    }
+    &::after{
+        right: 0;
+        background: linear-gradient(to left, rgba(0, 0, 0, 0.18), transparent);
+    }
+    &.fromLeft::before{
+        opacity: 1;
+    }
+    &.fromRight::after{
+        opacity: 1;
     }
 }
 .newestSaves{
@@ -272,10 +340,6 @@ onUnmounted(()=>{
             color: #666;
         }
         .cvsOwner{
-            padding: 3px;
-            border-radius: 5px;
-            background-color: #666;
-            color: white;
             min-width: 80px;
             text-align: center;
             font-weight: bold;

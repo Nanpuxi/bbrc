@@ -11,15 +11,22 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useHomePageLocalConfigStore } from '@/app/localConfig/homePageLocalConfig';
 import { userUpgradeToMemberName } from '../identities/routes/routesNames';
+//import GiteeGitInfo from '@/components/common/GiteeGitInfo.vue';
 
 const { setEnteredFrom } = useEnteredCanvasFromStore()
 const userInfoStore = useUserInfoStore()
-const { upgradeGuideDisplay, coopRulesDisplay } = storeToRefs(useHomePageLocalConfigStore())
+const homePageLocalConfig = useHomePageLocalConfigStore()
+const { upgradeGuideDisplay } = storeToRefs(homePageLocalConfig)
+
+/** hero 轮播自动滚完一轮后 1 小时内不再播放，直接静态显示最后一张 */
+const HERO_REPLAY_INTERVAL_MS = 60 * 60 * 1000
+const heroDone = homePageLocalConfig.heroAutoPlayedAt > 0
+    && Date.now() - homePageLocalConfig.heroAutoPlayedAt < HERO_REPLAY_INTERVAL_MS
 
 const heroSlides = [
-    { big: '共享', small: '团队协作，无限可能，可追踪可审计', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { big: '开放', small: '完全开源，自主可控，随心 fork 定制', gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
-    { big: '永久免费', small: '过去免费，现在免费，未来也免费，不设会员升级', gradient: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' },
+    { big: '共享', small: '共同创作，无限可能，可追踪可审计', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+    { big: '开放', small: '完全开源，自主可控，不受捆绑约束', gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
+    { big: '永久免费', small: '过去免费，现在免费，未来也免费，不设付费解锁', gradient: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' },
     { big: 'AARC', small: '方便快捷的线路图绘制工具', gradient: 'linear-gradient(135deg, #141e30 0%, #4b6cb7 100%)' },
 ]
 
@@ -40,17 +47,15 @@ const tutorialGroups: TutorialGroup[] = [
     {
         name: '基础教程',
         cards: [
-            { title: '快速上手', desc: '打开编辑器，五分钟画出第一条线路', emoji: '🚀', href: '/#/Editor/demo' },
-            { title: '使用说明', desc: '完整的图文功能说明', emoji: '📖', href: 'http://aarc.jowei19.com/#/Editor/188?viewOnly=1', external: true },
-            { title: '常见问题', desc: '遇到问题？先看这里', emoji: '❓', href: '/#/FAQ' },
+            { title: '控制线路走向', desc: '了解本工具的“区间矫正”机制', emoji: '📖', href: 'http://aarc.jowei19.com/#/Editor/188?viewOnly=1', external: true },
+            { title: '快速试用', desc: '在沙盒中尝试各种功能', emoji: '🚀', href: '/#/Editor/demo', external: true },
         ]
     },
     {
         name: '最新功能',
         cards: [
-            { title: '多人协作', desc: '与团队成员同时编辑同一张图', emoji: '👥', href: 'http://aarc.jowei19.com/#/Editor/188?viewOnly=1', external: true },
-            { title: '本地运行版', desc: '离线使用，数据存储在自己的设备上', emoji: '💾', href: '/#/client-download' },
-            { title: '开私服', desc: '部署属于你自己的 AARC 实例', emoji: '🛠️', href: '/#/fork-aarc' },
+            { title: '渐变色区间', desc: '可实现跨线车效果', emoji: '🎨', href: 'https://aarc.jowei19.com/#/Editor/a9QWM', image: '/demo-gradient.png', external: true },
+            { title: '自由角度区间', desc: '可实现非45度角的特色效果', emoji: '📐', href: 'https://aarc.jowei19.com/#/Editor/54696', image: '/demo-free.png', external: true },
         ]
     },
 ]
@@ -68,18 +73,21 @@ interface MoreSection {
 }
 const moreSections: MoreSection[] = [
     {
-        title: '协作功能',
+        title: '共同创作',
         emoji: '🤝',
         paras: [
-            '可多人同时编辑同一线路图：一人画线、一人排站、一人校订，分工协作互不等待。所有改动实时同步给房间内的每个人，并完整留痕——谁在什么时间改了什么，可追踪、可审计，出现分歧可以回溯每一处变更的来源。',
-            '组件自己的创作团队：在存档明显位置留下你们的 QQ 群号，把线路图变成团队的共同作品，而不只是一个人的草稿。',
+            '允许他人编辑：询问你好友的用户名，在存档的“信息设置-打开权限设置栏”添加他的名字，即可让其进入编辑。',
+            '组件自己的创作团队：在存档明显位置留下你们的 QQ 群号和创作规范，把线路图变成团队的共同作品。',
+            '有人搞破坏？前往存档的访客编辑记录页，查到始作俑者，然后取用自动备份轻松恢复到破坏前的原状。'
         ]
     },
     {
         title: '本地运行',
         emoji: '💾',
         paras: [
-            '如果对在线服务的稳定性或数据托管不放心，可以下载本地运行版：完全离线使用，线路图数据存储在自己的设备上，不经任何服务器；版本更新由你自主决定，不存在"强制升级后才能继续使用"。',
+            '如果对在线服务的稳定性或数据托管不放心，可以下载本地运行版。',
+            '完全离线使用，线路图数据存储在自己的设备上，不经任何服务器。',
+            '版本更新由你自主决定，不存在“强制更新”约束。',
         ],
         links: [
             { text: '前往本地运行版下载页', href: '/#/client-download' },
@@ -89,8 +97,8 @@ const moreSections: MoreSection[] = [
         title: '软件自由',
         emoji: '🕊️',
         paras: [
-            '软件自由意味着你对软件有完整的控制权：不会被账号体系、订阅制或平台政策捆绑，你使用本工具的权利任何人无法剥夺——因为源代码完全公开，运行什么样的服务、改成什么样子，都由你决定。',
-            '例如，如果你对官方站的某项政策不满，可以自行部署一个实例、迁移全部数据并继续创作，而不是被迫接受或放弃积累已久的作品。',
+            '软件自由意味着你对软件有完整的控制权：不会被账号体系、订阅制或平台政策捆绑，你使用本工具的权利任何人无法剥夺——因为源代码完全公开，运行什么样的服务、改成什么样子，都可由你的团队决定。',
+            '例如，如果你对官方站的某项政策不满，可以自行部署一个实例、迁移整个团队的全部数据并继续创作，而不是被迫接受或放弃积累已久的作品。',
         ],
         links: [
             { text: '了解如何开私服', href: '/#/fork-aarc' },
@@ -102,14 +110,17 @@ const moreSections: MoreSection[] = [
         emoji: '🧩',
         paras: [
             '本应用的"网站部分"与"编辑器部分"是解耦的：编辑器是独立的 aarc-core 包，不依赖站点的任何功能。',
-            '你可以把编辑器部分单独取出，嵌入自己另外开发的网站或本地应用中，或者与其他工具组成工具集。',
+            '可以把编辑器部分嵌入自己另外开发的网站或本地应用中，或者与其他工具组成工具集。',
+        ],
+        links: [
+            { text: '获取代码', href: '/#/fork-aarc' },
         ]
     },
     {
         title: '永久免费',
-        emoji: '🆓',
+        emoji: '💴',
         paras: [
-            '本应用为公益性项目，承诺永久开源免费：过去免费，现在免费，未来也免费。不管后期添加多少功能，永不以任何形式收取任何费用，不设会员、不设付费解锁。',
+            '本应用为公益性项目，承诺永久开源免费。不管后期添加多少功能，永不以任何形式收取任何费用，不设会员、不设付费解锁。',
         ]
     },
 ]
@@ -123,7 +134,15 @@ onMounted(()=>{
 <template>
 <div class="home-official">
     <div class="hero">
-        <Carousel :count="heroSlides.length" :auto-play="true" :auto-interval-ms="2000" :fade="true">
+        <Carousel
+            :count="heroSlides.length"
+            :auto-play="!heroDone"
+            :initial-index="heroDone ? heroSlides.length - 1 : 0"
+            :auto-interval-ms="2000"
+            :fade="true"
+            :show-dots="false"
+            @auto-done="homePageLocalConfig.heroAutoPlayedAt = Date.now()"
+        >
             <template #default="{ index }">
                 <div class="heroCard">
                     <div class="heroBig" :style="{ backgroundImage: heroSlides[index].gradient }">{{ heroSlides[index].big }}</div>
@@ -144,22 +163,6 @@ onMounted(()=>{
             <div v-if="upgradeGuideDisplay" class="upgradeBody">
                 绑定邮箱即可免费转为正式用户，无需加群审核：公开展示你的作品，使用多人协作功能。
                 <RouterLink :to="{name:userUpgradeToMemberName}" class="upgradeLink">立即转正</RouterLink>
-            </div>
-        </div>
-    </div>
-    <div v-else class="marginedSection">
-        <div class="coopRules">
-            <div class="coopRulesHead">
-                <span class="coopRulesTitle">创作规范</span>
-                <button class="lite" @click="coopRulesDisplay=!coopRulesDisplay">
-                    {{ coopRulesDisplay ? '收起▲' : '展开▼' }}
-                </button>
-            </div>
-            <div v-if="coopRulesDisplay" class="coopRulesBody">
-                ✅ 推荐：存档明显位置展示你建的QQ群号，让协作者在QQ群讨论发展方向/团队规定<br/>
-                ✅ 可以：在存档中添加与存档发展有关的留言<br/>
-                ❌ 请不要：把存档当聊天室/贴吧/论坛使用<br/>
-                ❓如有疑问请咨询QQ交流群群主
             </div>
         </div>
     </div>
@@ -221,6 +224,10 @@ onMounted(()=>{
     <div class="marginedSection">
         <DonorList></DonorList>
     </div>
+
+    <!-- <div class="marginedSection gitInfoOuter">
+        <GiteeGitInfo></GiteeGitInfo>
+    </div> -->
 </div>
 </template>
 
@@ -231,7 +238,7 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
     padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 }
 .marginedSection{
-    margin: 16px 0px;
+    margin: 30px auto;
     .userTypeNote{
         text-align: center;
         color: palevioletred;
@@ -326,6 +333,7 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
 }
 
 .tutorials{
+    max-width: 700px;
     .tutorialGroup{
         margin-bottom: 24px;
     }
@@ -343,7 +351,7 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
             width: 4px;
             height: 18px;
             border-radius: 2px;
-            background: linear-gradient(180deg, #667eea, #764ba2);
+            background: #2c3142;
         }
     }
     .tutorialGrid{
@@ -407,16 +415,19 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
 }
 
 .moreSections{
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 700px;
+    margin: 60px auto;
     display: flex;
     flex-direction: column;
     gap: 16px;
     .moreSection{
         padding: 4px 2px;
+        padding-right: 30px;
+        padding-left: 4px;
         &:nth-child(even){
             text-align: right;
+            padding-left: 30px;
+            padding-right: 4px;
         }
         h3{
             margin: 0 0 8px 0;
@@ -434,12 +445,16 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
             a{
                 color: #5a67d8;
                 text-decoration: none;
-                margin-right: 16px;
+                margin: 0px 16px;
                 &:hover{
                     text-decoration: underline;
                 }
             }
         }
     }
+}
+
+.gitInfoOuter{
+    max-width: 700px;
 }
 </style>
