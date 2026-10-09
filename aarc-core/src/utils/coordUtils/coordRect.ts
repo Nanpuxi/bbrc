@@ -22,6 +22,14 @@ export function rectInside(rect: RectCoord, pos: Coord) {
 
 /** 判断点是否在凸四边形内部（先用轴对齐包围盒快速拒绝，再用叉积法精确判断） */
 export function quadInside(quad: QuadCoord, pos: Coord) {
+    // 防御：四边形含 NaN/Infinity 等异常值时无法参与命中（如空文本曾产生的退化四边形），
+    // 视为不在内部并告警，避免异常四边形污染点击/框选检测
+    for (const [qx, qy] of quad) {
+        if (!Number.isFinite(qx) || !Number.isFinite(qy)) {
+            console.warn('quadInside 收到异常四边形，已忽略本次命中检测：', quad);
+            return false;
+        }
+    }
     const [x, y] = pos;
     const [[leftX, upperY], [rightX, lowerY]] = quadBoundingRectInternal(quad);
     if (x < leftX || x > rightX || y < upperY || y > lowerY) {

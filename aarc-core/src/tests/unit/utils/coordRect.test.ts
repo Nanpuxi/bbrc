@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   rectInside,
   rectCoordDistSqLessThan,
@@ -182,6 +182,35 @@ describe('quadInside', () => {
     const rect: RectCoord = [[0, 0], [10, 10]]
     const quad = rotateRectToQuad(rect, [5, 5], Math.PI / 4)
     expect(quadInside(quad, quad[0])).toBe(true)
+  })
+
+  it('含 NaN 顶点的四边形对任意点返回 false 并告警', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // 空文本曾产生的 rectMain 形状：四个顶点全为 NaN
+    const nanQuad = [[NaN, NaN], [NaN, NaN], [NaN, NaN], [NaN, NaN]] as QuadCoord
+    expect(quadInside(nanQuad, [5, 5])).toBe(false)
+    expect(quadInside(nanQuad, [500, 500])).toBe(false)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('含 ±Infinity 顶点的退化四边形返回 false 并告警', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // 空文本曾产生的 rectFull 形状：穿过锚点、向左右无限延伸的“线四边形”
+    const infQuad = [[Infinity, 100], [-Infinity, 100], [-Infinity, 100], [Infinity, 100]] as QuadCoord
+    expect(quadInside(infQuad, [100, 100])).toBe(false)
+    expect(quadInside(infQuad, [-300, 100])).toBe(false)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('quadCoordDistSqLessThan 对异常四边形同样返回 false', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const nanQuad = [[NaN, NaN], [NaN, NaN], [NaN, NaN], [NaN, NaN]] as QuadCoord
+    expect(quadCoordDistSqLessThan(nanQuad, [5, 5], 100)).toBe(false)
+    const infQuad = [[Infinity, 100], [-Infinity, 100], [-Infinity, 100], [Infinity, 100]] as QuadCoord
+    expect(quadCoordDistSqLessThan(infQuad, [100, 100], 100)).toBe(false)
+    warnSpy.mockRestore()
   })
 })
 

@@ -180,6 +180,10 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             if(markRoot){
                 drawQuad(ctx, rects.rectFull)
             }
+        }else if(needReportRect){
+            //主、副站名均为空时不产生包围盒，需清除缓存的矩形，
+            //否则旧矩形（或历史写入的退化四边形）仍参与命中检测
+            staNameRectStore.setStaNameRect(pt.id, undefined)
         }
 
         if(markRoot){

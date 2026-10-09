@@ -122,6 +122,39 @@ describe('drawText 角度支持', () => {
     })
 })
 
+describe('drawText 空文本处理', () => {
+    const emptyMain: DrawTextBodyOption = { text: '', color: 'black', font: '', fontSize: 10, rowHeight: 10 }
+    const emptySub: DrawTextBodyOption = { text: undefined, color: 'gray', font: '', fontSize: 10, rowHeight: 20 }
+
+    it('主副文本均为空时返回 undefined，且不产生任何绘制调用', () => {
+        const { ctx, calls } = createMockCtx()
+        const res = drawText(ctx, pos, [1, 0], undefined, emptyMain, emptySub, false, 'both')
+        expect(res).toBeUndefined()
+        expect(calls.filter(c => c[0] === 'fillText' || c[0] === 'strokeText')).toEqual([])
+    })
+
+    it('只有空白字符（含换行）视同空文本', () => {
+        const { ctx } = createMockCtx()
+        const res = drawText(ctx, pos, [1, 0], undefined, { ...emptyMain, text: '  \n\t ' }, emptySub, false, 'both')
+        expect(res).toBeUndefined()
+    })
+
+    it('主文本为空但副文本非空时仍正常返回包围盒', () => {
+        const { ctx } = createMockCtx()
+        const res = drawText(ctx, pos, [1, 0], undefined, emptyMain, subOpt, false, 'measure')
+        expect(res).toBeDefined()
+        // 只有副文本一行：宽 20（'xy'），高 20
+        expect(res?.rectFull).toEqual([[100, 40], [120, 40], [120, 60], [100, 60]])
+    })
+
+    it('drawTextForLineName 主副文本均为空时返回 undefined', () => {
+        const { ctx, calls } = createMockCtx()
+        const res = drawTextForLineName(ctx, [200, 100], [1, 1], 1, emptyMain, emptySub, false, 'both')
+        expect(res).toBeUndefined()
+        expect(calls.filter(c => c[0] === 'fillText' || c[0] === 'strokeText')).toEqual([])
+    })
+})
+
 describe('drawTextForLineName 角度支持', () => {
     const linePos: Coord = [200, 100]
     const lineMain: DrawTextBodyOption = { text: '试验线', color: 'black', font: '', fontSize: 10, rowHeight: 10 }

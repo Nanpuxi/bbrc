@@ -30,6 +30,9 @@ export function drawText(
 
     ctx.textBaseline = 'middle'
     const { mainHeight, subHeight, mainLines, subLines } = splitLines(main, sub)
+    if(mainLines.length===0 && subLines.length===0)
+        //主、副文本均无有效行时不产生包围盒（调用方应清除缓存的矩形）
+        return undefined
     const totalHeight = mainHeight+subHeight
     const mainRowMargin = main.rowHeight - main.fontSize
     const subRowMargin = sub.rowHeight - sub.fontSize
@@ -150,6 +153,9 @@ export function drawTextForLineName(
 {
     const mainText = main.text?.trim() || ''
     const subText = sub.text?.trim() || ''
+    if(!mainText && !subText)
+        //主、副文本均为空时不产生包围盒（调用方应清除缓存的矩形）
+        return undefined
     let useDropCap = false
     let dropCapPart = ''
     if(typeof dropCap == 'string'){
