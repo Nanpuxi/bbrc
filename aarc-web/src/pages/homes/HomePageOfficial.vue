@@ -90,7 +90,7 @@ const moreSections: MoreSection[] = [
             '版本更新由你自主决定，不存在“强制更新”约束。',
         ],
         links: [
-            { text: '前往本地运行版下载页', href: '/#/client-download' },
+            { text: '前往本地运行版下载页', href: '/#/client-download', external: true },
         ]
     },
     {
@@ -101,7 +101,7 @@ const moreSections: MoreSection[] = [
             '例如，如果你对官方站的某项政策不满，可以自行部署一个实例、迁移整个团队的全部数据并继续创作，而不是被迫接受或放弃积累已久的作品。',
         ],
         links: [
-            { text: '了解如何开私服', href: '/#/fork-aarc' },
+            { text: '了解如何开私服', href: '/#/fork-aarc', external: true },
             { text: '"软件自由"的详细解释', href: 'http://u.fsf.org/16e', external: true },
         ]
     },
@@ -113,7 +113,7 @@ const moreSections: MoreSection[] = [
             '可以把编辑器部分嵌入自己另外开发的网站或本地应用中，或者与其他工具组成工具集。',
         ],
         links: [
-            { text: '获取代码', href: '/#/fork-aarc' },
+            { text: '获取代码', href: '/#/fork-aarc', external: true },
         ]
     },
     {
@@ -333,6 +333,7 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
 }
 
 .tutorials{
+    width: 88vw;
     max-width: 700px;
     .tutorialGroup{
         margin-bottom: 24px;
@@ -356,12 +357,15 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
     }
     .tutorialGrid{
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         gap: 14px;
     }
-    @media screen and (max-width: 768px) {
-        .tutorialGrid{
-            grid-template-columns: 1fr;
+    @media screen and (max-width: 540px) {
+        &{
+            width: 60vw;
+            .tutorialGrid{
+                grid-template-columns: 1fr;
+            }
         }
     }
     .tutorialCard{

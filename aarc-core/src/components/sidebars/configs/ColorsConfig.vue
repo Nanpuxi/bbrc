@@ -86,11 +86,6 @@ function setToDark(){
                 </AuColorPicker>
             </td>
         </tr>
-        <tr>
-            <td colspan="2">
-                <span class="smallNote">敬请期待：地形预设颜色</span>
-            </td>
-        </tr>
     </tbody></table>
 </ConfigSection>
 </template>

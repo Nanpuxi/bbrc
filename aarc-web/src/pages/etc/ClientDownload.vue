@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import copy from 'copy-to-clipboard'
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents'
+import { useBrowserInfoStore } from 'aarc-core/app/globalStores/browserInfo'
 import SolutionsCompare from '../components/SolutionsCompare.vue'
 
 interface ClientArtifact {
@@ -17,8 +18,8 @@ interface ClientArtifact {
 
 const artifactTypes = [
     { type: 'exe', title: 'Windows 绿色版', fileDesc: 'aarc.exe（解压即用，无需安装）' },
-    { type: 'msi', title: 'Windows 安装版（MSI）', fileDesc: 'aarc-setup.msi（安装后从开始菜单启动）' },
-    { type: 'apk', title: 'Android（arm64）', fileDesc: 'aarc-arm64.apk' },
+    { type: 'msi', title: 'Windows 安装版', fileDesc: 'aarc-setup.msi（安装后从开始菜单启动）' },
+    { type: 'apk', title: 'Android', fileDesc: 'aarc-arm64.apk' },
 ]
 
 interface NoticeItem { text: string, linkText?: string, linkHref?: string, suffix?: string }
@@ -72,6 +73,8 @@ const noticeGroups: NoticeGroup[] = [
 const artifacts = ref<ClientArtifact[]>()
 const loadFailed = ref(false)
 
+const { isMobile } = useBrowserInfoStore()
+
 const apiBase = import.meta.env.VITE_ApiUrlBase ?? ''
 
 onMounted(()=>{
@@ -102,7 +105,13 @@ const latest = computed(()=>{
     }
     return map
 })
-const availableTypes = computed(()=>artifactTypes.filter((t)=>t.type in latest.value))
+const availableTypes = computed(()=>{
+    const list = artifactTypes.filter((t)=>t.type in latest.value)
+    // 手机端把 apk 放最前面
+    if (isMobile)
+        list.sort((a, b)=>(a.type === 'apk' ? -1 : b.type === 'apk' ? 1 : 0))
+    return list
+})
 
 function fmtSize(bytes: number){
     if (bytes >= 1024 * 1024 * 1024)
@@ -124,10 +133,13 @@ async function copyShasum(item: ClientArtifact){
     else
         showPop('复制失败，请改用正规浏览器', 'failed')
 }
+
+const show = ref(false)
+onMounted(()=>window.setTimeout(()=>{show.value = true}, 10))
 </script>
 
 <template>
-    <div class="derive-page">
+    <div v-if="show" class="derive-page">
         <header class="hero">
             <img class="hero-logo" src="/aarc-logo.svg" alt="AARC" />
             <h1 class="hero-title">客户端下载</h1>
@@ -232,6 +244,9 @@ async function copyShasum(item: ClientArtifact){
         display: flex;
         flex-direction: column;
         gap: 10px;
+        h3{
+            margin-bottom: 0px !important;
+        }
     }
 
     .btn {
