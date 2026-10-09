@@ -7,7 +7,7 @@
 - `AARC.Collab.Test/`：协作核心并发语义测试（xUnit）
 - `AARC.Diff/`、`AARC.Diff.Test/`：C# diff 类库及其测试
 - `aarc-core/`：前端编辑器核心包（见下文"前端 workspace"）
-- `aarc-web/`：前端站点包（见下文"前端 workspace"），内含 `docs/decoupling.md`（core/web 拆分方案与进度）
+- `aarc-web/`：前端站点包（见下文"前端 workspace"），内含 `docs/decoupling/decoupling.md`（core/web 拆分方案与进度）
 - `Dockerfile`：完整构建（前端 + 后端）
 
 ## 启动 WebApi 服务
@@ -51,7 +51,7 @@ pnpm --filter aarc-core type-check   # 改动 aarc-core 后
 - `aarc-web`：站点（pages、router、API 层等），依赖 `aarc-core`（`workspace:*`）
 - `aarc-tauri`：编辑器的最小 Tauri 宿主（浏览器 dev 与 `pnpm --filter aarc-tauri tauri:dev` 均可运行编辑器并本地保存；尚未做 fs 化），依赖 `aarc-core`（`workspace:*`），功能清单与实现步骤见其 README
 
-在根目录或包目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter <包名> <script>` 指定包。`aarc-web` 的 `test`/`test:run` 已透传到 `aarc-core`（测试随核心迁移）。core 需要宿主（web/未来 tauri）提供的功能清单及 web 对照实现见 `aarc-core/README.md`。详见 `aarc-web/docs/decoupling.md`。
+在根目录或包目录内运行 pnpm 命令均可；在根目录时可用 `pnpm --filter <包名> <script>` 指定包。`aarc-web` 的 `test`/`test:run` 已透传到 `aarc-core`（测试随核心迁移）。core 需要宿主（web/未来 tauri）提供的功能清单及 web 对照实现见 `aarc-core/README.md`。详见 `aarc-web/docs/decoupling/decoupling.md`。
 
 ## 前端单元测试（aarc-core，vitest node 环境）
 

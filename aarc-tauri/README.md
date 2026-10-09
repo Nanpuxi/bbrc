@@ -51,7 +51,7 @@ pnpm --filter aarc-tauri gen:icons
 - 复用 `aarc-core`：经 workspace 源码导出依赖（`"aarc-core": "workspace:*"`），由本包的 vite 统一打包，与 aarc-web 相同的方式保证 vue/pinia 单实例。
 - 参考文档（实现前必读）：
   - `aarc-core/README.md` —— core 需要宿主提供的全部功能清单及 web 对照实现
-  - `aarc-web/docs/decoupling.md` —— §3.1 宿主服务接口、§5 第 18 步（tauri 注意事项）
+  - `aarc-web/docs/decoupling/decoupling.md` —— §3.1 宿主服务接口、§5 第 18 步（tauri 注意事项）
 
 ## minimal 需要满足的功能
 

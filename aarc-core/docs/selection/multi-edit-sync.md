@@ -79,7 +79,7 @@ export type MultiEditSyncFontScope = 'all' | 'never' | 'sameLine' | 'sameKind'
 
 ## 4. 与多人协作的交叉点分析
 
-对照 `docs/multiplayer/object-locking.md` 与 `steps.md`，逐点确认：
+对照 `../multiplayer/object-locking.md` 与 `../multiplayer/steps.md`，逐点确认：
 
 | 交叉点 | 结论 |
 |---|---|

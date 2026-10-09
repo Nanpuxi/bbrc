@@ -25,7 +25,7 @@ export interface LineGradientResolution {
     toColor: string
 }
 
-/** 自动范围（沿渐变轴比例），见 docs/branch-line-gradient.md 决策 D */
+/** 自动范围（沿渐变轴比例），见 docs/rendering/branch-line-gradient.md 决策 D */
 export const LINE_GRADIENT_AUTO_RANGE: [number, number] = [0.25, 0.75]
 
 /**

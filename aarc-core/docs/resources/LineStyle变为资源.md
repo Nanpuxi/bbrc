@@ -4,7 +4,7 @@
 > 现状机制的记录。前端已拆分为 `aarc-core`（编辑器核心）与 `aarc-web`（站点）：
 > 编辑器内的样式预览/导入导出/数据源逻辑都在 core，userFile 上传/收藏 UI 在 web，
 > core 通过注入回调与窄投影 DTO 与宿主交互
-> （见 `aarc-core/README.md` 与 `aarc-web/docs/decoupling.md`）。
+> （见 `aarc-core/README.md` 与 `aarc-web/docs/decoupling/decoupling.md`）。
 
 ## 目标
 

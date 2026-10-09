@@ -2,7 +2,7 @@
 // 编辑器宿主组件（对应 aarc-web 的 Editor.vue 极简版）：
 // 无权限判定、无心跳、无压缩上传；存档经 saveStorage（tauri fs / 浏览器 localStorage 双实现）存取。
 // “离开”按钮打开存档管理器 Modal；切换存档仿照 web 的做法：记录目标 id 后整页 reload
-//（运行时切换的状态清理缺陷见 aarc-web/docs/save-switching-problems.md，修复前不做运行时切换）。
+//（运行时切换的状态清理缺陷见 aarc-core/docs/problems/save-switching-problems.md，修复前不做运行时切换）。
 import Cvs from 'aarc-core/components/Cvs.vue';
 import Menu from 'aarc-core/components/Menu.vue';
 import SaveManagerModal from './SaveManagerModal.vue';
@@ -95,7 +95,7 @@ function leave(){
 }
 function switchSave(id: string){
     // 仿照 web 的彻底 reload：记录目标存档 id 后整页刷新，启动流程会加载它
-    //（避开运行时切换的状态清理问题，见 aarc-web/docs/save-switching-problems.md）
+    //（避开运行时切换的状态清理问题，见 aarc-core/docs/problems/save-switching-problems.md）
     if(id === currentSaveId.value)
         return
     localStorage.setItem(currentIdStorageKey, id)

@@ -66,7 +66,7 @@ store 层（`staClusterStore.ts`）懒初始化：`staClusters` 为 `undefined` 
 
 两级缓存：
 
-1. **单个 cluster 多边形缓存** `clusterPolyCache`：以 `id:pos:dir:size` 拼接为 key，cluster 内点未变时直接复用已算好的四角点（四角点计算见 `../../aarc-web/docs/formalize-free-cluster.md`）
+1. **单个 cluster 多边形缓存** `clusterPolyCache`：以 `id:pos:dir:size` 拼接为 key，cluster 内点未变时直接复用已算好的四角点（四角点计算见 `free-point/formalize-free-cluster.md`）
 2. **全量渲染数据缓存**（perf 提交 `8ebbdb92`）：
    - 把所有 cluster 点的 `id/pos/dir/size`、所有 pointLink 的内容、以及**非 dot 链接端点的 `pos/dir/size/sta`** 写入可复用的签名缓冲区 `sigBuf`，与上一帧**逐位比较**（数值严格相等，无哈希碰撞风险）。端点数据必须入签名：伪集群与 cluster 型链接的多边形由端点坐标决定，而端点未必属于真实 cluster，否则移动端点时缓存不失效、伪集群留在原地
    - 签名未变时直接复用 `polysCache`，不再重新遍历点和拼接缓存 key

@@ -52,7 +52,7 @@ import { forkAarcName } from './routes/routesNames';
                 <h2 class="docs-title">详细信息</h2>
                 <p class="docs-text">可参考主仓库 HEAD 的以下文档：</p>
                 <ul class="docs-list">
-                    <li><code>aarc-web\docs\decoupling.md</code></li>
+                    <li><code>aarc-web\docs\decoupling\decoupling.md</code></li>
                     <li><code>aarc-core\README.md</code></li>
                 </ul>
             </div>
