@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { debounce } from 'aarc-core/utils/lang/debounce';
 
 const props = withDefaults(defineProps<{
     /** 幻灯片数量，内容通过默认插槽按 index 传入 */
@@ -104,9 +105,10 @@ function slideStyle(i: number) {
 }
 
 const windowWidth = ref(window.innerWidth);
-function onResize() {
+// resize 事件触发频繁，防抖避免反复重算
+const onResize = debounce(() => {
     windowWidth.value = window.innerWidth;
-}
+}, 150);
 const arrowsVisible = computed(() => {
     const s = props.showArrows;
     if (s === 'always') return true;
