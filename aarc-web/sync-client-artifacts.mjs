@@ -1,13 +1,14 @@
 // 从 aarc-tauri 的构建产物目录复制产物到 AARC.WebApi/Data/ClientApp 供 WebApi 下发：
 // - exe/msi 压缩为 zip（zipName 指定包内文件名），apk 原样复制
-// - 并写出元数据 json clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，均为产物本体的值）
+// - 并写出元数据 json clientArtifacts.json（更新时间、git提交ID、文件大小、sha256，
+//   均为实际下发文件的值；产物本体的哈希另记 srcSha256 供幂等判断）
 // 文件名带 -YYYYMMDD-HHmm 时间戳（取产物文件创建时间），多版本可共存。
-// 幂等：产物未变化（sha256 已有记录）时不复制、不追加条目。
+// 幂等：产物未变化（srcSha256 已有记录）时不复制、不追加条目。
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import { ZipArchive } from 'archiver'
-import { basename, dirname, extname, join } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const webDir = dirname(fileURLToPath(import.meta.url))
@@ -45,16 +46,25 @@ function newestFile(dir, match){
     return files.length ? join(dir, files[files.length - 1]) : null
 }
 
-// 从产物文件名提取版本号（当前仅 msi 文件名含版本，如 aarc_0.1.0_x64_en-US.msi），无则留空
-function versionOf(art, src){
-    if (!art.match)
+// 版本号统一来自 tauri.conf.json（exe/msi 由 Tauri 桌面构建烧入，apk 由 tauri android build
+// 生成 tauri.properties 供 gradle 读取），三者一致；msi 文件名里的版本号同为该值
+function versionOf(){
+    try {
+        const conf = JSON.parse(readFileSync(join(repoRoot, 'aarc-tauri', 'src-tauri', 'tauri.conf.json'), 'utf8'))
+        return conf.version ?? ''
+    }
+    catch {
+        console.warn('[syncClientArtifacts] 读取 tauri.conf.json 版本号失败，将留空')
         return ''
-    const m = art.match.exec(basename(src))
-    return m ? m[1] : ''
+    }
 }
 
 function sha256Of(path){
     return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+function sha256OfData(data){
+    return createHash('sha256').update(data).digest('hex')
 }
 
 function fmtStamp(d){
@@ -90,6 +100,8 @@ catch {
     console.warn('[syncClientArtifacts] 获取 git 提交 ID 失败，将留空')
 }
 
+const version = versionOf()
+
 let entries = []
 if (existsSync(jsonPath)) {
     entries = JSON.parse(readFileSync(jsonPath, 'utf8'))
@@ -108,7 +120,8 @@ for (let art of artifacts) {
     const srcStat = statSync(art.src)
     const srcHash = sha256Of(art.src)
     const fileTime = srcStat.birthtime ?? srcStat.mtime
-    const existing = entries.find((e)=>e.type === art.type && e.sha256 === srcHash)
+    // 旧版脚本的条目没有 srcSha256，其 sha256 记的是产物本体哈希，回退兼容
+    const existing = entries.find((e)=>e.type === art.type && (e.srcSha256 ?? e.sha256) === srcHash)
     if (existing) {
         const destPath = join(clientAppDir, existing.fileName)
         if (existsSync(destPath)) {
@@ -128,9 +141,10 @@ for (let art of artifacts) {
         url: `/api/clientApp/download?type=${art.type}`,
         updatedAt: fileTime.toISOString(),
         gitCommitId,
-        sizeBytes: data.length, // 展示的是实际下载文件的大小（exe 为 zip 的大小）
-        sha256: srcHash, // 产物本体的 sha256（zip 为包内 exe 的）
-        version: versionOf(art, art.src),
+        sizeBytes: data.length, // 实际下发文件的大小（exe/msi 为 zip 的大小）
+        sha256: sha256OfData(data), // 实际下发文件的 sha256（exe/msi 为 zip 的），用户可直接对下载文件验算
+        srcSha256: srcHash, // 产物本体的 sha256，仅用于幂等判断
+        version,
     })
     changedAny = true
     console.log(`[syncClientArtifacts] ${art.type} 产物已更新：${destName}`)
