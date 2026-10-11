@@ -2,6 +2,85 @@
     "update_date": "2026/09/03 3:29",
     "donor_list": [
         {
+            "name": "龙屿_Finn",
+            "amount": 30.00
+        },
+        {
+            "name": "长春1南不开通不换名",
+            "amount": 0.05
+        },
+        {
+            "name": "mirage",
+            "amount": 18.00
+        },
+        {
+            "name": "轨织山河",
+            "amount": 6.00,
+            "remark": "寻路和模拟"
+        },
+        {
+            "name": "Setreat",
+            "amount": 2.00,
+            "remark": "自定义车站"
+        },
+        {
+            "name": "芒果企鹅",
+            "amount": 0.11
+        },
+        {
+            "name": "zdss",
+            "amount": 5.00
+        },
+        {
+            "name": "桦斩ovo",
+            "amount": 6.00
+        },
+        {
+            "name": "Setreat",
+            "amount": 0.30
+        },
+        {
+            "name": "25韩旖堂",
+            "amount": 1.14
+        },
+        {
+            "name": "春熙宁",
+            "amount": 1.00
+        },
+        {
+            "name": "那兔独晓曼",
+            "amount": 3.00
+        },
+        {
+            "name": "金陵1421",
+            "amount": 6.00
+        },
+        {
+            "name": "Setreat",
+            "amount": 2.25
+        },
+        {
+            "name": "高咲侑",
+            "amount": 0.14
+        },
+        {
+            "name": "亚历克斯",
+            "amount": 6
+        },
+        {
+            "name": "意",
+            "amount": 18
+        },
+        {
+            "name": "藏星",
+            "amount": 50
+        },
+        {
+            "name": "昊子",
+            "amount": 1.98
+        },
+
+        {
             "name": "精苏·东奥",
             "amount": 0.10
         },
@@ -132,7 +211,7 @@
             "remark": "区域复制"
         },
         {
-            "name": "藏星.",
+            "name": "藏星",
             "amount": 50
         },
         {
