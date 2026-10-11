@@ -98,4 +98,4 @@ pnpm --filter aarc-tauri gen:icons
 4. **浏览器内回归**：打开编辑器、编辑、保存、刷新后恢复、离开拦截、弹窗/等待、导出图片（降级项确认不崩溃）。
 5. **接入 tauri**：`tauri init` 生成 `src-tauri`，配置 CSP/网络放行，注入 `apiUrlBase`；icons 静态资源随包打包。
 6. **fs 化**：保存与 svg 缩略上传改本地文件读写（`@tauri-apps/plugin-fs` 或自定义 command）；persist 存储评估是否换 fs 适配。（已部分完成：导出落盘经 core 的 `fileSaver` 注入——桌面走 dialog+fs，安卓走 MediaStore 相册，见"二、可省略"末节）
-7. **收尾**：原生对话框/右键抽象（如需要）；确认 web 侧 `analyze-deps.mjs` 的 core 闭包检查仍通过（本包不改 core，理论上无影响）；更新根 `AGENTS.md` 与 decoupling.md 第 18 步状态。
+7. **收尾**：原生对话框/右键抽象（如需要）；确认 web 侧 `scripts/analyze-deps.mjs` 的 core 闭包检查仍通过（本包不改 core，理论上无影响）；更新根 `AGENTS.md` 与 decoupling.md 第 18 步状态。

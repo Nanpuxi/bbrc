@@ -11,7 +11,7 @@ import { ZipArchive } from 'archiver'
 import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const webDir = dirname(fileURLToPath(import.meta.url))
+const webDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = join(webDir, '..')
 const clientAppDir = join(repoRoot, 'AARC.WebApi', 'Data', 'ClientApp')
 const jsonPath = join(clientAppDir, 'clientArtifacts.json')

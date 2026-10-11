@@ -2,14 +2,14 @@
 // 若存在无法解析的 import、或 core 文件 import 逃逸到 aarc-core/src 之外
 // （单向依赖：web → core 允许，core → web 禁止），则以非零码退出，阻止构建。
 // 用法:
-//   node analyze-deps.mjs              # 仅检查，不写文件
-//   node analyze-deps.mjs --out x.txt  # 检查并把闭包清单写入指定文件
+//   node scripts/analyze-deps.mjs              # 仅检查，不写文件
+//   node scripts/analyze-deps.mjs --out x.txt  # 检查并把闭包清单写入指定文件
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const CORE_SRC_DIR = path.resolve(SCRIPT_DIR, '../aarc-core/src');
+const CORE_SRC_DIR = path.resolve(SCRIPT_DIR, '../../aarc-core/src');
 const ENTRIES = [
   path.join(CORE_SRC_DIR, 'components/Cvs.vue'),
   path.join(CORE_SRC_DIR, 'components/Menu.vue'),

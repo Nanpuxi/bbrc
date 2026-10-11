@@ -2,7 +2,7 @@
 
 本文分析把编辑器核心（`Cvs.vue` + `Menu.vue` 及其依赖闭包）拆分为独立包 `aarc-core`、剩余部分改名 `aarc-web`、共同置于 pnpm-workspace 下的实施步骤与主要阻碍。约束：**不改变任何运行时行为**；目标：未来新增 `aarc-tauri`，为 `aarc-core` 提供本地文件访问能力。
 
-分析基于 `aarc-web/analyze-deps.mjs` 生成的依赖闭包 `temp.txt`，以及对闭包外文件的反向依赖扫描（2026-02 时点）。
+分析基于 `aarc-web/scripts/analyze-deps.mjs` 生成的依赖闭包 `temp.txt`，以及对闭包外文件的反向依赖扫描（2026-02 时点）。
 
 注意：此处修改方案后，必须检查是否需要同步修改 `aarc-core/README.md`
 
@@ -114,7 +114,7 @@ AARC/                          # 仓库根（现有后端不动）
 
 ### 阶段 0：准备（已完成）
 
-1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc-web/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。~~拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。~~ ✅ 扩展已完成（2026-09）：入口改为 `aarc-core/src` 的 Cvs/Menu + 全部测试文件，解析 `aarc-core/` 自引用；任何 core 文件 import 逃逸出 `aarc-core/src`（含 `@/` 别名、`aarc-web` 引用、越界相对路径）均以非零码退出。
+1. ✅ `analyze-deps.mjs` 已改造为 prebuild 检查（位于 `aarc-web/scripts/`，接入 `package.json` 的 `build`/`build-here`）：入口闭包内存在未解析 import 时以非零码退出阻止构建；`--out <file>` 参数控制是否写出闭包清单（默认不写）。~~拆分后需扩展为：分别扫描两个入口包，任何 core 文件 import 到 web 文件即为违规（单向依赖：web → core 允许，core → web 禁止）。~~ ✅ 扩展已完成（2026-09）：入口改为 `aarc-core/src` 的 Cvs/Menu + 全部测试文件，解析 `aarc-core/` 自引用；任何 core 文件 import 逃逸出 `aarc-core/src`（含 `@/` 别名、`aarc-web` 引用、越界相对路径）均以非零码退出。
 2. ✅ 已清理残留：删除 `vite.config.ts` 中无人使用的 `~` 别名。
 
 ### 阶段 1：workspace 化（不改代码归属，先改布局）（已完成）
@@ -139,7 +139,7 @@ AARC/                          # 仓库根（现有后端不动）
 ### 阶段 3：构建与样式拆分
 
 10. ✅ 已完成（2026-09）~~样式：`src/styles/styles.scss`（仅 `main.ts:5` 引入一次）劈成两半~~——实际做法：core 新建 `aarc-core/src/styles/global.scss`（含 base 元素样式、core 依赖的全部全局 class、以及 `@use` 的四份 partial），四份 partial 已 `git mv` 至 `aarc-core/src/styles/`——`configSection.scss`、`options.scss`、`arrangableList.scss`（原位于 web 的 `components/sidebars/*/shared/`，目录结构镜像 core 组件树）与 `bangPanel.scss`（原 `styles/`，实际仅 core 的 NameEdit/NameSearch/TextTagEdit 使用）。web 的 `styles.scss` 改为顶部 `@use 'aarc-core/styles/global.scss'`（包路径经 vite sass 解析正常），仅保留 web 私有规则（`h1WithBtns`/`table.index`/`dangerZone`/`wideTableContainer` 等）。core 样式自此 self-contained，宿主契约变为"全局引入 core 样式表一次"。验证：迁移前后 `pnpm build-here` 产物 CSS 规则集合 diff 为零（1290 条规则逐条一致）。~~`styles/_globalValues.scss`、`_globalMixins.scss` 被两包共用（`CvsBlocks.vue:50-51`、`App.vue:40` 等），放 core 导出~~（2026-09 更新：`_globalMixins.scss` 实际仅 core 的 `CvsBlocks.vue` 使用，已内联进该组件并删除文件；`_globalValues.scss` 仅 web 自用，留 web，两包不再共用 scss partial）。
-11. ✅ 构建脚本：`build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`build.ts:21-23`）属于 web 职责，留在 aarc-web（未改动）；~~`vite.config.ts` 的 `fullReload` 监听列表要改为包含 core 路径~~ ✅ 已完成（2026-09）：监听列表已加入 `../aarc-core/src/**`。Dockerfile 前端阶段已补 `aarc-core` 的 package.json 与源码 COPY，✅ 完整 `docker build` 已重跑通过（2026-09，产物 chunk 哈希与本地构建一致）。
+11. ✅ 构建脚本：`scripts/build.ts` 的 `gitInfoGen`、`apiGenerated.ts` 拷贝到 public（`scripts/build.ts:21-23`）属于 web 职责，留在 aarc-web（未改动，随其他顶层脚本一并移入 `aarc-web/scripts/`）；~~`vite.config.ts` 的 `fullReload` 监听列表要改为包含 core 路径~~ ✅ 已完成（2026-09）：监听列表已加入 `../aarc-core/src/**`。Dockerfile 前端阶段已补 `aarc-core` 的 package.json 与源码 COPY，✅ 完整 `docker build` 已重跑通过（2026-09，产物 chunk 哈希与本地构建一致）。
 12. 依赖拆分：✅ 已完成（2026-09）——core 侧按迁移集实际 import 分配：vue/pinia/pinia-plugin-persistedstate、@aurouscia/*（au-color-picker/au-undo-redo/keyboard-shortcut/svgcanvas）、bowser/color/color-convert/copy-to-clipboard/omggif/rfdc/svgo/upng-js 及对应 @types；vitest 随测试迁至 core（含 vitest.config.ts 与 test 脚本，web 的 `test`/`test:run` 改为 `pnpm --filter aarc-core` 透传）。`vue-router`/`@microsoft/signalr`/`axios` 等留 web（闭包内 vue-router 引用已在 §3.1 改造中清零，原注意事项失效）。~~web 侧 dependencies 暂未瘦身（仍声明全部包，含 core 也用的那些），可后续清理——已查明可删清单，见第 21 步。~~ ✅ web 侧瘦身已完成（2026-09，见第 21 步）。pinia、vue 单实例由源码导出 + web vite 统一打包保证。
 13. ✅ 环境变量：env 目录随 web（宿主）。~~core 内 `import.meta.env` 用法阶段一保持不变~~（2026-09 更新：已完成配置注入化，core 内 `import.meta` 清零，见 §3.1"环境变量"行）。
 
@@ -174,12 +174,12 @@ AARC/                          # 仓库根（现有后端不动）
 5. **persist 插件由宿主注册**：core 内 5 个 store 的持久化依赖它；`editorLocalConfig.ts:28-35` 的 legacy localStorage 迁移也要随宿主环境测试。
 6. ~~**全局 scss 隐式依赖（§4 第 10 步）**：样式缺失不会报错，只会静默变形——迁移后需目检全部 core 组件。~~ ✅ 已解决（2026-09，第 10 步）：core 样式已 self-contained（`aarc-core/src/styles/global.scss`），宿主契约简化为"全局引入一次"；迁移正确性由构建产物 CSS 规则集合 diff 为零验证。
 7. ~~**`import.meta.env` 散落 core 闭包 5 个文件**~~ ✅ 已解决（2026-09）：core 新增 `app/coreConfig.ts` 配置注入入口（`configureCore`/`getCoreConfig`），全部改读注入配置，`import.meta` 清零；web 在 `main.ts` 注入。tauri 不再有此项阻碍。
-8. **构建耦合点**：outDir 指向后端 wwwroot、fullReload 监听列表、build.ts 的两个拷贝动作、Dockerfile/gen-ts-client 的路径——workspace 化后全部要跟着改。
+8. **构建耦合点**：outDir 指向后端 wwwroot、fullReload 监听列表、`scripts/build.ts` 的两个拷贝动作、Dockerfile/gen-ts-client 的路径——workspace 化后全部要跟着改。
 9. **vue/pinia 单实例约束**：若未来 core 改为预构建产物（而非源码导出），必须用 `peerDependencies` + vite `dedupe`，否则会出现双 pinia 实例导致 store 错位。源码导出方案下无此问题。
 
 ## 6. 有利条件
 
-- 闭包静态自洽（325 文件，无未解析 import），有 `analyze-deps.mjs` 可持续验证。
+- 闭包静态自洽（325 文件，无未解析 import），有 `scripts/analyze-deps.mjs` 可持续验证。
 - 宿主仅 `Editor.vue` 一处，装配改动面小。
 - 闭包内无对 `public/` 运行时路径的依赖（`/icons/`、`/demoDataSource/` 均不在闭包内）。
 - `uniqueComponents` 已是注入模式，证明该项目代码风格可容纳"宿主注入"，扩展此模式阻力小。

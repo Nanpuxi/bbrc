@@ -14,13 +14,13 @@
   "scripts": {
     "dev": "vite",
     "dev-host": "vite --host",
-    "prebuild": "node copy-license.mjs",
-    "build": "node analyze-deps.mjs && tsx build.ts",
-    "build-here": "node analyze-deps.mjs && tsx build.ts --here",
-    "type-check": "tsx build.ts --check-only",
+    "prebuild": "node scripts/copy-license.mjs",
+    "build": "node scripts/analyze-deps.mjs && tsx scripts/build.ts",
+    "build-here": "node scripts/analyze-deps.mjs && tsx scripts/build.ts --here",
+    "type-check": "tsx scripts/build.ts --check-only",
     "toggleEnvLocal": "tsx env/toggleLocalEnvFile.ts",
     "gitInfoGen": "tsx src/utils/gitInfo/gitInfoGen.ts",
-    "syncClientArtifacts": "node sync-client-artifacts.mjs",
+    "syncClientArtifacts": "node scripts/sync-client-artifacts.mjs",
     "colorSetsGen": "tsx src/data/palette/colorSetsGen.ts",
     "test": "pnpm --filter aarc-core test",
     "test:run": "pnpm --filter aarc-core test:run"

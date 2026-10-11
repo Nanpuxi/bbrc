@@ -232,7 +232,7 @@ export function renderLineStylePreviewBlob(lineStyle: LineStyle): Promise<Blob |
 - **收藏回调全局唯一**：第 3 步不做的话，LineStyle 的取用回调会覆盖 iconStore 注册
   的回调，导致图标"取用"功能串线。
 - **跨包边界**：上传调 API 必须经注入口由 web 执行，core 不能 import web 的 apiStore
-  （core → web 依赖被 `aarc-web/analyze-deps.mjs` 在构建时禁止）。
+  （core → web 依赖被 `aarc-web/scripts/analyze-deps.mjs` 在构建时禁止）。
 - **后端校验**：JSON ≤ 3MB 限制对样式足够；缩略图走 `_tb.webp` 约定，前端必须传
   webp。
 - 后端 `Search`（匿名可见）需要 View 授权，但 `/userfile/**` 静态文件本身无鉴权，

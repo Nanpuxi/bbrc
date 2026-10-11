@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const packageDir = dirname(fileURLToPath(import.meta.url))
+const packageDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const licenseSrc = join(packageDir, '..', 'LICENSE.txt')
 const publicDir = join(packageDir, 'public')
 
