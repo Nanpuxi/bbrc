@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Text.Json;
 
 namespace AARC.WebApi.Services.Files
@@ -25,8 +25,8 @@ namespace AARC.WebApi.Services.Files
             DateTime latestSave = DateTime.MinValue;
             foreach(var f in cvsDir.GetFiles())
             {
-                if(f.CreationTime > latestSave)
-                    latestSave = f.CreationTime;
+                if(f.LastWriteTime > latestSave)
+                    latestSave = f.LastWriteTime;
             }
 
             bool lastBackupVeryClose = latestSave.AddMinutes(backupFileCreateThresholdMins) > DateTime.Now;
@@ -52,7 +52,7 @@ namespace AARC.WebApi.Services.Files
             {
                 var files = cvsDir
                     .EnumerateFiles()
-                    .OrderBy(x => x.CreationTime)
+                    .OrderBy(x => x.LastWriteTime)
                     .ToList();
                 if(files.Count > backupFileMaxCountPerId)
                 {
@@ -85,7 +85,7 @@ namespace AARC.WebApi.Services.Files
             if (!cvsDir.Exists)
                 return backups;
             
-            var zips = cvsDir.GetFiles("*.zip").OrderByDescending(f => f.CreationTime);
+            var zips = cvsDir.GetFiles("*.zip").OrderByDescending(f => f.LastWriteTime);
             foreach (var file in zips)
             {
                 backups.Add(new SaveBackupInfo
