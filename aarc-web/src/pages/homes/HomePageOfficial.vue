@@ -11,12 +11,13 @@ import { useEnteredCanvasFromStore } from '@/app/globalStores/enteredCanvasFrom'
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
 import { useHomePageLocalConfigStore } from '@/app/localConfig/homePageLocalConfig';
 import { userUpgradeToMemberName } from '../identities/routes/routesNames';
-//import GiteeGitInfo from '@/components/common/GiteeGitInfo.vue';
 
 const { setEnteredFrom } = useEnteredCanvasFromStore()
 const userInfoStore = useUserInfoStore()
 const homePageLocalConfig = useHomePageLocalConfigStore()
 const { upgradeGuideDisplay } = storeToRefs(homePageLocalConfig)
+
+const freeSwPage = 'https://www.gnu.org/philosophy/free-sw.html'
 
 /** hero 轮播自动滚完一轮后 1 小时内不再播放，直接静态显示最后一张 */
 const HERO_REPLAY_INTERVAL_MS = 60 * 60 * 1000
@@ -47,15 +48,15 @@ const tutorialGroups: TutorialGroup[] = [
     {
         name: '基础教程',
         cards: [
-            { title: '控制线路走向', desc: '了解本工具的“区间矫正”机制', emoji: '📖', href: 'http://aarc.jowei19.com/#/Editor/188?viewOnly=1', external: true },
-            { title: '快速试用', desc: '在沙盒中尝试各种功能', emoji: '🚀', href: '/#/Editor/demo', external: true },
+            { title: '控制线路走向', desc: '了解本工具的“区间矫正”机制', emoji: '📖', href: 'http://aarc.jowei19.com/#/Editor/188?viewOnly=1' },
+            { title: '快速试用', desc: '在沙盒中尝试各种功能', emoji: '🚀', href: '/#/Editor/demo' },
         ]
     },
     {
         name: '最新功能',
         cards: [
-            { title: '渐变色区间', desc: '可实现跨线车效果', emoji: '🎨', href: 'https://aarc.jowei19.com/#/Editor/a9QWM', image: '/demo-gradient.png', external: true },
-            { title: '自由角度区间', desc: '可实现非45度角的特色效果', emoji: '📐', href: 'https://aarc.jowei19.com/#/Editor/54696', image: '/demo-free.png', external: true },
+            { title: '渐变色区间', desc: '可实现跨线车效果', emoji: '🎨', href: 'https://aarc.jowei19.com/#/Editor/a9QWM', image: '/demo-gradient.png' },
+            { title: '自由角度区间', desc: '可实现非45度角的特色效果', emoji: '📐', href: 'https://aarc.jowei19.com/#/Editor/54696', image: '/demo-free.png' },
         ]
     },
 ]
@@ -102,7 +103,7 @@ const moreSections: MoreSection[] = [
         ],
         links: [
             { text: '了解如何开私服', href: '/#/fork-aarc', external: true },
-            { text: '"软件自由"的详细解释', href: 'http://u.fsf.org/16e', external: true },
+            { text: '"软件自由"的详细解释', href: freeSwPage, external: true },
         ]
     },
     {
@@ -225,9 +226,11 @@ onMounted(()=>{
         <DonorList></DonorList>
     </div>
 
-    <!-- <div class="marginedSection gitInfoOuter">
-        <GiteeGitInfo></GiteeGitInfo>
-    </div> -->
+    <div class="marginedSection">
+        <a :href="freeSwPage" target="_blank" class="freeSwPoster">
+            <img src="https://static.fsf.org/nosvn/images/badges/fsfs_icons_beige-bg.png" alt="Free Software, Free Society" style="width: 100%;">
+        </a>
+    </div>
 </div>
 </template>
 
@@ -460,5 +463,11 @@ $serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", Georgia, serif;
 
 .gitInfoOuter{
     max-width: 700px;
+}
+
+.freeSwPoster{
+    display: block;
+    width: 160px;
+    margin: auto;
 }
 </style>
