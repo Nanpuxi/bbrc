@@ -9,14 +9,19 @@ function goSponsor() {
     router.replace({ name: sponsorWxName })
 }
 
-interface Donor {
+interface RawDonor {
     name: string
     amount: number
     remark?: string
 }
+interface Donor {
+    name: string
+    amount: number
+    remark?: string | string[]
+}
 interface DonorsData {
     update_date: string
-    donor_list: Donor[]
+    donor_list: RawDonor[]
 }
 
 const donorsData = donorsJson as DonorsData
@@ -31,7 +36,20 @@ const props = withDefaults(defineProps<{
 const expanded = ref(!props.collapsible)
 
 const donors = computed<Donor[]>(() => {
-    return [...donorsData.donor_list].sort((a, b) => {
+    const merged = new Map<string, Donor>()
+    for (const d of donorsData.donor_list) {
+        const exist = merged.get(d.name)
+        if (exist) {
+            exist.amount += d.amount
+            if (d.remark !== undefined) {
+                if (Array.isArray(exist.remark)) exist.remark.push(d.remark)
+                else exist.remark = exist.remark === undefined ? [d.remark] : [exist.remark, d.remark]
+            }
+            continue
+        }
+        merged.set(d.name, { name: d.name, amount: d.amount, remark: d.remark })
+    }
+    return [...merged.values()].sort((a, b) => {
         if (a.amount !== b.amount) return b.amount - a.amount
         return a.name.localeCompare(b.name)
     })
@@ -51,6 +69,7 @@ const donors = computed<Donor[]>(() => {
         <div class="donorNote">
             本项目为免费公益性，衷心感谢以上捐赠者对运营开支作出的支持。<br/>
             名单按金额从高到低排序，金额相同时按昵称字典序排列。<br/>
+            同名昵称的多次捐赠已合并计算。<br/>
             为保护隐私，要求匿名的以及未填写昵称的捐赠者不在名单中。<br/>
             如果名单有错漏，或是不希望被展示，请qq私聊：1783826971（Au）<br/>
             当前名单更新于 {{ updateDate }}，可能存在滞后
