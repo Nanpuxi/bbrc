@@ -1,4 +1,5 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace AARC.WebApi.Services.App.HttpAuthInfo
 {
@@ -13,10 +14,18 @@ namespace AARC.WebApi.Services.App.HttpAuthInfo
         }
         private int GetUserId()
         {
-            var ctx = _httpContextAccessor.HttpContext;
-            if (ctx is null)
+            return GetUserIdFrom(_httpContextAccessor.HttpContext?.User);
+        }
+
+        /// <summary>
+        /// 从已认证的 ClaimsPrincipal 中取用户 Id，未登录返回 0。
+        /// 本服务注册为 Scoped，中间件构造函数注入不了，故留静态入口供其复用，保证 uid 判定口径一致。
+        /// </summary>
+        public static int GetUserIdFrom(ClaimsPrincipal? user)
+        {
+            if (user is null)
                 return 0;
-            var idClaim = ctx.User.Claims.FirstOrDefault(x
+            var idClaim = user.Claims.FirstOrDefault(x
                 => x.Type.Contains(JwtRegisteredClaimNames.NameId));
             if (idClaim is null)
                 return 0;

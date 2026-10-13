@@ -1,4 +1,5 @@
 using AARC.WebApi.Controllers.System;
+using AARC.WebApi.Services.App.HttpAuthInfo;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
@@ -41,8 +42,8 @@ public class RateLimitMiddleware
         var rateLimit = GetRateLimit(endpoint);  // 读 Attribute
         if (rateLimit is null) { await _next(context); return; }
 
-        var ip = GetClientIp(context);
-        var cacheKey = $"rateLimit:{ip}:{endpoint.DisplayName}"; 
+        var subject = GetSubject(context);
+        var cacheKey = $"rateLimit:{subject}:{endpoint.DisplayName}"; 
         
         var span = TimeSpan.FromSeconds(rateLimit.Seconds);
         var maxReq = rateLimit.MaxRequests;
@@ -85,6 +86,14 @@ public class RateLimitMiddleware
             return endpoint.Metadata.GetMetadata<RateLimitAttribute>()
                 ?? DefaultRateLimitAttribute;
         });
+    }
+
+    // 限流主体：已登录按用户维度计数，未登录退回 IP 维度
+    // （登录、找回密码等匿名接口没有 uid，只能按 IP 兜底）
+    private static string GetSubject(HttpContext context)
+    {
+        var uid = HttpUserIdProvider.GetUserIdFrom(context.User);
+        return uid > 0 ? $"uid:{uid}" : $"ip:{GetClientIp(context)}";
     }
 
     private static string GetClientIp(HttpContext ctx)
