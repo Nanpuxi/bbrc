@@ -2,6 +2,7 @@
 import { ref, nextTick, useTemplateRef, computed, watch } from 'vue';
 import { useApiStore } from '@/app/com/apiStore';
 import SideBar from 'aarc-core/components/common/SideBar.vue';
+import Notice from 'aarc-core/components/common/Notice.vue';
 import Prompt from 'aarc-core/components/common/Prompt.vue';
 import { useUniqueComponentsStore } from 'aarc-core/app/globalStores/uniqueComponents';
 import fileDownload from 'js-file-download';
@@ -20,6 +21,7 @@ import ConvertToRailChess from '../../components/ConvertToRailChess.vue';
 import FolderSelect from './FolderSelect.vue';
 import CommentList from '@/components/common/CommentList.vue';
 import { useUserInfoStore } from '@/app/globalStores/userInfo';
+import { useSaveListLocalConfigStore } from '@/app/localConfig/saveListLocalConfig';
 import { storeToRefs } from 'pinia';
 
 const props = defineProps<{
@@ -41,6 +43,8 @@ const emit = defineEmits<{
 
 const userInfoStore = useUserInfoStore()
 const { isAdmin, userInfo: currentUser } = storeToRefs(userInfoStore)
+const createQuotaStore = useSaveListLocalConfigStore()
+const { createQuotaExceeded, createQuotaNoticeText } = storeToRefs(createQuotaStore)
 const api = useApiStore();
 const { showPop } = useUniqueComponentsStore()
 const { saveDiffsRoute } = useSavesRoutesJump()
@@ -113,6 +117,8 @@ async function done() {
         p = api.save.updateInfo(editingSave.value)
     const success = await p
     if (success) {
+        if (isCreatingSave.value)
+            createQuotaStore.recordSaveCreate()
         saveInfoSb.value?.fold()
         emit('refresh')
         showPop('操作成功', 'success')
@@ -320,6 +326,9 @@ defineExpose({ startCreating })
 
     <SideBar ref="saveInfoSb" @extend="resetDangerZone" class="saveInfoSb">
         <h1>{{ isCreatingSave ? '创建存档' : '信息设置' }}</h1>
+        <div v-if="createQuotaExceeded" class="create-quota-notice">
+            <Notice :type="'warn'">{{ createQuotaNoticeText }}</Notice>
+        </div>
         <table v-if="editingSave">
             <tbody>
                 <tr>
@@ -474,6 +483,10 @@ defineExpose({ startCreating })
 </template>
 
 <style scoped lang="scss">
+.create-quota-notice :deep(.notice) {
+    max-width: 320px;
+}
+
 .miniInSidebar {
     border-radius: 10px;
     height: 160px;

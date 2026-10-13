@@ -100,6 +100,9 @@ namespace AARC.WebApi.Controllers.Saves
         }
         [HttpPost]
         [UserCheck]
+        // 前端有配对的限额提示，参数改动需同步 aarc-web/src/app/localConfig/saveListLocalConfig.ts
+        // 中的 createQuotaWindowMinutes / createQuotaMaxSaves（那边也注释指回此处）
+        [RateLimit(10 * 60, 3)]
         public bool Add([FromBody]SaveDto saveDto)
         {
             var id = saveRepo.Create(saveDto);
