@@ -76,6 +76,8 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
     const cvsRenderResolutionRatio = ref<number>(2)
     const lineExtendSta = ref<ControlPointSta|undefined>(undefined)
     const textTagClickMode = ref<TextTagClickMode>('rect')
+    /** 支线渐变范围的记忆列表（[起, 止]，0..1） */
+    const gradientRangeMemory = ref<[number, number][]>([])
 
     watch(cvsRenderResolutionRatio as Ref<number | string>, (v)=>{
         if(v === '' || v == null || typeof v !== 'number' || isNaN(v))
@@ -127,6 +129,7 @@ export const useEditorLocalConfigStore = defineStore('editorLocalConfig',()=>{
         cvsRenderResolutionRatio,
         lineExtendSta,
         textTagClickMode,
+        gradientRangeMemory,
         backCompat
     }
 },

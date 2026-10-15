@@ -12,6 +12,7 @@ import { useLineStateStore } from 'aarc-core/models/stores/saveDerived/state/lin
 import { useLineSpanStore } from 'aarc-core/models/stores/saveDerived/slice/lineSpanStore';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
 import { detectLineAttachEnd, attachesOfEnd, LINE_GRADIENT_AUTO_RANGE } from 'aarc-core/utils/lineUtils/lineGradient';
+import { useEditorLocalConfigStore } from 'aarc-core/app/localConfig/editorLocalConfig';
 
 
 const envStore = useEnvStore()
@@ -19,6 +20,7 @@ const saveStore = useSaveStore()
 const lineStateStore = useLineStateStore()
 const lineSpanStore = useLineSpanStore()
 const cs = useConfigStore()
+const elc = useEditorLocalConfigStore()
 const { save } = storeToRefs(saveStore)
 const props = defineProps<{
     line:Line,
@@ -216,6 +218,34 @@ const gradientRangeToPct = computed({
         g.range = pct < other ? [pct / 100, other / 100] : [other / 100, pct / 100]
     }
 })
+/** 渐变范围记忆：写入当前值（去重）、应用、删除 */
+const gradientRangeMemories = computed<[number, number][]>(()=>
+    elc.gradientRangeMemory
+)
+function writeGradientRangeMemory(){
+    const from = gradientRangeFromPct.value, to = gradientRangeToPct.value
+    const entry: [number, number] = [Math.min(from, to), Math.max(from, to)]
+    if(gradientRangeMemories.value.some(x => x[0] === entry[0] && x[1] === entry[1]))
+        return
+    gradientRangeMemories.value.push(entry)
+    sortGradientRangeMemories()
+}
+/** 左值升序，左值相同按右值升序；历史持久化的乱序数据在挂载时一并整理 */
+function sortGradientRangeMemories(){
+    elc.gradientRangeMemory.sort((a, b)=> a[0] - b[0] || a[1] - b[1])
+}
+onMounted(sortGradientRangeMemories)
+function applyGradientRangeMemory(entry: [number, number]){
+    const g = props.line.gradient
+    if(g)
+        g.range = [entry[0] / 100, entry[1] / 100]
+}
+function removeGradientRangeMemory(entry: [number, number]){
+    const list = gradientRangeMemories.value
+    const idx = list.indexOf(entry)
+    if(idx >= 0)
+        list.splice(idx, 1)
+}
 let gradientReportTimer = 0
 watch(() => props.line.gradient, () => {
     window.clearTimeout(gradientReportTimer)
@@ -690,10 +720,28 @@ onMounted(()=>{
             <td>渐变<br/>范围</td>
             <td>
                 <div class="viewableRange">
-                    <input type="range" v-model.number="gradientRangeFromPct" :min="0" :max="100" :step="1"/>
-                    <input type="range" v-model.number="gradientRangeToPct" :min="0" :max="100" :step="1"/>
+                    <div class="rangeWithInput">
+                        <input type="range" v-model.number="gradientRangeFromPct" :min="0" :max="100" :step="1"/>
+                        <input type="number" v-model.number.lazy="gradientRangeFromPct" :min="0" :max="100" :step="1"/>
+                    </div>
+                    <div class="rangeWithInput">
+                        <input type="range" v-model.number="gradientRangeToPct" :min="0" :max="100" :step="1"/>
+                        <input type="number" v-model.number.lazy="gradientRangeToPct" :min="0" :max="100" :step="1"/>
+                    </div>
                 </div>
                 <div class="smallNote">{{ gradientRangeFromPct }}% → {{ gradientRangeToPct }}%（沿线百分比）</div>
+                <div class="gradientRangeMemory">
+                    <button class="lite" @click="writeGradientRangeMemory">写入记忆</button>
+                    <div v-if="gradientRangeMemories.length>0" class="gradientRangeMemoryList">
+                        <div v-for="entry in gradientRangeMemories" :key="`${entry[0]}-${entry[1]}`" class="gradientRangeMemoryItem">
+                            <span class="memoryText" @click="applyGradientRangeMemory(entry)">
+                                {{ entry[0] }}%→{{ entry[1] }}%
+                            </span>
+                            <button class="lite cancel" @click="removeGradientRangeMemory(entry)">×</button>
+                        </div>
+                    </div>
+                    <div v-if="gradientRangeMemories.length>0" class="smallNote">点击记忆值可应用到当前设置</div>
+                </div>
             </td>
         </tr>
         </template>
@@ -716,6 +764,46 @@ onMounted(()=>{
 </template>
 
 <style scoped lang="scss">
+.rangeWithInput{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+.gradientRangeMemory{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    &>.lite{
+        text-decoration: underline;
+    }
+}
+.gradientRangeMemoryList{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    .gradientRangeMemoryItem{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 130px;
+        background-color: #eee;
+        padding: 2px 6px;
+        .memoryText{
+            cursor: pointer;
+            font-size: 14px;
+            &:hover{
+                text-decoration: underline;
+            }
+        }
+        .memoryDelete{
+            padding: 0 8px;
+        }
+    }
+}
 .nameAndColorTd{
     background-color: white;
     &>div{
