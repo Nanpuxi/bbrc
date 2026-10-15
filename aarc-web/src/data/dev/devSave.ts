@@ -130,7 +130,9 @@ export const devSave:Save = {
             name: '火车南站\n西广场(假日酒店)',
             nameS: 'S. Railway Station\nW. Square (Holiday Inn)',
             nameP: [0, 20],
-            nameAngle: Math.PI/10
+            nameAngle: Math.PI/10,
+            nameScaleX: 0.6,
+            nameSScaleX: 0.8
         },
         {
             id: 34,

@@ -45,6 +45,14 @@ export interface ControlPoint{
     nameSSize?:number
     /** 站名旋转角度（弧度，逆时针为正，与 canvas rotate 一致；undefined 按 0 处理） */
     nameAngle?:number
+    /** 主站名横向缩放倍率（绕站名锚点，在文字自身坐标系内，与 nameSize 相乘生效；undefined 按 1 处理） */
+    nameScaleX?:number
+    /** 主站名纵向缩放倍率 */
+    nameScaleY?:number
+    /** 副站名横向缩放倍率；未设置时跟随 nameScaleX，nameScaleX 也未设置时按 1 处理 */
+    nameSScaleX?:number
+    /** 副站名纵向缩放倍率；未设置时跟随 nameScaleY，nameScaleY 也未设置时按 1 处理 */
+    nameSScaleY?:number
     anchorX?:SgnNumber
     anchorY?:SgnNumber
     /** 站名“地毯”（描边基底）设置；各字段 undefined 时回退到全局配置 config.staNameCarpet */

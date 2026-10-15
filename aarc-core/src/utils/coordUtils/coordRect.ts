@@ -22,6 +22,14 @@ export function rectInside(rect: RectCoord, pos: Coord) {
 
 /** 判断点是否在凸四边形内部（先用轴对齐包围盒快速拒绝，再用叉积法精确判断） */
 export function quadInside(quad: QuadCoord, pos: Coord) {
+    // 防御：四边形含 NaN/Infinity 等异常值时无法参与命中（如空文本曾产生的退化四边形），
+    // 视为不在内部并告警，避免异常四边形污染点击/框选检测
+    for (const [qx, qy] of quad) {
+        if (!Number.isFinite(qx) || !Number.isFinite(qy)) {
+            console.warn('quadInside 收到异常四边形，已忽略本次命中检测：', quad);
+            return false;
+        }
+    }
     const [x, y] = pos;
     const [[leftX, upperY], [rightX, lowerY]] = quadBoundingRectInternal(quad);
     if (x < leftX || x > rightX || y < upperY || y > lowerY) {
@@ -171,6 +179,23 @@ export function rotateRectToQuad(rect: RectCoord, center: Coord, angle: number):
         const dy = y - center[1];
         return [center[0] + dx * cos - dy * sin, center[1] + dx * sin + dy * cos] as Coord;
     }) as QuadCoord;
+}
+
+/** 两个轴对齐矩形的轴对齐并集（包围盒） */
+export function unionRect(a: RectCoord, b: RectCoord): RectCoord {
+    return [
+        [Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])],
+        [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])],
+    ];
+}
+
+/** 把轴对齐矩形绕 center 做非等比缩放（sx 横向、sy 纵向），结果仍是轴对齐矩形 */
+export function scaleRect(rect: RectCoord, center: Coord, sx: number, sy: number): RectCoord {
+    const [cx, cy] = center;
+    return [
+        [cx + (rect[0][0] - cx) * sx, cy + (rect[0][1] - cy) * sy],
+        [cx + (rect[1][0] - cx) * sx, cy + (rect[1][1] - cy) * sy],
+    ];
 }
 
 /** 统一 RectCoord（绕 center 旋转 angle）与已是 QuadCoord 的输入为 QuadCoord */
