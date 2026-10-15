@@ -3,7 +3,7 @@ import { useConfigStore } from "aarc-core/models/stores/configStore";
 import { useStaNameMainRectStore, useStaNameRectStore } from "aarc-core/models/stores/saveDerived/staNameRectStore";
 import { useSaveStore } from "aarc-core/models/stores/saveStore";
 import { coordAdd, coordTwinShrink } from "aarc-core/utils/coordUtils/coordMath";
-import { drawText } from "aarc-core/utils/drawUtils/drawText";
+import { drawText, resolveTextScale } from "aarc-core/utils/drawUtils/drawText";
 import { sgn } from "aarc-core/utils/sgn";
 import { defineStore } from "pinia";
 import { CvsContext } from "../common/cvsContext";
@@ -155,6 +155,11 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             color: ptCarpet?.color ?? globalCarpet.color ?? cs.config.bgColor,
             opacity: ptCarpet?.opacity ?? globalCarpet.opacity ?? 0.8
         }
+        //缩放倍率回退链：主值“本点值 → 1”；副值“本点副值 → 本点主值 → 1”
+        const nameSx = resolveTextScale(pt.nameScaleX)
+        const nameSy = resolveTextScale(pt.nameScaleY)
+        const nameSSx = resolveTextScale(pt.nameSScaleX, nameSx)
+        const nameSSy = resolveTextScale(pt.nameSScaleY, nameSy)
         const rects = drawText(ctx, globalPos, align, undefined, {
             text: pt.name,
             color: cs.config.staNameColor,
@@ -172,7 +177,8 @@ export const useStaNameCvsWorker = defineStore('staNameCvsWorker', ()=>{
             fontSize: cs.config.staNameSubFontSize * fontSizeRatioSub,
             rowHeight: cs.config.staNameSubRowHeight * fontSizeRatioSub
         },
-        carpetStroke, needReportRect ? 'both' : 'draw', undefined, pt.nameAngle)
+        carpetStroke, needReportRect ? 'both' : 'draw', undefined, pt.nameAngle,
+        nameSx, nameSy, nameSSx, nameSSy)
 
         if(rects){
             staNameRectStore.setStaNameRect(pt.id, rects.rectFull)

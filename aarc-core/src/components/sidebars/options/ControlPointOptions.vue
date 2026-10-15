@@ -12,6 +12,7 @@ import { isRing } from 'aarc-core/utils/lineUtils/isRing';
 import { isSameCoord } from 'aarc-core/utils/sgn';
 import { Coord } from 'aarc-core/models/coord';
 import AngleInput from '../shared/AngleInput.vue';
+import ScaleInput from '../shared/ScaleInput.vue';
 import { useNamePosMemoryStore } from 'aarc-core/models/stores/utils/namePosMemoryStore';
 import { AuColorPicker } from '@aurouscia/au-color-picker';
 import { useConfigStore } from 'aarc-core/models/stores/configStore';
@@ -175,6 +176,53 @@ function resetCarpet(){
 function customizeCarpetColor(){
     if(editing.value?.nameCarpet)
         editing.value.nameCarpet.color = '#ffffff'
+}
+//站名局部缩放：四值均未设置时收起为“自定义”按钮；点“自定义”立即填入主站名 1,1
+const hasMainScale = computed<boolean>(()=>{
+    const e = editing.value
+    return !!e && (e.nameScaleX!==undefined || e.nameScaleY!==undefined)
+})
+const hasSubScale = computed<boolean>(()=>{
+    const e = editing.value
+    return !!e && (e.nameSScaleX!==undefined || e.nameSScaleY!==undefined)
+})
+const hasNameScale = computed<boolean>(()=>hasMainScale.value || hasSubScale.value)
+function customizeNameScale(){
+    if(!editing.value)
+        return
+    //点击“自定义”是用户主动编辑：填入主站名 1,1，副站名保持“单独设置”按钮
+    editing.value.nameScaleX = 1
+    editing.value.nameScaleY = 1
+}
+function setSubScaleX(){
+    if(editing.value)
+        editing.value.nameSScaleX = 1
+}
+function setSubScaleY(){
+    if(editing.value)
+        editing.value.nameSScaleY = 1
+}
+function resetNameScale(){
+    if(!editing.value)
+        return
+    if(!window.confirm('确定要清除缩放吗？这会丢弃本点的四个缩放值，恢复为不缩放'))
+        return
+    editing.value.nameScaleX = undefined
+    editing.value.nameScaleY = undefined
+    editing.value.nameSScaleX = undefined
+    editing.value.nameSScaleY = undefined
+}
+function clearSubScaleX(){
+    if(!window.confirm('是否清除此项，改为跟随主文本？'))
+        return
+    if(editing.value)
+        editing.value.nameSScaleX = undefined
+}
+function clearSubScaleY(){
+    if(!window.confirm('是否清除此项，改为跟随主文本？'))
+        return
+    if(editing.value)
+        editing.value.nameSScaleY = undefined
 }
 function resetCarpetColor(){
     if(editing.value?.nameCarpet)
@@ -392,6 +440,55 @@ defineExpose({
                     预设可在“设置-站名拼音转换”中新建
                 </div>
             </div>
+            <h2>站名局部缩放</h2>
+            <div class="optionSection nameScale">
+                <table v-if="!hasNameScale" class="fullWidth"><tbody>
+                    <tr>
+                        <td>
+                            <button class="lite" @click="customizeNameScale">自定义</button>
+                        </td>
+                    </tr>
+                </tbody></table>
+                <template v-else>
+                <table class="fullWidth"><tbody>
+                    <tr>
+                        <td>主站名</td>
+                        <td>
+                            <div class="smallNote">横向</div>
+                            <ScaleInput v-model="editing.nameScaleX" placeholder="默认"/>
+                            <div class="smallNote">纵向</div>
+                            <ScaleInput v-model="editing.nameScaleY" placeholder="默认"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>副站名</td>
+                        <td>
+                            <div class="smallNote">横向</div>
+                            <template v-if="editing.nameSScaleX!==undefined">
+                                <ScaleInput v-model="editing.nameSScaleX" placeholder="跟随主值"
+                                    cancelable @cancel="clearSubScaleX"/>
+                            </template>
+                            <button v-else class="lite" @click="setSubScaleX">点击单独设置</button>
+                            <div class="smallNote">纵向</div>
+                            <template v-if="editing.nameSScaleY!==undefined">
+                                <ScaleInput v-model="editing.nameSScaleY" placeholder="跟随主值"
+                                    cancelable @cancel="clearSubScaleY"/>
+                            </template>
+                            <button v-else class="lite" @click="setSubScaleY">点击单独设置</button>
+                            <div class="smallNote">未单独设置时跟随主站名缩放</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <button class="lite" @click="resetNameScale">清除缩放设置</button>
+                        </td>
+                    </tr>
+                </tbody></table>
+                <div class="smallNote" style="text-align: center;">
+                    此节的设置不属于站名位置“记忆”，<br/>写入/应用记忆时不会记录和覆盖缩放值
+                </div>
+                </template>
+            </div>
             <h2>拆分线路</h2>
             <div class="optionSection">
                 <button v-if="!showLineSplitMenu" @click="showLineSplitMenu=true"
@@ -498,6 +595,11 @@ defineExpose({
     }
     &:deep(.acp){
         margin: auto;
+    }
+}
+.nameScale{
+    .lite{
+        text-decoration: underline;
     }
 }
 </style>

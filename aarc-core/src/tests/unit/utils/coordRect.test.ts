@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   rectInside,
+  scaleRect,
+  unionRect,
   rectCoordDistSqLessThan,
   quadInside,
   quadCoordDistSqLessThan,
@@ -342,5 +344,42 @@ describe('toQuadCoord', () => {
   it('RectCoord 输入且 angle=0 时等价于 rectToQuad', () => {
     const rect: RectCoord = [[-5, -10], [5, 10]]
     expect(toQuadCoord(rect)).toEqual(rectToQuad(rect))
+  })
+})
+
+
+describe('scaleRect', () => {
+  it('sx=sy=1 时矩形不变', () => {
+    const rect: RectCoord = [[0, 0], [10, 20]]
+    expect(scaleRect(rect, [5, 10], 1, 1)).toEqual(rect)
+  })
+
+  it('横向 2 倍：宽度翻倍、高度不变、锚点不动', () => {
+    const rect: RectCoord = [[0, 0], [10, 20]]
+    expect(scaleRect(rect, [5, 10], 2, 1)).toEqual([[-5, 0], [15, 20]] as RectCoord)
+  })
+
+  it('纵向 0.5 倍：上下边界都向锚点靠拢', () => {
+    const rect: RectCoord = [[0, 0], [10, 20]]
+    expect(scaleRect(rect, [5, 10], 1, 0.5)).toEqual([[0, 5], [10, 15]] as RectCoord)
+  })
+
+  it('锚点不在矩形中心时，整体沿缩放方向平移', () => {
+    //锚点为矩形左上角，缩放只向右下撑开
+    const rect: RectCoord = [[0, 0], [10, 20]]
+    expect(scaleRect(rect, [0, 0], 3, 2)).toEqual([[0, 0], [30, 40]] as RectCoord)
+  })
+})
+
+describe('unionRect', () => {
+  it('返回两个矩形的轴对齐包围盒', () => {
+    const a: RectCoord = [[0, 0], [10, 10]]
+    const b: RectCoord = [[5, -5], [20, 6]]
+    expect(unionRect(a, b)).toEqual([[0, -5], [20, 10]] as RectCoord)
+  })
+
+  it('与自身并集不变', () => {
+    const a: RectCoord = [[-3, 2], [7, 9]]
+    expect(unionRect(a, a)).toEqual(a)
   })
 })

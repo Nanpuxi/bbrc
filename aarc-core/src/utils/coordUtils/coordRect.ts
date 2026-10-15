@@ -181,6 +181,23 @@ export function rotateRectToQuad(rect: RectCoord, center: Coord, angle: number):
     }) as QuadCoord;
 }
 
+/** 两个轴对齐矩形的轴对齐并集（包围盒） */
+export function unionRect(a: RectCoord, b: RectCoord): RectCoord {
+    return [
+        [Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])],
+        [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])],
+    ];
+}
+
+/** 把轴对齐矩形绕 center 做非等比缩放（sx 横向、sy 纵向），结果仍是轴对齐矩形 */
+export function scaleRect(rect: RectCoord, center: Coord, sx: number, sy: number): RectCoord {
+    const [cx, cy] = center;
+    return [
+        [cx + (rect[0][0] - cx) * sx, cy + (rect[0][1] - cy) * sy],
+        [cx + (rect[1][0] - cx) * sx, cy + (rect[1][1] - cy) * sy],
+    ];
+}
+
 /** 统一 RectCoord（绕 center 旋转 angle）与已是 QuadCoord 的输入为 QuadCoord */
 export function toQuadCoord(rect: RectCoord | QuadCoord, center: Coord = [0, 0], angle: number = 0): QuadCoord {
     return rect.length === 4 ? rect : rotateRectToQuad(rect, center, angle);

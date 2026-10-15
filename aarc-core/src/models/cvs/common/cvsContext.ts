@@ -128,6 +128,11 @@ export class CvsContext{
     translate(x:number, y:number){
         this.b.ctx2d.translate(x, y)
     }
+    /** 以逻辑单位平移画布（ctx2d 处于设备坐标系，位移需乘 scale） */
+    translateBy(dx:number, dy:number){
+        let b = this.b
+        b.ctx2d.translate(dx * b.scale, dy * b.scale)
+    }
     save(){
         this.b.ctx2d.save()
     }
@@ -140,6 +145,14 @@ export class CvsContext{
         const dx = b.mapX(x), dy = b.mapY(y)
         b.ctx2d.translate(dx, dy)
         b.ctx2d.rotate(angle)
+        b.ctx2d.translate(-dx, -dy)
+    }
+    /** 以逻辑坐标 (x, y) 为中心进行非等比缩放（配合 save/restore 使用） */
+    scaleAround(x:number, y:number, sx:number, sy:number){
+        const b = this.b
+        const dx = b.mapX(x), dy = b.mapY(y)
+        b.ctx2d.translate(dx, dy)
+        b.ctx2d.scale(sx, sy)
         b.ctx2d.translate(-dx, -dy)
     }
 
