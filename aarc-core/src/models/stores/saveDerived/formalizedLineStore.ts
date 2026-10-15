@@ -121,7 +121,8 @@ export const useFormalizedLineStore = defineStore('formalizedLine', ()=>{
 
         // 支线渐变色按整线解析一次，所有 span 共用（StyleSlice 截段时视觉连续，见决策 F）
         const gradient = resolveLineGradient(line, allFormalPts,
-            useSaveStore().save?.lines, l => lineStateStore.getLineActualColor(l))
+            useSaveStore().save?.lines, l => lineStateStore.getLineActualColor(l),
+            (l, ptId, approach, selfLineId) => lineStateStore.getJunctionPtColor(l.id, ptId, approach, selfLineId))
         const gradientKey = gradient
             ? JSON.stringify([gradient.from, gradient.to, gradient.range, gradient.fromColor, gradient.toColor])
             : ''

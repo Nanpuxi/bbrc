@@ -42,7 +42,7 @@ import { useEditorLocalConfigStore } from "aarc-core/app/localConfig/editorLocal
 import { useCvsFrameStore } from "aarc-core/models/stores/cvsFrameStore";
 import { useRenderOptionsStore } from "aarc-core/models/stores/renderOptionsStore";
 import { formalize } from "aarc-core/utils/lineUtils/formalize";
-import { buildLineGradient, resolveLineGradient, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient";
+import { buildLineGradient, resolveLineGradient, resolveSpanStrokeColor, LineGradientResolution } from "aarc-core/utils/lineUtils/lineGradient";
 
 type LineRenderType = 'both'|'body'|'carpet'
 
@@ -215,7 +215,8 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 const l = line[i]
                 const formalPts = formalPtsOfLines[i]
                 const gradient = resolveLineGradient(l, formalPts,
-                    saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
+                    saveStore.save?.lines, x => lineStateStore.getLineActualColor(x),
+                    (x, ptId, approach, selfLineId) => lineStateStore.getJunctionPtColor(x.id, ptId, approach, selfLineId))
                 const buildPath = () => {
                     ctx.beginPath()
                     linkPts(ctx, formalPts, l, cs.getTurnRadiusOf, lineShouldSimplify())
@@ -338,7 +339,8 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
             // 局部线段仍使用整线解析的渐变（CanvasGradient 为设备坐标系对象，对局部 path 同样适用）
             const wholeFormalPts = formalizedLineStore.getLinesFormalPts(line.id)
             const gradient = resolveLineGradient(line, wholeFormalPts,
-                saveStore.save?.lines, x => lineStateStore.getLineActualColor(x))
+                saveStore.save?.lines, x => lineStateStore.getLineActualColor(x),
+                (x, ptId, approach, selfLineId) => lineStateStore.getJunctionPtColor(x.id, ptId, approach, selfLineId))
             doRender(ctx, line, true, enforceLineWidth, undefined, undefined, gradient, buildPath)
         })
         formalizedLineStore.setLocalFormalSegs(formalizedSegs)
@@ -365,8 +367,16 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         options: SpanRenderOptions & { pathBuilder?: () => void }
     ) {
         const { color, downplayed, style, styleId, strokeTarget, gradient, pathBuilder } = options
-        // 支线渐变色按整线解析（各 span 共用），启用时优先于 span 级颜色覆盖
-        const lineColor = gradient ?? color ?? lineStateStore.getLineActualColor(lineInfo)
+        const lineDownplayed = downplayed ?? lineStateStore.isLineDownplayed(lineInfo.id) ?? false
+        // 支线渐变色按整线解析（各 span 共用），优先于 span 级颜色覆盖；
+        // span 被时间淡化时回退纯色（渐变轴无法表达沿路径的灰显边界，见 lineGradient.ts 决策注释）
+        const lineColor = resolveSpanStrokeColor({
+            gradient,
+            color,
+            fallbackColor: lineStateStore.getLineActualColor(lineInfo),
+            downplayed: lineDownplayed,
+            downplayedBy: lineStateStore.lineActualColors.get(lineInfo.id)?.downplayedBy
+        })
 
         // 填充线路（如湖泊）；支线渐变不适用填充，回退主色
         if (lineInfo.isFilled && lineInfo.type === LineType.terrain) {
@@ -379,7 +389,6 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
         const lineWidth = cs.config.lineWidth * (lineInfo.width || 1)
         ctx.lineJoin = 'round'
 
-        const lineDownplayed = downplayed ?? lineStateStore.isLineDownplayed(lineInfo.id)
         const effectiveStyleId = styleId ?? lineInfo.style
         const itsStyle = style ?? saveStore.save?.lineStyles?.find(x => x.id === effectiveStyleId)
 
@@ -517,7 +526,13 @@ export const useLineCvsWorker = defineStore('lineCvsWorker', ()=>{
                 if (!pt)
                     continue
                 const lineWidth = cs.config.lineWidth * (info.line.width || 1)
-                const lineColor = info.gradient ?? info.color ?? lineStateStore.getLineActualColor(info.line)
+                const lineColor = resolveSpanStrokeColor({
+                    gradient: info.gradient,
+                    color: info.color,
+                    fallbackColor: lineStateStore.getLineActualColor(info.line),
+                    downplayed: info.downplayed,
+                    downplayedBy: lineStateStore.lineActualColors.get(info.line.id)?.downplayedBy
+                })
                 ctx.beginPath()
                 ctx.arc(pt[0], pt[1], lineWidth / 2, 0, 2 * Math.PI)
                 ctx.fillStyle = typeof lineColor === 'string'

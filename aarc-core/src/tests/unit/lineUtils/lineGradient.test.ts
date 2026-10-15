@@ -6,6 +6,7 @@ import {
     detectLineAttachEnd,
     attachesOfEnd,
     resolveLineGradient,
+    resolveSpanStrokeColor,
     LINE_GRADIENT_AUTO_RANGE
 } from 'aarc-core/utils/lineUtils/lineGradient'
 
@@ -206,5 +207,92 @@ describe('buildLineGradient', () => {
         // 外延 = lineWidthBase/2 = 2
         expect(calls[0].args).toEqual([-2, 0, 102, 0])
         expect(calls[0].stops).toEqual([[0, '#111'], [0.25, '#111'], [0.75, '#222'], [1, '#222']])
+    })
+})
+
+describe('resolveSpanStrokeColor', () => {
+    const gradient = { from: [0, 0] as [number, number], to: [100, 0] as [number, number], range: [0.25, 0.75] as [number, number], fromColor: '#111', toColor: '#222' }
+    it('未淡化：渐变优先于 span 颜色', () => {
+        expect(resolveSpanStrokeColor({
+            gradient, color: '#aaa', fallbackColor: '#bbb',
+            downplayed: false
+        })).toBe(gradient)
+    })
+    it('span 级时间淡化（downplayedBy 无条目）：回退 span 淡化色，不用渐变', () => {
+        expect(resolveSpanStrokeColor({
+            gradient, color: '#gray', fallbackColor: '#bbb',
+            downplayed: true, downplayedBy: undefined
+        })).toBe('#gray')
+    })
+    it('整线时间淡化：回退 span 淡化色', () => {
+        expect(resolveSpanStrokeColor({
+            gradient, color: '#gray', fallbackColor: '#bbb',
+            downplayed: true, downplayedBy: 'time'
+        })).toBe('#gray')
+    })
+    it('强调淡化：继续用渐变（解析时端点已灰化）', () => {
+        expect(resolveSpanStrokeColor({
+            gradient, color: '#gray', fallbackColor: '#bbb',
+            downplayed: true, downplayedBy: 'accentuation'
+        })).toBe(gradient)
+    })
+    it('无渐变：取 span 颜色，其次兜底色', () => {
+        expect(resolveSpanStrokeColor({
+            color: '#aaa', fallbackColor: '#bbb', downplayed: true, downplayedBy: 'time'
+        })).toBe('#aaa')
+        expect(resolveSpanStrokeColor({
+            fallbackColor: '#bbb', downplayed: false
+        })).toBe('#bbb')
+    })
+})
+
+describe('resolveLineGradient 端点局部取色', () => {
+    const fp20 = [fp([100, 100], 0), fp([200, 200], 1)]
+    it('自动目标色：接续共享点有局部颜色时用局部色（跟随该点 span 的 downplay）', () => {
+        const parent = makeLine(1, [10, 30])
+        const branch = makeLine(3, [10, 20], { parent: 1, gradient: {} })
+        const other = makeLine(4, [20, 99])
+        const res = resolveLineGradient(branch, fp20, [parent, branch, other],
+            colorsOf([parent, branch, other]),
+            (l, ptId) => l.id === 4 && ptId === 20 ? '#gray20' : undefined)!
+        expect(res.toColor).toBe('#gray20')
+        // 主色端 pt10 无局部色 → 整线色
+        expect(res.fromColor).toBe('#c3')
+    })
+    it('主色端：采样 parent 接点局部颜色（selfLineId 传入支线 id）', () => {
+        const parent = makeLine(1, [10, 30])
+        const branch = makeLine(3, [10, 20], { parent: 1, gradient: {} })
+        const other = makeLine(4, [20, 99])
+        let seenSelf: number | undefined = -999
+        const res = resolveLineGradient(branch, fp20, [parent, branch, other],
+            colorsOf([parent, branch, other]),
+            (l, ptId, _a, selfLineId) => {
+                if (l.id === 1 && ptId === 10) { seenSelf = selfLineId; return '#gray10' }
+                return undefined
+            })!
+        expect(res.fromColor).toBe('#gray10')
+        expect(seenSelf).toBe(3)
+        // 目标端 other 的 pt20 无局部色 → 整线色
+        expect(res.toColor).toBe('#c4')
+    })
+    it('手动 targetColor 是字面颜色，不跟随端点局部淡化', () => {
+        const parent = makeLine(1, [10, 30])
+        const branch = makeLine(3, [10, 20], { parent: 1, gradient: { targetColor: '#f00' } })
+        const res = resolveLineGradient(branch, fp20, [parent, branch],
+            colorsOf([parent, branch]),
+            () => '#gray')!
+        expect(res.toColor).toBe('#f00')
+        // 主色端仍跟随局部色（主色永远是自动的）
+        expect(res.fromColor).toBe('#gray')
+    })
+    it('getPtColor 返回 undefined 时回退整线颜色', () => {
+        const parent = makeLine(1, [10, 30])
+        const branch = makeLine(3, [10, 20], { parent: 1, gradient: {} })
+        const other = makeLine(4, [20, 99])
+        const res = resolveLineGradient(branch, fp20, [parent, branch, other],
+            colorsOf([parent, branch, other]),
+            () => undefined)!
+        expect(res.fromColor).toBe('#c3')
+        expect(res.toColor).toBe('#c4')
     })
 })

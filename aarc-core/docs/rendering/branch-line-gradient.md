@@ -30,6 +30,11 @@
   （决策 F，StyleSlice 截段时视觉连续），分组键新增 `gradientKey` 区分不同渐变；
   简化模式与选中点局部渲染（`doRender` 透传）同样支持渐变（决策 E）；
   填充地形与缩略图回退主色；pattern 层仍优先覆盖渐变，渐变仅作 tint 时回退其主色。
+- 端点局部淡化与方向感知（§8 P1/P2/P3 及 §8.6，2026-10 落地）：span 被时间淡化时落笔回退纯色
+  （`resolveSpanStrokeColor`，渐变轴无法表达沿路径的灰显边界）；渐变两端自动取色采样接点局部实际颜色
+  （`lineStateStore.getJunctionPtColor` 注入 `resolveLineGradient` 的 `getPtColor`），交界点按支线
+  接入方向选侧（垂直/无方向时非淡化优先兜底），选中 span 被导出过滤时取背景色；手动
+  `targetColor` 仍为字面颜色。
 - UI：LineOptions 支线区新增 渐变/目标颜色/渐变角度/渐变范围 控件；Lines.vue 子列表
   色块启用渐变时显示 CSS 渐变预览。
 - `ensureChildrenOptionsSame` 排除项已加入 `'gradient'`（envStore.ts）。
@@ -290,3 +295,120 @@ v1 建议：任意普通线路 + 严格相等（或极小容差），地形线�
 
 无需改动：命中检测（`coordOnLine.ts`）、`saveNormalize`（Line 级字段靠 `??` 兜底）、
 协作 diff（对象 diff 自动携带新字段）。
+
+---
+
+## 8. 与按 span 淡化（downplay）机制的交叉分析
+
+> 2026-10 追加。对照 `per-span-rendering-plan.md`（其 Step 1/2 已落地）分析渐变与
+> span 级淡化的交互。结论：**渐变文档 §4.2 的"淡化"假设的是整线级淡化，与已落地的
+> span 级时间淡化存在一处真实渲染 bug（P1）与两处语义缺口（P2/P3）**。
+> **更新：P1/P2/P3 均已修复——span 落笔回退纯色（P1/P3）；渐变两端自动取色改采
+> 接点局部实际颜色（P2），并进一步升级为方向感知（§8.6）：交界点按支线接入方向
+> 选侧，垂直时非淡化优先兜底，选中 span 被导出过滤时取背景色。**
+
+### 8.1 两套机制的现状
+
+- **淡化**：`lineStateStore` 提供两个粒度——整线级 `getLineActualColor`（含强调淡化、
+  整线时间淡化），以及 span 级 `getSpanActualColor` / `isSpanDownplayed`
+  （`lineStateStore.ts:203-235`）。span 级时间淡化随 TimeSlice 生效：**同一条线可以
+  只有部分 span 被淡化**（未开通区间淡化、已开通区间正常，per-span 文档 Q3 答复）。
+- **渐变**：`collectSpanRenderInfos` 按**整线**解析一次（`formalizedLineStore.ts:123`），
+  端点色取自整线级 `getLineActualColor`，所有 span 共用同一 `LineGradientResolution`
+  （决策 F）；落笔处颜色优先级为
+  `gradient ?? span color ?? getLineActualColor`（`lineCvsWorker.ts:369`）。
+
+### 8.2 P1（bug）：span 级时间淡化对渐变线路失效
+
+当渐变支线带 TimeSlice、只有部分 span 未开通时：
+
+- 非渐变线路：未开通 span 走 `getSpanActualColor` 返回淡化色，正常灰显；
+- 渐变线路：`lineColor = gradient ?? color`，span 淡化色被**整体绕过**，
+  未开通 span 仍按完整渐变彩色渲染。
+
+且该问题**无法靠"把淡化烘进渐变"解决**：渐变轴是两端 formalPt 间的**直线**，而淡化
+状态沿**线路路径长度**变化，单条线性渐变只有在轴与走向一致时才能恰好表达"前段灰、
+后段彩"。因此必须显式定规则（见 8.5）。
+
+注意强调淡化不受影响：它是整线级的，解析渐变时 `getLineActualColor` 已含，两端点
+同为灰度，整线灰渐变正确。
+
+### 8.3 P2（已修复）：渐变目标色取对方**整线**色，与接点处的 span 级实际色脱节
+
+目标色 = `getLineActualColor(对方)`（决策 G，取整线主色）。若对方线路在接续点所在的
+span 恰被 TimeSlice 淡化（接点处实际渲染为灰），渐变目标端仍取正常彩色 → 接续处
+出现色差。反向亦然：支线自身部分 span 淡化时，主色端取的是整线正常色。决策 G 只讨
+论了"目标线是渐变线"的情形，未覆盖"目标线被 span 级淡化"的情形。
+
+**修复**：渐变两端颜色自动判定时改采**端点局部实际颜色**——`lineStateStore.getJunctionPtColor(lineId, ptId, approach?, selfLineId?)`（定位控制点的相邻
+span，返回 `getSpanActualColor`），`resolveLineGradient` 增加 `getPtColor` 注入参数：
+- 主色端 = 主色端点所在 span 的局部颜色；
+- 目标色端（指定线路/自动模式）= 接续共享点在对方线路上所在 span 的局部颜色；
+- 手动指定的 `targetColor` 是字面颜色，不做淡化（用户显式选择）；
+- 取不到局部颜色（点不在线路上等）时回退整线颜色。
+- **交界点的选侧规则后来从“固定到达侧”升级为方向感知（§8.6）**，此处为演进记录。
+
+### 8.4 P3（连带点）：接缝补圆与样式层
+
+- 接缝补圆（`lineCvsWorker.ts:520-526`）同样用 `info.gradient ?? info.color`，
+  P1 修复时必须同步改这里，否则断笔处冒出彩色圆点。
+- 样式层 `colorMode==='line'` 的层与本体共用 `dynaColor`，P1 修复（淡化 span 回退
+  纯色）后这些层自动跟随，无需单独处理；`fixedColorConverter` 链路本就走
+  `downplayed` 分支，不受影响。
+- 分组键已含 `downplayed` 与 `gradientKey`（`gradientKey` 内含两端色，淡化切换会
+  令其变化），分组机制本身无需改动。
+
+### 8.5 修复方向建议（已实施）
+
+实际实现收敛为一个纯函数 `resolveSpanStrokeColor`
+（`src/utils/lineUtils/lineGradient.ts`），`doRenderSpan` 与 base 接缝补圆
+（`lineCvsWorker.ts`）两处取色共用：
+
+1. **淡化 span 回退纯色**：span 因时间被淡化时（`downplayed && downplayedBy !==
+   'accentuation'`，span 级时间淡化在 `lineActualColors` 无条目、`downplayedBy`
+   为 undefined，同样命中）用 `getSpanActualColor` 的淡化色（字符串），仅未淡化
+   span 使用渐变。代价是淡化 span 与其他 span 之间渐变不连续，但这正是淡化语义
+   想要的"该段灰显"，与非渐变线路行为对齐。整线级时间淡化也因此从"灰→彩半渐变"
+   修正为整段灰显。强调淡化仍走渐变（端点已灰，视觉等价）。
+2. **接缝补圆**同步采用同一优先级（同一函数，天然一致）。
+3. **目标色采样（P2）**：✅ 已实现——端点局部取色，见 §8.3。
+4. 简化模式与选中点局部渲染（`lineCvsWorker.ts` 的 `doRender` 路径）无视 span，
+   天然不受 P1 影响，保持现状。
+
+### 8.6 接点方向感知取色（2026-10 决策，已实施）
+
+**背景**：P2 修复（§8.3）后，`getPtActualColor` 在交界点固定取"到达侧"（`findIndex`
+首个命中）。评估发现固定选侧有两个问题：
+
+1. 支线从交界点的什么方向接入是用户画图的偶然结果，与两侧淡化分布无关——
+   固定取到达侧意味着支线恰好朝未淡化一侧延伸时，渐变末端灰得莫名其妙；
+2. 更严重的：导出时未开通 span 被 `filterNotOpened` 整体过滤，"到达侧"可能
+   根本没被渲染——渐变末端灰着接到一条正常色的线头（或空白），预览/导出不一致。
+   且 B 自己在交界点盖的是**出发侧** span 的接缝补圆（`lineCvsWorker.ts:508-526`），
+   固定到达侧连"B 画在该点的颜色"都没对上。
+
+**决策（方案 A：方向感知，垂直兜底）**：
+
+- `resolveLineGradient` 从支线 formalPts 计算端点伸出方向 `approach`，随 `getPtColor`
+  回调传入；
+- 交界点（前后两个 span 均相邻）时，对每侧计算"接点指向该 span 另一侧"的方向
+  射线，与支线 **approach** 方向点积，取得分最高的一侧。**两端 approach 统一为
+  支线驶向接点的方向**（本体 → 接点并延伸）：支线"开往"哪一侧，就取哪一侧的
+  颜色（朝着淡化侧 → 一起淡化；朝着未淡化侧 → 维持该侧颜色）；
+  - 初版两端统一用"接点 → 本体"方向，人工测试发现与实际相反，故两端先后修正为
+    驶入方向（目标端先修，主色端随后，2026-10 修正）。
+- 方向与两侧夹角都超过 60°（dot < 0.5，含垂直）或方向信息缺失 → 兜底**非淡化
+  优先**（任一相邻 span 未淡化取基础色，全部淡化取淡化色）——与车站圆圈
+  `getStaColorFromSpan`（`pointCvsWorker.ts:59-70`）同一策略；
+- 非交界点（线路端点或 span 内部）只有一个相邻 span，直接取该 span，无需方向；
+- **导出过滤**：选中 span 未开通（导出时被过滤、不渲染）→ 渐变端色取**背景色**
+  （`config.bgColor`），渐变末端"溶入背景"而非指向不存在的线头；预览模式不受影响
+  （淡化 span 仍渲染，取淡化色）；
+- 主色端采样 **parent**（而非支线自身）在接点处的方向感知局部颜色（注意：演进初期曾错误地采样支线自身端 span，导致
+  parent 侧局部淡化被忽略；2026-10 修正）；但支线自身端 span 已被淡化时优先跟随自身
+  （该 span 落笔已按 §8.5 回退纯色，渐变起点与之衔接）；
+- 手动 `targetColor` 仍为字面颜色，不参与上述规则。
+
+实现：`lineStateStore.getJunctionPtColor(lineId, ptId, approach?, selfLineId?)`（取代初版
+`getPtActualColor`）；`resolveLineGradient` 的 `getPtColor` 注入签名追加
+`approach` 参数。

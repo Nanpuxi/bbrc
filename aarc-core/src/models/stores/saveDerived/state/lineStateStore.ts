@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useSaveStore } from "../../saveStore";
 import { useConfigStore } from "../../configStore";
 import { Line, LineTimeInfo } from "aarc-core/models/save";
+import { Coord } from "aarc-core/models/coord";
 import { useRenderOptionsStore } from "../../renderOptionsStore";
 import { useColorProcStore } from "../../utils/colorProcStore";
 import { useLineSpanStore } from "../slice/lineSpanStore";
@@ -225,6 +226,132 @@ export const useLineStateStore = defineStore('lineState', () => {
     }
 
     /**
+     * 方向判定阈值：approach 与某一侧的方向夹角 ≤60°（dot ≥ 0.5）才信任方向，
+     * 否则视为垂直/无法判定，走非淡化优先兜底（docs/rendering/branch-line-gradient.md §8.6）
+     */
+    const JUNCTION_APPROACH_MIN_DOT = 0.5
+
+    function normalizeCoord(c: Coord): Coord | undefined {
+        const len = Math.hypot(c[0], c[1])
+        return len > 1e-9 ? [c[0] / len, c[1] / len] : undefined
+    }
+
+    /**
+     * 交界 span 选侧：approach（支线"朝向"的方向，语义见 resolveLineGradient 的
+     * approachAt）与"接点指向各相邻 span 另一侧"的方向做点积，取得分最高的一侧——
+     * 支线几何上朝向哪一侧就取哪一侧的颜色。方向缺失或与两侧夹角都超过 60°
+     * （含垂直）时，兜底非淡化优先（与车站圆圈 getStaColorFromSpan 同一策略）。
+     */
+    function pickJunctionSpan(
+        line: Line,
+        ptId: number,
+        ptIdx: number,
+        adjacent: number[],
+        approach: Coord | undefined,
+        spans: { fromIdx: number, toIdx: number, fromPt: number, toPt: number }[]
+    ): number {
+        if (approach) {
+            const junctionPos = saveStore.getPtById(ptId)?.pos
+            if (junctionPos) {
+                let bestSpan = -1
+                let bestScore = -Infinity
+                for (const spanIdx of adjacent) {
+                    const span = spans[spanIdx]
+                    const otherPtId = ptIdx === span.fromIdx ? span.toPt : span.fromPt
+                    const otherPos = saveStore.getPtById(otherPtId)?.pos
+                    if (!otherPos) continue
+                    const ray = normalizeCoord([otherPos[0] - junctionPos[0], otherPos[1] - junctionPos[1]])
+                    if (!ray) continue
+                    const score = ray[0] * approach[0] + ray[1] * approach[1]
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestSpan = spanIdx
+                    }
+                }
+                if (bestSpan >= 0 && bestScore >= JUNCTION_APPROACH_MIN_DOT)
+                    return bestSpan
+            }
+        }
+        // 垂直/无方向信息：优先未淡化 span，全淡化取第一个（即淡化色）
+        const notDownplayed = adjacent.find(i => !isSpanDownplayed(line.id, i))
+        return notDownplayed ?? adjacent[0]
+    }
+
+    /**
+     * 收集接点在某线路上的相邻 span 索引：span 内部 → 唯一；span 边界（交界点）→
+     * 前后两个；线路端点 → 只有一个。点不在线路上或无 span 信息时返回 undefined。
+     */
+    function adjacentSpansOf(lineId: number, ptId: number): { adjacent: number[], ptIdx: number, line: Line } | undefined {
+        const line = saveStore.getLineById(lineId)
+        if (!line) return undefined
+        const ptIdx = line.pts.indexOf(ptId)
+        if (ptIdx < 0) return undefined
+        const flattened = lineSpanStore.getFlattenedLine(lineId)
+        if (!flattened || flattened.spans.length === 0) return undefined
+
+        const adjacent: number[] = []
+        flattened.spans.forEach((span, spanIdx) => {
+            if (ptIdx > span.fromIdx && ptIdx < span.toIdx)
+                adjacent.push(spanIdx)                 // span 内部：唯一相邻
+            else if (ptIdx === span.fromIdx || ptIdx === span.toIdx)
+                adjacent.push(spanIdx)                 // span 边界：前后均相邻（交界点）
+        })
+        if (adjacent.length === 0) return undefined
+        return { adjacent, ptIdx, line }
+    }
+
+    /**
+     * 交界 span 选侧（approach 语义与兜底见 pickJunctionSpan）；单个相邻 span 直接返回。
+     */
+    function resolveJunctionSpanIdx(lineId: number, ptId: number, approach?: Coord): number | undefined {
+        const info = adjacentSpansOf(lineId, ptId)
+        if (!info) return undefined
+        if (info.adjacent.length === 1) return info.adjacent[0]
+        const flattened = lineSpanStore.getFlattenedLine(lineId)!
+        return pickJunctionSpan(info.line, ptId, info.ptIdx, info.adjacent, approach, flattened.spans)
+    }
+
+    /**
+     * 取某线路某 span 的渐变端点用色：导出模式下 span 未开通（被过滤、不渲染）
+     * → 背景色（渐变末端"溶入背景"）；否则取 span 实际颜色。
+     */
+    function spanEndpointColor(lineId: number, spanIdx: number): string | undefined {
+        const t = effectiveTimeMoment.value
+        if (exporting.value && typeof t === 'number' && !lineSpanStore.isSpanOpened(lineId, spanIdx, t))
+            return configStore.config.bgColor
+        return getSpanActualColor(lineId, spanIdx)
+    }
+
+    /**
+     * 接点局部取色（方向感知，docs/rendering/branch-line-gradient.md §8.6）。
+     *
+     * 用于渐变端点取色：渐变轴端落在某个点上时，该点处的颜色由相邻 span 的局部
+     * 状态决定，而非整线统一颜色：
+     * - 非交界点（线路端点或 span 内部）只有一个相邻 span，直接取其颜色；
+     * - 交界点（前后两个 span 均相邻）按 approach 方向选侧，垂直/无方向时非淡化
+     *   优先兜底；
+     * - 导出模式下选中 span 未开通（被 filterNotOpened 过滤、不渲染）→ 返回背景色，
+     *   渐变末端"溶入背景"；预览模式淡化 span 仍渲染，取淡化色；
+     * - 点不在线路上或无 span 信息时返回 undefined，调用方回退整线颜色。
+     *
+     * @param approach 支线驶向接点的方向（本体 → 接点，由 resolveLineGradient 从支线
+     * formalPts 计算，两端统一）；undefined 表示无方向信息，直接走非淡化优先兜底
+     * @param selfLineId 主色端调用时传入的支线自身 id：支线自身端 span 被淡化时
+     * 优先跟随自身（该 span 落笔已按 §8.5 回退纯色，渐变起点与之衔接），不淡化
+     * 才取传入线路（parent）的接点局部颜色
+     */
+    function getJunctionPtColor(lineId: number, ptId: number, approach?: Coord, selfLineId?: number): string | undefined {
+        if (selfLineId != null) {
+            const selfSpanIdx = resolveJunctionSpanIdx(selfLineId, ptId, undefined)
+            if (selfSpanIdx != null && isSpanDownplayed(selfLineId, selfSpanIdx))
+                return spanEndpointColor(selfLineId, selfSpanIdx)
+        }
+        const spanIdx = resolveJunctionSpanIdx(lineId, ptId, approach)
+        if (spanIdx == null) return undefined
+        return spanEndpointColor(lineId, spanIdx)
+    }
+
+    /**
      * 获取指定线路指定 span 是否被淡化
      */
     function isSpanDownplayed(lineId: number, spanIdx: number): boolean {
@@ -242,6 +369,7 @@ export const useLineStateStore = defineStore('lineState', () => {
         getLineTagActualColor,
         isLineTagDownplayed,
         getSpanActualColor,
+        getJunctionPtColor,
         isSpanDownplayed
     }
 })
